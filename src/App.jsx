@@ -1,173 +1,16 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
+import {
+  PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
+  buildDefaultData, migrateData, computeStats, getSubjectEntries,
+  computeDesgaste, priorComparableRawFactors, freezeApproval,
+} from "./domain.js";
 
 /* ------------------------------------------------------------------ */
-/*  DATOS Y CONSTANTES                                                 */
-/* ------------------------------------------------------------------ */
-
-const PALETTE = ["#4FD8EA", "#F5A623", "#3DDC84", "#A78BFA", "#FB923C", "#2DD4BF", "#FF8FB3", "#8DA3F0"];
-
-const RAW_ENTRIES = {"2025-10-20":{"Motori per l'aeromobili":55},"2025-10-22":{"Motori per l'aeromobili":103},"2025-10-27":{"Motori per l'aeromobili":40},"2025-10-29":{"Motori per l'aeromobili":90},"2025-11-03":{"Motori per l'aeromobili":20},"2025-11-04":{"Motori per l'aeromobili":60},"2025-11-09":{"Spaceflight Mechanics":75},"2025-11-10":{"Spaceflight Mechanics":30},"2025-11-11":{"Spaceflight Mechanics":145},"2025-11-12":{"Spaceflight Mechanics":75},"2025-11-18":{"Spaceflight Mechanics":88},"2025-11-21":{"Spaceflight Mechanics":126},"2025-11-27":{"Calcolo Numerico":130},"2025-11-28":{"Calcolo Numerico":55},"2025-12-01":{"Calcolo Numerico":143,"Spaceflight Mechanics":125},"2025-12-02":{"Spaceflight Mechanics":25},"2025-12-03":{"Spaceflight Mechanics":215},"2025-12-04":{"Calcolo Numerico":110},"2025-12-05":{"Calcolo Numerico":163},"2025-12-06":{"Calcolo Numerico":60},"2025-12-07":{"Spaceflight Mechanics":225},"2025-12-08":{"Calcolo Numerico":30,"Spaceflight Mechanics":75},"2025-12-09":{"Calcolo Numerico":85},"2025-12-11":{"Calcolo Numerico":40},"2025-12-29":{"Calcolo Numerico":120},"2026-01-09":{"Spaceflight Mechanics":70},"2026-01-10":{"Calcolo Numerico":45,"Spaceflight Mechanics":120},"2026-01-11":{"Calcolo Numerico":120,"Spaceflight Mechanics":70},"2026-01-12":{"Spaceflight Mechanics":285},"2026-01-13":{"Calcolo Numerico":127,"Spaceflight Mechanics":80},"2026-01-14":{"Spaceflight Mechanics":50},"2026-01-15":{"Calcolo Numerico":125,"Spaceflight Mechanics":105},"2026-01-16":{"Spaceflight Mechanics":285},"2026-01-19":{"Calcolo Numerico":165},"2026-01-20":{"Calcolo Numerico":60,"Spaceflight Mechanics":80},"2026-01-21":{"Calcolo Numerico":70,"Spaceflight Mechanics":217},"2026-01-22":{"Calcolo Numerico":110},"2026-01-23":{"Calcolo Numerico":140,"Spaceflight Mechanics":175},"2026-01-24":{"Calcolo Numerico":60,"Spaceflight Mechanics":80},"2026-01-25":{"Spaceflight Mechanics":182},"2026-01-26":{"Calcolo Numerico":178},"2026-01-27":{"Calcolo Numerico":265},"2026-01-28":{"Calcolo Numerico":140},"2026-02-01":{"Motori per l'aeromobili":164},"2026-02-04":{"Motori per l'aeromobili":225},"2026-02-05":{"Motori per l'aeromobili":135},"2026-02-06":{"Motori per l'aeromobili":50},"2026-02-07":{"Motori per l'aeromobili":235},"2026-02-08":{"Motori per l'aeromobili":220},"2026-02-09":{"Motori per l'aeromobili":105},"2026-02-10":{"Motori per l'aeromobili":150},"2026-02-11":{"Motori per l'aeromobili":100},"2026-02-12":{"Motori per l'aeromobili":215},"2026-02-13":{"Motori per l'aeromobili":240},"2026-02-14":{"Motori per l'aeromobili":270},"2026-02-15":{"Motori per l'aeromobili":295},"2026-02-16":{"Motori per l'aeromobili":285},"2026-02-28":{"Meccanica del Volo":30},"2026-03-02":{"Meccanica del Volo":136},"2026-03-04":{"Meccanica del Volo":60},"2026-03-05":{"Meccanica del Volo":130},"2026-03-09":{"Meccanica del Volo":150},"2026-03-10":{"Meccanica del Volo":150},"2026-03-11":{"Meccanica del Volo":85},"2026-03-12":{"Meccanica del Volo":50},"2026-03-14":{"Meccanica del Volo":50},"2026-03-15":{"Meccanica del Volo":35},"2026-03-16":{"Meccanica del Volo":40},"2026-04-06":{"Meccanica del Volo":168},"2026-04-08":{"Meccanica del Volo":228},"2026-04-09":{"Meccanica del Volo":180},"2026-04-10":{"Meccanica del Volo":90},"2026-04-11":{"Meccanica del Volo":20},"2026-04-12":{"Meccanica del Volo":125},"2026-04-13":{"Meccanica del Volo":30},"2026-04-14":{"Meccanica del Volo":220},"2026-04-16":{"Meccanica del Volo":360},"2026-04-17":{"Meccanica del Volo":400},"2026-04-18":{"Meccanica del Volo":265},"2026-04-19":{"Meccanica del Volo":205},"2026-04-20":{"Meccanica del Volo":190},"2026-04-21":{"Meccanica del Volo":190},"2026-04-22":{"Meccanica del Volo":410},"2026-04-23":{"Meccanica del Volo":330},"2026-04-24":{"Meccanica del Volo":160},"2026-04-30":{"Spaceflight Mechanics":100},"2026-05-04":{"Spaceflight Mechanics":225,"Aerodinamica":40},"2026-05-05":{"Spaceflight Mechanics":50},"2026-05-06":{"Spaceflight Mechanics":145},"2026-05-07":{"Spaceflight Mechanics":39,"Motori per l'aeromobili":40},"2026-05-08":{"Aerospace Structures":200},"2026-05-15":{"Spaceflight Mechanics":110},"2026-05-16":{"Spaceflight Mechanics":155,"Motori per l'aeromobili":123},"2026-05-18":{"Spaceflight Mechanics":245},"2026-05-19":{"Spaceflight Mechanics":165},"2026-05-20":{"Spaceflight Mechanics":80,"Motori per l'aeromobili":150},"2026-05-21":{"Spaceflight Mechanics":130,"Motori per l'aeromobili":140},"2026-05-22":{"Spaceflight Mechanics":230},"2026-05-23":{"Spaceflight Mechanics":210},"2026-05-25":{"Spaceflight Mechanics":368},"2026-05-26":{"Spaceflight Mechanics":50,"Motori per l'aeromobili":270},"2026-05-27":{"Spaceflight Mechanics":215},"2026-05-30":{"Spaceflight Mechanics":200},"2026-05-31":{"Spaceflight Mechanics":170,"Motori per l'aeromobili":60},"2026-06-01":{"Spaceflight Mechanics":110,"Motori per l'aeromobili":135},"2026-06-02":{"Motori per l'aeromobili":314},"2026-06-03":{"Spaceflight Mechanics":263},"2026-06-04":{"Spaceflight Mechanics":235},"2026-06-05":{"Spaceflight Mechanics":40,"Motori per l'aeromobili":132},"2026-06-06":{"Spaceflight Mechanics":80,"Motori per l'aeromobili":382},"2026-06-07":{"Spaceflight Mechanics":130},"2026-06-08":{"Spaceflight Mechanics":60,"Motori per l'aeromobili":110},"2026-06-09":{"Aerospace Structures":170},"2026-06-11":{"Motori per l'aeromobili":118},"2026-06-12":{"Motori per l'aeromobili":295},"2026-06-13":{"Motori per l'aeromobili":344},"2026-06-14":{"Motori per l'aeromobili":442,"Aerodinamica":60},"2026-06-15":{"Motori per l'aeromobili":140},"2026-06-16":{"Motori per l'aeromobili":30},"2026-06-17":{"Aerodinamica":351},"2026-06-18":{"Aerodinamica":395},"2026-06-19":{"Aerodinamica":240}};
-
-const DEFAULT_SUBJECT_DEFS = [
-  { name: "Calcolo Numerico", credits: 6 },
-  { name: "Meccanica del Volo", credits: 12 },
-  { name: "Aerospace Structures", credits: 12 },
-  { name: "Spaceflight Mechanics", credits: 12 },
-  { name: "Motori per l'aeromobili", credits: 12 },
-  { name: "Aerodinamica", credits: 12 },
-];
-
-function uid(prefix) {
-  return prefix + "_" + Math.random().toString(36).slice(2, 9);
-}
-
-function buildDefaultData() {
-  const subjects = DEFAULT_SUBJECT_DEFS.map((s, i) => ({
-    id: uid("sub"),
-    name: s.name,
-    credits: s.credits,
-    target: null,
-    color: PALETTE[i % PALETTE.length],
-  }));
-  const nameToId = Object.fromEntries(subjects.map((s) => [s.name, s.id]));
-  const entries = {};
-  Object.entries(RAW_ENTRIES).forEach(([date, bySubjectName]) => {
-    entries[date] = {};
-    Object.entries(bySubjectName).forEach(([name, minutes]) => {
-      const id = nameToId[name];
-      if (id) entries[date][id] = minutes;
-    });
-  });
-  return {
-    activeCursoId: "curso_2025_2026",
-    cursos: [
-      {
-        id: "curso_2025_2026",
-        name: "2025-2026",
-        subjects,
-        entries,
-      },
-    ],
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/*  UTILIDADES DE FECHA                                                */
-/* ------------------------------------------------------------------ */
-
-function isoToday() {
-  return new Date().toISOString().slice(0, 10);
-}
-function parseISO(iso) {
-  return new Date(iso + "T00:00:00");
-}
-function addDays(iso, n) {
-  const d = parseISO(iso);
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-function daysBetween(a, b) {
-  return Math.round((parseISO(b) - parseISO(a)) / 86400000);
-}
-function formatShort(iso) {
-  const d = parseISO(iso);
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
-}
-function formatLong(iso) {
-  const d = parseISO(iso);
-  return d.toLocaleDateString("es-ES", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-}
-function hm(minutes) {
-  const m = Math.round(minutes);
-  const h = Math.floor(m / 60);
-  const r = m % 60;
-  if (h === 0) return `${r} min`;
-  if (r === 0) return `${h} h`;
-  return `${h} h ${r} min`;
-}
-
-/* ------------------------------------------------------------------ */
-/*  CALCULOS DERIVADOS                                                 */
-/* ------------------------------------------------------------------ */
-
-function computeStats(curso) {
-  const { subjects, entries } = curso;
-  const dates = Object.keys(entries).sort();
-  const dailyTotals = {};
-  let maxSession = { minutes: 0, date: null, subjectId: null };
-
-  dates.forEach((date) => {
-    let dayTotal = 0;
-    Object.entries(entries[date]).forEach(([subId, minutes]) => {
-      dayTotal += minutes;
-      if (minutes > maxSession.minutes) {
-        maxSession = { minutes, date, subjectId: subId };
-      }
-    });
-    dailyTotals[date] = dayTotal;
-  });
-
-  const activeDates = dates.filter((d) => dailyTotals[d] > 0).sort();
-  const globalTotal = activeDates.reduce((acc, d) => acc + dailyTotals[d], 0);
-
-  // racha mas larga
-  let longest = 0, run = 0, prev = null;
-  activeDates.forEach((d) => {
-    if (prev && daysBetween(prev, d) === 1) run += 1;
-    else run = 1;
-    if (run > longest) longest = run;
-    prev = d;
-  });
-
-  // racha actual (hasta hoy, con margen de "hoy aun no registrado")
-  const today = isoToday();
-  const activeSet = new Set(activeDates);
-  let cursor = today;
-  if (!activeSet.has(cursor)) cursor = addDays(cursor, -1);
-  let current = 0;
-  while (activeSet.has(cursor)) {
-    current += 1;
-    cursor = addDays(cursor, -1);
-  }
-
-  const lastActiveDate = activeDates[activeDates.length - 1] || null;
-  const daysSinceLast = lastActiveDate ? daysBetween(lastActiveDate, today) : null;
-
-  const perSubject = subjects.map((sub) => {
-    let total = 0, daysActive = 0, last = null, maxDay = 0, maxDayDate = null;
-    activeDates.forEach((d) => {
-      const m = entries[d][sub.id];
-      if (m) {
-        total += m;
-        daysActive += 1;
-        if (!last || d > last) last = d;
-        if (m > maxDay) { maxDay = m; maxDayDate = d; }
-      }
-    });
-    const hoursPerCredit = sub.credits > 0 ? total / 60 / sub.credits : 0;
-    const pct = globalTotal > 0 ? (total / globalTotal) * 100 : 0;
-    const avgActiveDay = daysActive > 0 ? total / daysActive : 0;
-    const daysSince = last ? daysBetween(last, today) : null;
-    return {
-      ...sub,
-      total, daysActive, pct, hoursPerCredit, avgActiveDay,
-      last, daysSince, maxDay, maxDayDate,
-    };
-  });
-
-  return {
-    dailyTotals, activeDates, globalTotal, longest, current,
-    lastActiveDate, daysSinceLast, maxSession, perSubject,
-    totalDaysLogged: activeDates.length,
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/*  COMPONENTES DE UI                                                  */
+/*  COMPONENTES DE UI GENERICOS                                        */
 /* ------------------------------------------------------------------ */
 
 function Gauge({ label, value, max, unit, target, color, sub }) {
@@ -215,24 +58,54 @@ function Tab({ id, active, onClick, children }) {
   );
 }
 
+const ESTADO_LABELS = { en_curso: "En curso", suspendida: "Suspendida", aprobada: "Aprobada" };
+
+function EstadoBadge({ estado }) {
+  return <span className={`badge-estado badge-estado-${estado}`}>{ESTADO_LABELS[estado] || estado}</span>;
+}
+
+function Modal({ title, onClose, children, wide }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className={`modal-box ${wide ? "modal-box-wide" : ""}`} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">{title}</div>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">×</button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
-/*  TAB: BITACORA (registro diario)                                    */
+/*  TAB: BITACORA (registro diario + historial completo)               */
 /* ------------------------------------------------------------------ */
 
-function BitacoraTab({ curso, onSaveDay, onDeleteDay, stats }) {
+function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay }) {
   const [date, setDate] = useState(isoToday());
   const [values, setValues] = useState({});
+  const [historySubjectId, setHistorySubjectId] = useState(loggableSubjects[0]?.id || cursoSubjects[0]?.id || null);
+  const [visibleCount, setVisibleCount] = useState(20);
 
   useEffect(() => {
-    const existing = curso.entries[date] || {};
+    const existing = entries[date] || {};
     const next = {};
-    curso.subjects.forEach((s) => { next[s.id] = existing[s.id] ? String(existing[s.id]) : ""; });
+    loggableSubjects.forEach((s) => { next[s.id] = existing[s.id] ? String(existing[s.id]) : ""; });
     setValues(next);
-  }, [date, curso]);
+  }, [date, loggableSubjects, entries]);
 
-  const dayTotal = curso.subjects.reduce((acc, s) => acc + (parseFloat(values[s.id]) || 0), 0);
+  useEffect(() => {
+    if (!historySubjectId && cursoSubjects[0]) setHistorySubjectId(cursoSubjects[0].id);
+  }, [cursoSubjects, historySubjectId]);
 
-  const recent = [...stats.activeDates].sort().reverse().slice(0, 8);
+  useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
+
+  const dayTotal = loggableSubjects.reduce((acc, s) => acc + (parseFloat(values[s.id]) || 0), 0);
+  const hasEntryToday = !!entries[date] && loggableSubjects.some((s) => entries[date][s.id] > 0);
+
+  const historySubject = cursoSubjects.find((s) => s.id === historySubjectId) || null;
+  const history = historySubject ? getSubjectEntries(entries, historySubject.id, "desc") : [];
 
   return (
     <div className="grid-2">
@@ -242,70 +115,86 @@ function BitacoraTab({ curso, onSaveDay, onDeleteDay, stats }) {
           <label className="field-label">Fecha</label>
           <input type="date" value={date} max={isoToday()} onChange={(e) => setDate(e.target.value)} className="input-field" />
         </div>
-        <div className="subject-inputs">
-          {curso.subjects.map((s) => (
-            <div className="field-row" key={s.id}>
-              <label className="field-label">
-                <span className="dot" style={{ background: s.color }} />
-                {s.name}
-              </label>
-              <div className="input-with-unit">
-                <input
-                  type="number" min="0" step="5" placeholder="0"
-                  value={values[s.id] || ""}
-                  onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
-                  className="input-field input-num"
-                />
-                <span className="unit-tag">min</span>
-              </div>
+        {loggableSubjects.length === 0 ? (
+          <div className="empty-hint">No hay asignaturas activas en este curso (todas están aprobadas o no has añadido ninguna todavía).</div>
+        ) : (
+          <>
+            <div className="subject-inputs">
+              {loggableSubjects.map((s) => (
+                <div className="field-row" key={s.id}>
+                  <label className="field-label">
+                    <span className="dot" style={{ background: s.color }} />
+                    {s.name}
+                  </label>
+                  <div className="input-with-unit">
+                    <input
+                      type="number" min="0" step="5" placeholder="0"
+                      value={values[s.id] || ""}
+                      onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
+                      className="input-field input-num"
+                    />
+                    <span className="unit-tag">min</span>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="day-total-row">
-          <span>Total del día</span>
-          <span className="mono">{hm(dayTotal)}</span>
-        </div>
-        <div className="btn-row">
-          <button
-            className="btn-primary"
-            onClick={() => {
-              const clean = {};
-              curso.subjects.forEach((s) => {
-                const v = parseFloat(values[s.id]);
-                if (v > 0) clean[s.id] = v;
-              });
-              onSaveDay(date, clean);
-            }}
-          >
-            Guardar registro
-          </button>
-          {curso.entries[date] && (
-            <button className="btn-ghost" onClick={() => onDeleteDay(date)}>Eliminar día</button>
-          )}
-        </div>
+            <div className="day-total-row">
+              <span>Total del día</span>
+              <span className="mono">{hm(dayTotal)}</span>
+            </div>
+            <div className="btn-row">
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  const clean = {};
+                  loggableSubjects.forEach((s) => {
+                    const v = parseFloat(values[s.id]);
+                    if (v > 0) clean[s.id] = v;
+                  });
+                  onSaveDay(date, loggableSubjects.map((s) => s.id), clean);
+                }}
+              >
+                Guardar registro
+              </button>
+              {hasEntryToday && (
+                <button className="btn-ghost" onClick={() => onDeleteDay(date, loggableSubjects.map((s) => s.id))}>Eliminar día</button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="panel">
-        <div className="panel-title">Últimos registros</div>
-        {recent.length === 0 && <div className="empty-hint">Todavía no hay vuelos registrados en este curso.</div>}
-        <div className="log-list">
-          {recent.map((d) => (
-            <button key={d} className="log-item" onClick={() => setDate(d)}>
-              <span className="log-date">{formatShort(d)}</span>
-              <span className="log-detail">
-                {Object.entries(curso.entries[d]).map(([subId, min]) => {
-                  const s = curso.subjects.find((x) => x.id === subId);
-                  return s ? (
-                    <span key={subId} className="log-chip" style={{ borderColor: s.color }}>
-                      {s.name.length > 14 ? s.name.slice(0, 14) + "…" : s.name} · {min}m
-                    </span>
-                  ) : null;
-                })}
-              </span>
-              <span className="log-total mono">{hm(stats.dailyTotals[d])}</span>
-            </button>
-          ))}
+        <div className="panel-title-row">
+          <div className="panel-title" style={{ marginBottom: 0 }}>Historial completo</div>
+          {cursoSubjects.length > 0 && (
+            <select className="input-field subject-select" value={historySubjectId || ""} onChange={(e) => setHistorySubjectId(e.target.value)}>
+              {cursoSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
         </div>
+        {history.length === 0 && <div className="empty-hint">Todavía no hay registros para esta asignatura.</div>}
+        {history.length > 0 && (
+          <>
+            <div className="log-list">
+              {history.slice(0, visibleCount).map((e) => (
+                <button key={e.date} className="log-item" onClick={() => setDate(e.date)}>
+                  <span className="log-date">{formatShort(e.date)}</span>
+                  <span className="log-detail">
+                    <span className="log-chip" style={{ borderColor: historySubject?.color }}>{formatMedium(e.date)}</span>
+                  </span>
+                  <span className="log-total mono">{hm(e.minutes)}</span>
+                </button>
+              ))}
+            </div>
+            <div className="history-footer">
+              <span className="empty-hint" style={{ padding: "8px 0" }}>{history.length} registro(s) en total</span>
+              {visibleCount < history.length && (
+                <button className="btn-ghost btn-small" onClick={() => setVisibleCount((n) => n + 20)}>Cargar más</button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -315,9 +204,9 @@ function BitacoraTab({ curso, onSaveDay, onDeleteDay, stats }) {
 /*  TAB: PANEL (instrumentos)                                          */
 /* ------------------------------------------------------------------ */
 
-function PanelTab({ curso, stats, onSetTarget }) {
+function PanelTab({ stats }) {
   const maxHoursPerCredit = Math.max(0.5, ...stats.perSubject.map((s) => s.hoursPerCredit), ...stats.perSubject.map((s) => s.target || 0)) * 1.15;
-  const maxSessionSub = stats.maxSession.subjectId ? curso.subjects.find((s) => s.id === stats.maxSession.subjectId) : null;
+  const maxSessionSub = stats.perSubject.find((s) => s.id === stats.maxSession.subjectId) || null;
 
   return (
     <div>
@@ -363,6 +252,7 @@ function PanelTab({ curso, stats, onSetTarget }) {
             <thead>
               <tr>
                 <th>Asignatura</th>
+                <th>Estado</th>
                 <th>Créditos</th>
                 <th>Total</th>
                 <th>% esfuerzo</th>
@@ -375,6 +265,7 @@ function PanelTab({ curso, stats, onSetTarget }) {
               {stats.perSubject.map((s) => (
                 <tr key={s.id}>
                   <td><span className="dot" style={{ background: s.color }} />{s.name}</td>
+                  <td><EstadoBadge estado={s.estado} /></td>
                   <td className="mono">{s.credits}</td>
                   <td className="mono">{hm(s.total)}</td>
                   <td className="mono">{s.pct.toFixed(1)}%</td>
@@ -397,7 +288,7 @@ function PanelTab({ curso, stats, onSetTarget }) {
 /*  TAB: TRAYECTORIA (graficos)                                        */
 /* ------------------------------------------------------------------ */
 
-function TrayectoriaTab({ curso, stats }) {
+function TrayectoriaTab({ cursoSubjects, entries, stats }) {
   const [range, setRange] = useState(90);
 
   const chartDates = useMemo(() => {
@@ -410,7 +301,7 @@ function TrayectoriaTab({ curso, stats }) {
 
   const areaData = chartDates.map((d) => {
     const row = { date: formatShort(d) };
-    curso.subjects.forEach((s) => { row[s.name] = curso.entries[d][s.id] || 0; });
+    cursoSubjects.forEach((s) => { row[s.name] = (entries[d] && entries[d][s.id]) || 0; });
     return row;
   });
 
@@ -444,7 +335,7 @@ function TrayectoriaTab({ curso, stats }) {
             <YAxis stroke="#8291AC" fontSize={11} />
             <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} />
             <Legend wrapperStyle={{ fontSize: 11, color: "#8291AC" }} />
-            {curso.subjects.map((s) => (
+            {cursoSubjects.map((s) => (
               <Area key={s.id} type="monotone" dataKey={s.name} stackId="1" stroke={s.color} fill={s.color} fillOpacity={0.55} />
             ))}
           </AreaChart>
@@ -501,88 +392,62 @@ function TrayectoriaTab({ curso, stats }) {
 /*  TAB: ASIGNATURAS (gestion de cursos y asignaturas)                 */
 /* ------------------------------------------------------------------ */
 
-function AsignaturasTab({ data, setData, curso }) {
+function ApprovalForm({ subject, onConfirm, onCancel }) {
+  const [nota, setNota] = useState("");
+  const [convocatorias, setConvocatorias] = useState("1");
+  return (
+    <div>
+      <p className="panel-subtitle">
+        Vas a marcar <strong>{subject.name}</strong> como aprobada. Esto congela para siempre sus métricas de
+        clasificación histórica y su índice de desgaste con los datos de hoy — no se recalculan después.
+      </p>
+      <div className="field-row">
+        <label className="field-label">Nota obtenida</label>
+        <input type="number" step="0.1" className="input-field input-num" value={nota} onChange={(e) => setNota(e.target.value)} />
+      </div>
+      <div className="field-row">
+        <label className="field-label">Convocatorias / cursos necesarios</label>
+        <input type="number" min="1" step="1" className="input-field input-num" value={convocatorias} onChange={(e) => setConvocatorias(e.target.value)} />
+      </div>
+      <div className="btn-row">
+        <button className="btn-primary" onClick={() => onConfirm({ nota, convocatorias })}>Confirmar aprobación</button>
+        <button className="btn-ghost" onClick={onCancel}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAddSubject, onLinkSubject, onUnlinkSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso }) {
   const [newSubject, setNewSubject] = useState({ name: "", credits: "" });
   const [newCurso, setNewCurso] = useState("");
-
-  function updateSubject(subId, patch) {
-    setData((d) => ({
-      ...d,
-      cursos: d.cursos.map((c) =>
-        c.id !== curso.id ? c : { ...c, subjects: c.subjects.map((s) => (s.id === subId ? { ...s, ...patch } : s)) }
-      ),
-    }));
-  }
-
-  function removeSubject(subId) {
-    setData((d) => ({
-      ...d,
-      cursos: d.cursos.map((c) => {
-        if (c.id !== curso.id) return c;
-        const entries = {};
-        Object.entries(c.entries).forEach(([date, vals]) => {
-          const { [subId]: _drop, ...rest } = vals;
-          entries[date] = rest;
-        });
-        return { ...c, subjects: c.subjects.filter((s) => s.id !== subId), entries };
-      }),
-    }));
-  }
+  const [linkChoice, setLinkChoice] = useState("");
+  const [approvingId, setApprovingId] = useState(null);
 
   function addSubject() {
     if (!newSubject.name.trim() || !newSubject.credits) return;
-    setData((d) => ({
-      ...d,
-      cursos: d.cursos.map((c) =>
-        c.id !== curso.id
-          ? c
-          : {
-              ...c,
-              subjects: [
-                ...c.subjects,
-                {
-                  id: uid("sub"),
-                  name: newSubject.name.trim(),
-                  credits: parseFloat(newSubject.credits),
-                  target: null,
-                  color: PALETTE[c.subjects.length % PALETTE.length],
-                },
-              ],
-            }
-      ),
-    }));
+    onAddSubject(newSubject.name.trim(), parseFloat(newSubject.credits));
     setNewSubject({ name: "", credits: "" });
   }
 
   function addCurso() {
     if (!newCurso.trim()) return;
-    const id = uid("curso");
-    setData((d) => ({
-      activeCursoId: id,
-      cursos: [...d.cursos, { id, name: newCurso.trim(), subjects: [], entries: {} }],
-    }));
+    onAddCurso(newCurso.trim());
     setNewCurso("");
   }
 
-  function removeCurso(id) {
-    if (data.cursos.length === 1) return;
-    setData((d) => {
-      const cursos = d.cursos.filter((c) => c.id !== id);
-      return { activeCursoId: d.activeCursoId === id ? cursos[0].id : d.activeCursoId, cursos };
-    });
-  }
+  const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
 
   return (
     <div>
       <div className="panel">
         <div className="panel-title">Cursos académicos</div>
-        <div className="panel-subtitle">Cada curso lleva su propio conjunto de asignaturas y registros, para poder comparar el esfuerzo de un año con otro.</div>
+        <div className="panel-subtitle">Cada curso agrupa las asignaturas que cursas ese año. Una asignatura suspendida puede retomarse en un curso posterior sin perder su historial.</div>
         <div className="curso-list">
-          {data.cursos.map((c) => (
-            <div key={c.id} className={`curso-chip ${c.id === data.activeCursoId ? "curso-chip-active" : ""}`}>
-              <button onClick={() => setData((d) => ({ ...d, activeCursoId: c.id }))}>{c.name}</button>
-              {data.cursos.length > 1 && (
-                <span className="curso-remove" onClick={() => removeCurso(c.id)}>×</span>
+          {cursos.map((c) => (
+            <div key={c.id} className={`curso-chip ${c.id === activeCursoId ? "curso-chip-active" : ""}`}>
+              <button onClick={() => onSelectCurso(c.id)}>{c.name}</button>
+              {cursos.length > 1 && (
+                <span className="curso-remove" onClick={() => onRemoveCurso(c.id)}>×</span>
               )}
             </div>
           ))}
@@ -608,27 +473,42 @@ function AsignaturasTab({ data, setData, curso }) {
             <thead>
               <tr>
                 <th>Asignatura</th>
+                <th>Estado</th>
                 <th>Créditos</th>
                 <th>Referencia h/crédito</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {curso.subjects.map((s) => (
+              {cursoSubjects.map((s) => (
                 <tr key={s.id}>
                   <td>
                     <span className="dot" style={{ background: s.color }} />
                     <input
                       className="input-field input-inline"
                       value={s.name}
-                      onChange={(e) => updateSubject(s.id, { name: e.target.value })}
+                      onChange={(e) => onUpdateSubject(s.id, { name: e.target.value })}
                     />
+                  </td>
+                  <td>
+                    <select
+                      className="input-field input-inline estado-select"
+                      value={s.estado}
+                      onChange={(e) => {
+                        if (e.target.value === "aprobada") setApprovingId(s.id);
+                        else onChangeEstado(s.id, e.target.value);
+                      }}
+                    >
+                      <option value="en_curso">En curso</option>
+                      <option value="suspendida">Suspendida</option>
+                      <option value="aprobada">Aprobada</option>
+                    </select>
                   </td>
                   <td>
                     <input
                       type="number" min="1" step="1" className="input-field input-inline input-num"
                       value={s.credits}
-                      onChange={(e) => updateSubject(s.id, { credits: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => onUpdateSubject(s.id, { credits: parseFloat(e.target.value) || 0 })}
                     />
                   </td>
                   <td>
@@ -636,10 +516,10 @@ function AsignaturasTab({ data, setData, curso }) {
                       type="number" min="0" step="0.1" className="input-field input-inline input-num"
                       placeholder="opcional"
                       value={s.target ?? ""}
-                      onChange={(e) => updateSubject(s.id, { target: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                      onChange={(e) => onUpdateSubject(s.id, { target: e.target.value === "" ? null : parseFloat(e.target.value) })}
                     />
                   </td>
-                  <td><button className="btn-ghost btn-small" onClick={() => removeSubject(s.id)}>Eliminar</button></td>
+                  <td><button className="btn-ghost btn-small" onClick={() => onUnlinkSubject(s.id)}>Quitar</button></td>
                 </tr>
               ))}
             </tbody>
@@ -648,9 +528,235 @@ function AsignaturasTab({ data, setData, curso }) {
         <div className="btn-row" style={{ marginTop: 14 }}>
           <input className="input-field" placeholder="Nombre de la asignatura" value={newSubject.name} onChange={(e) => setNewSubject((v) => ({ ...v, name: e.target.value }))} />
           <input className="input-field input-num" type="number" min="1" placeholder="Créditos" value={newSubject.credits} onChange={(e) => setNewSubject((v) => ({ ...v, credits: e.target.value }))} />
-          <button className="btn-primary" onClick={addSubject}>Añadir asignatura</button>
+          <button className="btn-primary" onClick={addSubject}>Añadir asignatura nueva</button>
+        </div>
+        {unlinkedSubjects.length > 0 && (
+          <div className="btn-row" style={{ marginTop: 10 }}>
+            <select className="input-field" value={linkChoice} onChange={(e) => setLinkChoice(e.target.value)}>
+              <option value="">Vincular asignatura ya existente (p. ej. una suspendida)…</option>
+              {unlinkedSubjects.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} — {ESTADO_LABELS[s.estado]}</option>
+              ))}
+            </select>
+            <button
+              className="btn-primary"
+              onClick={() => { if (linkChoice) { onLinkSubject(linkChoice); setLinkChoice(""); } }}
+              disabled={!linkChoice}
+              style={!linkChoice ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+            >
+              Vincular a este curso
+            </button>
+          </div>
+        )}
+      </div>
+
+      {approvingSubject && (
+        <Modal title="Marcar asignatura como aprobada" onClose={() => setApprovingId(null)}>
+          <ApprovalForm
+            subject={approvingSubject}
+            onCancel={() => setApprovingId(null)}
+            onConfirm={({ nota, convocatorias }) => { onApprove(approvingSubject.id, { nota, convocatorias }); setApprovingId(null); }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  TAB: DESGASTE (peor tramo, normalizado y personal)                 */
+/* ------------------------------------------------------------------ */
+
+function DesgasteCard({ subject, desgaste }) {
+  const isFrozen = subject.estado === "aprobada";
+  const wb = desgaste.worstBlock;
+  return (
+    <div className="panel wear-card">
+      <div className="wear-card-head">
+        <div>
+          <span className="dot" style={{ background: subject.color }} />
+          <strong>{subject.name}</strong>
+          {!isFrozen && <span className="wear-provisional">provisional</span>}
+        </div>
+        <EstadoBadge estado={subject.estado} />
+      </div>
+      {!desgaste.comparable && (
+        <div className="empty-hint">No comparable — datos insuficientes (ningún bloque de ≥3 días activos).</div>
+      )}
+      {desgaste.comparable && !desgaste.hasTopes && (
+        <div className="empty-hint">Bloque peor detectado, pero aún no hay ninguna asignatura aprobada con la que fijar una referencia.</div>
+      )}
+      {desgaste.comparable && desgaste.hasTopes && (
+        <>
+          <div className="wear-index-row">
+            <span className="wear-index-value">{desgaste.indice.toFixed(2)}<span className="gauge-unit">/10</span></span>
+            <span className={`wear-label wear-label-${desgaste.etiqueta.toLowerCase()}`}>{desgaste.etiqueta}</span>
+          </div>
+          <div className="wear-factors">
+            <div className="wear-factor"><span>Intensidad</span><span className="mono">{desgaste.normalized.intensidad.toFixed(1)}/10 · {desgaste.rawFactors.intensidad.toFixed(0)} min/día</span></div>
+            <div className="wear-factor"><span>Duración</span><span className="mono">{desgaste.normalized.duracion.toFixed(1)}/10 · {desgaste.rawFactors.duracion} días</span></div>
+            <div className="wear-factor"><span>Compresión</span><span className="mono">{desgaste.normalized.compresion.toFixed(1)}/10 · {(desgaste.rawFactors.compresion * 100).toFixed(0)}%</span></div>
+            <div className="wear-factor"><span>Racha interna</span><span className="mono">{desgaste.normalized.racha.toFixed(1)}/10 · {desgaste.rawFactors.racha} d</span></div>
+          </div>
+        </>
+      )}
+      {wb && <div className="gauge-sub">Peor tramo: {formatShort(wb.first)} → {formatShort(wb.last)}</div>}
+    </div>
+  );
+}
+
+function DesgasteTab({ subjects, entries }) {
+  const rows = useMemo(() => {
+    return subjects.map((s) => {
+      if (s.estado === "aprobada") {
+        return { subject: s, desgaste: s.frozen?.desgaste || { comparable: false } };
+      }
+      const prior = priorComparableRawFactors(subjects);
+      const desgaste = computeDesgaste(s.id, entries, prior, { includeSelf: false });
+      return { subject: s, desgaste };
+    }).sort((a, b) => {
+      const ai = a.desgaste.comparable && a.desgaste.hasTopes !== false ? (a.desgaste.indice ?? -1) : -2;
+      const bi = b.desgaste.comparable && b.desgaste.hasTopes !== false ? (b.desgaste.indice ?? -1) : -2;
+      if (a.subject.estado === "aprobada" && b.subject.estado !== "aprobada") return -1;
+      if (b.subject.estado === "aprobada" && a.subject.estado !== "aprobada") return 1;
+      return (bi ?? -2) - (ai ?? -2);
+    });
+  }, [subjects, entries]);
+
+  if (rows.length === 0) return <div className="panel"><div className="empty-hint">Todavía no hay asignaturas.</div></div>;
+
+  return (
+    <div>
+      <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
+        Mide el tramo de estudio más exigente de cada asignatura, comparado con tu propio historial. Para las
+        asignaturas ya aprobadas el número queda congelado para siempre; para las que siguen en curso se muestra
+        una vista previa que cambiará hasta que las apruebes.
+      </div>
+      {rows.map(({ subject, desgaste }) => (
+        <DesgasteCard key={subject.id} subject={subject} desgaste={desgaste} />
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  TAB: CLASIFICACIÓN HISTÓRICA (tabla comparativa, sin normalizar)    */
+/* ------------------------------------------------------------------ */
+
+const CLASIF_COLUMNS = [
+  { key: "name", label: "Asignatura" },
+  { key: "horasPorCredito", label: "Horas/crédito" },
+  { key: "diasTotales", label: "Días totales" },
+  { key: "convocatorias", label: "Convocatorias" },
+  { key: "nota", label: "Nota" },
+];
+
+function ClasificacionDetail({ subject }) {
+  const f = subject.frozen;
+  const d = f.desgaste;
+  return (
+    <div>
+      <div className="stat-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+        <StatCard label="Horas / crédito" value={f.horasPorCredito.toFixed(2)} accent="#4FD8EA" />
+        <StatCard label="Días totales" value={`${f.diasTotales} d`} accent="#F5A623" />
+        <StatCard label="Convocatorias" value={f.convocatorias ?? "—"} accent="#A78BFA" />
+        <StatCard label="Nota" value={f.nota ?? "—"} accent="#3DDC84" />
+      </div>
+      <div className="panel" style={{ marginTop: 4 }}>
+        <div className="panel-title">Desgaste</div>
+        {!d.comparable && <div className="empty-hint">No comparable — datos insuficientes.</div>}
+        {d.comparable && d.hasTopes && (
+          <>
+            <div className="wear-index-row">
+              <span className="wear-index-value">{d.indice.toFixed(2)}<span className="gauge-unit">/10</span></span>
+              <span className={`wear-label wear-label-${d.etiqueta.toLowerCase()}`}>{d.etiqueta}</span>
+            </div>
+            <div className="wear-factors">
+              <div className="wear-factor"><span>Intensidad</span><span className="mono">{d.normalized.intensidad.toFixed(1)}/10 · {d.rawFactors.intensidad.toFixed(0)} min/día</span></div>
+              <div className="wear-factor"><span>Duración</span><span className="mono">{d.normalized.duracion.toFixed(1)}/10 · {d.rawFactors.duracion} días</span></div>
+              <div className="wear-factor"><span>Compresión</span><span className="mono">{d.normalized.compresion.toFixed(1)}/10 · {(d.rawFactors.compresion * 100).toFixed(0)}%</span></div>
+              <div className="wear-factor"><span>Racha interna</span><span className="mono">{d.normalized.racha.toFixed(1)}/10 · {d.rawFactors.racha} d</span></div>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="gauge-sub" style={{ padding: "0 4px" }}>
+        Inicio: {f.fechaInicio ? formatMedium(f.fechaInicio) : "—"} · Aprobada: {formatMedium(f.fechaAprobacion)}
+      </div>
+    </div>
+  );
+}
+
+function ClasificacionTab({ subjects }) {
+  const [sortKey, setSortKey] = useState("horasPorCredito");
+  const [sortDir, setSortDir] = useState("desc");
+  const [detailId, setDetailId] = useState(null);
+
+  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen);
+
+  const rows = useMemo(() => {
+    const list = approved.map((s) => ({
+      id: s.id, name: s.name, color: s.color,
+      horasPorCredito: s.frozen.horasPorCredito,
+      diasTotales: s.frozen.diasTotales,
+      convocatorias: s.frozen.convocatorias ?? 0,
+      nota: s.frozen.nota ?? 0,
+    }));
+    list.sort((a, b) => {
+      const av = a[sortKey], bv = b[sortKey];
+      if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+    return list;
+  }, [approved, sortKey, sortDir]);
+
+  function toggleSort(key) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("desc"); }
+  }
+
+  const detailSubject = detailId ? subjects.find((s) => s.id === detailId) : null;
+
+  if (approved.length === 0) {
+    return <div className="panel"><div className="empty-hint">Todavía no hay asignaturas aprobadas. Márcalas como aprobadas desde la pestaña Asignaturas para verlas aquí.</div></div>;
+  }
+
+  return (
+    <div>
+      <div className="panel">
+        <div className="panel-title">Clasificación histórica</div>
+        <div className="panel-subtitle">Cifras absolutas, sin normalizar — la forma más objetiva de comparar cuánto costó cada asignatura. Toca una fila para ver la ficha completa.</div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                {CLASIF_COLUMNS.map((c) => (
+                  <th key={c.key} className="sortable-th" onClick={() => toggleSort(c.key)}>
+                    {c.label}{sortKey === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="clickable-row" onClick={() => setDetailId(r.id)}>
+                  <td><span className="dot" style={{ background: r.color }} />{r.name}</td>
+                  <td className="mono">{r.horasPorCredito.toFixed(2)}</td>
+                  <td className="mono">{r.diasTotales}</td>
+                  <td className="mono">{r.convocatorias || "—"}</td>
+                  <td className="mono">{r.nota || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {detailSubject && (
+        <Modal title={detailSubject.name} onClose={() => setDetailId(null)} wide>
+          <ClasificacionDetail subject={detailSubject} />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -661,6 +767,7 @@ function AsignaturasTab({ data, setData, curso }) {
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
 const APPS_SCRIPT_TOKEN = import.meta.env.VITE_APPS_SCRIPT_TOKEN;
+const DISABLE_CLOUD_SAVE = import.meta.env.VITE_DISABLE_CLOUD_SAVE === "true";
 
 async function cloudLoad() {
   const res = await fetch(`${APPS_SCRIPT_URL}?token=${encodeURIComponent(APPS_SCRIPT_TOKEN)}`);
@@ -696,10 +803,10 @@ export default function App() {
     (async () => {
       try {
         const value = await cloudLoad();
-        setData(value ? JSON.parse(value) : buildDefaultData());
+        setData(migrateData(value ? JSON.parse(value) : buildDefaultData()));
         setCloudError(null);
       } catch (e) {
-        setData(buildDefaultData());
+        setData(migrateData(buildDefaultData()));
         setCloudError(String((e && e.message) || e));
       }
     })();
@@ -707,6 +814,7 @@ export default function App() {
 
   useEffect(() => {
     if (!data) return;
+    if (DISABLE_CLOUD_SAVE) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
@@ -720,30 +828,100 @@ export default function App() {
   }, [data]);
 
   const curso = useMemo(() => data && data.cursos.find((c) => c.id === data.activeCursoId), [data]);
-  const stats = useMemo(() => (curso ? computeStats(curso) : null), [curso]);
+  const cursoSubjects = useMemo(
+    () => (data && curso ? data.subjects.filter((s) => curso.subjectIds.includes(s.id)) : []),
+    [data, curso]
+  );
+  const loggableSubjects = useMemo(() => cursoSubjects.filter((s) => s.estado !== "aprobada"), [cursoSubjects]);
+  const unlinkedSubjects = useMemo(
+    () => (data && curso ? data.subjects.filter((s) => !curso.subjectIds.includes(s.id) && s.estado !== "aprobada") : []),
+    [data, curso]
+  );
+  const stats = useMemo(() => (data && cursoSubjects ? computeStats(cursoSubjects, data.entries) : null), [data, cursoSubjects]);
 
-  function handleSaveDay(date, values) {
+  function handleSaveDay(date, loggableIds, values) {
+    setData((d) => {
+      const nextDay = { ...(d.entries[date] || {}) };
+      loggableIds.forEach((id) => delete nextDay[id]);
+      Object.entries(values).forEach(([id, v]) => { nextDay[id] = v; });
+      const entries = { ...d.entries };
+      if (Object.keys(nextDay).length === 0) delete entries[date];
+      else entries[date] = nextDay;
+      return { ...d, entries };
+    });
+  }
+
+  function handleDeleteDay(date, loggableIds) {
+    setData((d) => {
+      const nextDay = { ...(d.entries[date] || {}) };
+      loggableIds.forEach((id) => delete nextDay[id]);
+      const entries = { ...d.entries };
+      if (Object.keys(nextDay).length === 0) delete entries[date];
+      else entries[date] = nextDay;
+      return { ...d, entries };
+    });
+  }
+
+  function handleAddSubject(name, credits) {
+    setData((d) => {
+      const newSub = { id: uid("sub"), name, credits, target: null, color: PALETTE[d.subjects.length % PALETTE.length], estado: "en_curso", frozen: null };
+      return {
+        ...d,
+        subjects: [...d.subjects, newSub],
+        cursos: d.cursos.map((c) => (c.id !== curso.id ? c : { ...c, subjectIds: [...c.subjectIds, newSub.id] })),
+      };
+    });
+  }
+
+  function handleLinkSubject(subjectId) {
     setData((d) => ({
       ...d,
-      cursos: d.cursos.map((c) => {
-        if (c.id !== curso.id) return c;
-        const entries = { ...c.entries };
-        if (Object.keys(values).length === 0) delete entries[date];
-        else entries[date] = values;
-        return { ...c, entries };
-      }),
+      cursos: d.cursos.map((c) => (c.id !== curso.id || c.subjectIds.includes(subjectId) ? c : { ...c, subjectIds: [...c.subjectIds, subjectId] })),
     }));
   }
 
-  function handleDeleteDay(date) {
+  function handleUnlinkSubject(subjectId) {
+    setData((d) => {
+      const cursos = d.cursos.map((c) => (c.id !== curso.id ? c : { ...c, subjectIds: c.subjectIds.filter((id) => id !== subjectId) }));
+      const stillLinked = cursos.some((c) => c.subjectIds.includes(subjectId));
+      const hasEntries = Object.values(d.entries).some((day) => day[subjectId] > 0);
+      if (stillLinked || hasEntries) {
+        return { ...d, cursos };
+      }
+      return { ...d, cursos, subjects: d.subjects.filter((s) => s.id !== subjectId) };
+    });
+  }
+
+  function handleUpdateSubject(subjectId, patch) {
+    setData((d) => ({ ...d, subjects: d.subjects.map((s) => (s.id === subjectId ? { ...s, ...patch } : s)) }));
+  }
+
+  function handleChangeEstado(subjectId, estado) {
     setData((d) => ({
       ...d,
-      cursos: d.cursos.map((c) => {
-        if (c.id !== curso.id) return c;
-        const { [date]: _drop, ...rest } = c.entries;
-        return { ...c, entries: rest };
-      }),
+      subjects: d.subjects.map((s) => (s.id === subjectId ? { ...s, estado, frozen: estado === "aprobada" ? s.frozen : null } : s)),
     }));
+  }
+
+  function handleApprove(subjectId, { nota, convocatorias }) {
+    setData((d) => {
+      const subject = d.subjects.find((s) => s.id === subjectId);
+      const approved = freezeApproval(subject, { entries: d.entries, subjects: d.subjects, nota, convocatorias });
+      return { ...d, subjects: d.subjects.map((s) => (s.id === subjectId ? approved : s)) };
+    });
+  }
+
+  function handleAddCurso(name) {
+    const id = uid("curso");
+    setData((d) => ({ ...d, activeCursoId: id, cursos: [...d.cursos, { id, name, subjectIds: [] }] }));
+  }
+
+  function handleRemoveCurso(id) {
+    setData((d) => {
+      if (d.cursos.length === 1) return d;
+      const cursos = d.cursos.filter((c) => c.id !== id);
+      return { ...d, activeCursoId: d.activeCursoId === id ? cursos[0].id : d.activeCursoId, cursos };
+    });
   }
 
   if (!data || !curso || !stats) {
@@ -775,18 +953,54 @@ export default function App() {
         </div>
       </header>
 
+      {DISABLE_CLOUD_SAVE && (
+        <div className="preview-banner">
+          Vista previa de solo lectura: los cambios que hagas aquí no se guardan en la nube compartida.
+        </div>
+      )}
+
       <nav className="tab-bar">
         <Tab id="bitacora" active={tab === "bitacora"} onClick={setTab}>Bitácora</Tab>
         <Tab id="panel" active={tab === "panel"} onClick={setTab}>Panel</Tab>
         <Tab id="trayectoria" active={tab === "trayectoria"} onClick={setTab}>Trayectoria</Tab>
+        <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
+        <Tab id="clasificacion" active={tab === "clasificacion"} onClick={setTab}>Clasificación</Tab>
         <Tab id="asignaturas" active={tab === "asignaturas"} onClick={setTab}>Asignaturas</Tab>
       </nav>
 
       <main className="app-main">
-        {tab === "bitacora" && <BitacoraTab curso={curso} stats={stats} onSaveDay={handleSaveDay} onDeleteDay={handleDeleteDay} />}
-        {tab === "panel" && <PanelTab curso={curso} stats={stats} />}
-        {tab === "trayectoria" && <TrayectoriaTab curso={curso} stats={stats} />}
-        {tab === "asignaturas" && <AsignaturasTab data={data} setData={setData} curso={curso} />}
+        {tab === "bitacora" && (
+          <BitacoraTab
+            cursoSubjects={cursoSubjects}
+            loggableSubjects={loggableSubjects}
+            entries={data.entries}
+            onSaveDay={handleSaveDay}
+            onDeleteDay={handleDeleteDay}
+          />
+        )}
+        {tab === "panel" && <PanelTab stats={stats} />}
+        {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={data.entries} stats={stats} />}
+        {tab === "desgaste" && <DesgasteTab subjects={data.subjects} entries={data.entries} />}
+        {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} />}
+        {tab === "asignaturas" && (
+          <AsignaturasTab
+            subjects={data.subjects}
+            cursoSubjects={cursoSubjects}
+            unlinkedSubjects={unlinkedSubjects}
+            curso={curso}
+            cursos={data.cursos}
+            activeCursoId={data.activeCursoId}
+            onSelectCurso={(id) => setData((d) => ({ ...d, activeCursoId: id }))}
+            onAddSubject={handleAddSubject}
+            onLinkSubject={handleLinkSubject}
+            onUnlinkSubject={handleUnlinkSubject}
+            onUpdateSubject={handleUpdateSubject}
+            onChangeEstado={handleChangeEstado}
+            onApprove={handleApprove}
+            onAddCurso={handleAddCurso}
+            onRemoveCurso={handleRemoveCurso}
+          />
+        )}
       </main>
     </div>
   );
@@ -808,6 +1022,7 @@ const CSS = `
     --amber: #F5A623;
     --green: #3DDC84;
     --red: #FF5C5C;
+    --purple: #A78BFA;
   }
   .app-shell {
     background: radial-gradient(1200px 600px at 50% -10%, #101B30 0%, var(--bg) 60%);
@@ -840,6 +1055,11 @@ const CSS = `
     .header-right { width: 100%; }
   }
 
+  .preview-banner {
+    max-width: 1080px; margin: 0 auto 16px; background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.35);
+    color: var(--amber); font-size: 12.5px; padding: 10px 14px; border-radius: 10px;
+  }
+
   .tab-bar { max-width: 1080px; margin: 0 auto 20px; display: flex; gap: 6px; flex-wrap: wrap; }
   .tab-btn {
     font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
@@ -864,7 +1084,7 @@ const CSS = `
 
   .field-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .field-label { font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; flex: 1; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; margin-right: 6px; }
   .input-field {
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px;
     padding: 8px 10px; font-size: 13px; font-family: inherit; width: 100%;
@@ -873,6 +1093,8 @@ const CSS = `
   .input-with-unit { display: flex; align-items: center; gap: 6px; width: 130px; }
   .input-num { width: 90px; text-align: right; font-family: ui-monospace, monospace; }
   .input-inline { padding: 6px 8px; font-size: 13px; }
+  .estado-select { width: auto; min-width: 110px; }
+  .subject-select { width: auto; max-width: 220px; }
   .unit-tag { font-size: 11px; color: var(--text-dim); }
   .subject-inputs { margin: 14px 0; }
   .day-total-row {
@@ -903,6 +1125,7 @@ const CSS = `
   .log-detail { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
   .log-chip { font-size: 11px; border: 1px solid; border-radius: 20px; padding: 2px 8px; color: var(--text-dim); }
   .log-total { font-size: 12px; color: var(--text); flex-shrink: 0; }
+  .history-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 
   .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
   @media (max-width: 900px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -931,6 +1154,10 @@ const CSS = `
   }
   .data-table td { padding: 9px 10px; border-bottom: 1px solid rgba(38,50,74,0.5); }
   .data-table tr:last-child td { border-bottom: none; }
+  .sortable-th { cursor: pointer; user-select: none; }
+  .sortable-th:hover { color: var(--text); }
+  .clickable-row { cursor: pointer; }
+  .clickable-row:hover td { background: rgba(79,216,234,0.05); }
 
   .seg-control { display: flex; gap: 4px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
   .seg-btn { background: transparent; border: none; color: var(--text-dim); font-size: 11px; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-family: ui-monospace, monospace; }
@@ -942,4 +1169,42 @@ const CSS = `
   .curso-chip-active button { background: var(--cyan); color: #06131C; font-weight: 700; }
   .curso-remove { padding: 0 10px; color: var(--text-dim); cursor: pointer; font-size: 14px; }
   .curso-remove:hover { color: var(--red); }
+
+  .badge-estado {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid; white-space: nowrap;
+  }
+  .badge-estado-en_curso { color: var(--cyan); border-color: rgba(79,216,234,0.4); background: rgba(79,216,234,0.08); }
+  .badge-estado-suspendida { color: var(--amber); border-color: rgba(245,166,35,0.4); background: rgba(245,166,35,0.08); }
+  .badge-estado-aprobada { color: var(--green); border-color: rgba(61,220,132,0.4); background: rgba(61,220,132,0.08); }
+
+  .wear-card { padding: 16px 20px; }
+  .wear-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .wear-provisional { font-size: 10px; color: var(--text-dim); margin-left: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .wear-index-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .wear-index-value { font-family: ui-monospace, monospace; font-size: 28px; font-weight: 700; }
+  .wear-label { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .wear-label-llevadero { color: var(--green); background: rgba(61,220,132,0.1); }
+  .wear-label-moderado { color: var(--cyan); background: rgba(79,216,234,0.1); }
+  .wear-label-duro { color: var(--amber); background: rgba(245,166,35,0.1); }
+  .wear-label-extremo { color: var(--red); background: rgba(255,92,92,0.1); }
+  .wear-factors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 20px; }
+  @media (max-width: 560px) { .wear-factors { grid-template-columns: 1fr; } }
+  .wear-factor { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }
+  .wear-factor span:first-child { color: var(--text); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(6,10,20,0.7); backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 100;
+  }
+  .modal-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 440px;
+    max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal-box-wide { max-width: 640px; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .modal-title { font-size: 15px; font-weight: 700; }
+  .modal-close { background: transparent; border: none; color: var(--text-dim); font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; }
+  .modal-close:hover { color: var(--red); }
+  .modal-body { padding: 18px 20px; }
 `;
