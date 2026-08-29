@@ -5,8 +5,9 @@ import {
 } from "recharts";
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
-  buildDefaultData, migrateData, computeStats, getSubjectEntries,
+  buildDefaultData, migrateData, computeStats, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, priorComparableRawFactors, freezeApproval,
+  inferCursoRange, entriesInRange, subjectsWithActivityInRange,
 } from "./domain.js";
 
 /* ------------------------------------------------------------------ */
@@ -116,7 +117,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
           <input type="date" value={date} max={isoToday()} onChange={(e) => setDate(e.target.value)} className="input-field" />
         </div>
         {loggableSubjects.length === 0 ? (
-          <div className="empty-hint">No hay asignaturas activas en este curso (todas están aprobadas o no has añadido ninguna todavía).</div>
+          <div className="empty-hint">No hay asignaturas activas (todas están aprobadas o no has añadido ninguna todavía).</div>
         ) : (
           <>
             <div className="subject-inputs">
@@ -424,10 +425,9 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   );
 }
 
-function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAddSubject, onLinkSubject, onUnlinkSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso }) {
+function AsignaturasTab({ subjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso }) {
   const [newSubject, setNewSubject] = useState({ name: "", credits: "" });
-  const [newCurso, setNewCurso] = useState("");
-  const [linkChoice, setLinkChoice] = useState("");
+  const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
 
   function addSubject() {
@@ -436,51 +436,69 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
     setNewSubject({ name: "", credits: "" });
   }
 
+  function updateNewCursoName(name) {
+    const inferred = inferCursoRange(name);
+    setNewCurso((v) => ({
+      ...v,
+      name,
+      startDate: inferred ? inferred.startDate : v.startDate,
+      endDate: inferred ? inferred.endDate : v.endDate,
+    }));
+  }
+
   function addCurso() {
-    if (!newCurso.trim()) return;
-    onAddCurso(newCurso.trim());
-    setNewCurso("");
+    if (!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate) return;
+    onAddCurso(newCurso.name.trim(), newCurso.startDate, newCurso.endDate);
+    setNewCurso({ name: "", startDate: "", endDate: "" });
   }
 
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
+  const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
 
   return (
     <div>
       <div className="panel">
         <div className="panel-title">Cursos académicos</div>
-        <div className="panel-subtitle">Cada curso agrupa las asignaturas que cursas ese año. Una asignatura suspendida puede retomarse en un curso posterior sin perder su historial.</div>
+        <div className="panel-subtitle">
+          Cada curso es solo un rango de fechas — el registro de una asignatura se muestra bajo el curso al que
+          corresponda su fecha, automáticamente, sin que tengas que vincular nada a mano.
+        </div>
         <div className="curso-list">
           {cursos.map((c) => (
             <div key={c.id} className={`curso-chip ${c.id === activeCursoId ? "curso-chip-active" : ""}`}>
-              <button onClick={() => onSelectCurso(c.id)}>{c.name}</button>
+              <button onClick={() => onSelectCurso(c.id)} title={`${c.startDate} → ${c.endDate}`}>{c.name}</button>
               {cursos.length > 1 && (
                 <span className="curso-remove" onClick={() => onRemoveCurso(c.id)}>×</span>
               )}
             </div>
           ))}
         </div>
-        <div className="btn-row" style={{ marginTop: 12 }}>
+        <div className="btn-row" style={{ marginTop: 12, alignItems: "center" }}>
           <input
             className="input-field"
             placeholder="Ej. 2026-2027"
-            value={newCurso}
-            onChange={(e) => setNewCurso(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCurso(); } }}
+            value={newCurso.name}
+            onChange={(e) => updateNewCursoName(e.target.value)}
           />
-          <button className="btn-primary" onClick={addCurso} disabled={!newCurso.trim()} style={!newCurso.trim() ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>
+          <input type="date" className="input-field" value={newCurso.startDate} onChange={(e) => setNewCurso((v) => ({ ...v, startDate: e.target.value }))} />
+          <span className="gauge-sub" style={{ margin: 0 }}>→</span>
+          <input type="date" className="input-field" value={newCurso.endDate} onChange={(e) => setNewCurso((v) => ({ ...v, endDate: e.target.value }))} />
+          <button
+            className="btn-primary"
+            onClick={addCurso}
+            disabled={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate}
+            style={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+          >
             Añadir curso
           </button>
         </div>
       </div>
 
       <div className="panel">
-        <div className="panel-title">Asignaturas de {curso.name}</div>
+        <div className="panel-title">Asignaturas</div>
         <div className="panel-subtitle">
-          Dos mecanismos distintos, no los mezcles: <strong>"Vincular asignatura ya existente"</strong> (más abajo) es para
-          cuando es la MISMA asignatura que ya tenías en otro curso — p. ej. la suspendiste el año pasado y la retomas
-          ahora, o necesitas registrar horas suyas en varios cursos seguidos. <strong>"Combinar con"</strong> (en cada fila)
-          es para cuando son DOS asignaturas distintas que cuentan como una sola por una convalidación — p. ej. una
-          asignatura de Erasmus que te reconocieron como otra de tu plan de estudios.
+          Si esta asignatura convalida o equivale a otra con nombre distinto que cursaste antes, puedes combinarla con
+          ella desde "Combinar con". Sus horas, días y cursos necesarios se sumarán a la asignatura que finalmente apruebes.
         </div>
         <div className="table-wrap">
           <table className="data-table">
@@ -494,9 +512,10 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
               </tr>
             </thead>
             <tbody>
-              {cursoSubjects.map((s) => {
+              {subjects.map((s) => {
                 const mergeOptions = subjects.filter((o) => o.id !== s.id && !o.mergedInto);
                 const hasOwnSources = subjects.some((o) => o.mergedInto === s.id);
+                const deletable = !hasEntries(s.id);
                 return (
                   <tr key={s.id}>
                     <td>
@@ -553,7 +572,17 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
                         onChange={(e) => onUpdateSubject(s.id, { target: e.target.value === "" ? null : parseFloat(e.target.value) })}
                       />
                     </td>
-                    <td><button className="btn-ghost btn-small" onClick={() => onUnlinkSubject(s.id)}>Quitar</button></td>
+                    <td>
+                      <button
+                        className="btn-ghost btn-small"
+                        onClick={() => deletable && onDeleteSubject(s.id)}
+                        disabled={!deletable}
+                        title={deletable ? undefined : "No se puede eliminar: ya tiene registros guardados"}
+                        style={!deletable ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -565,24 +594,6 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
           <input className="input-field input-num" type="number" min="1" placeholder="Créditos" value={newSubject.credits} onChange={(e) => setNewSubject((v) => ({ ...v, credits: e.target.value }))} />
           <button className="btn-primary" onClick={addSubject}>Añadir asignatura nueva</button>
         </div>
-        {unlinkedSubjects.length > 0 && (
-          <div className="btn-row" style={{ marginTop: 10 }}>
-            <select className="input-field" value={linkChoice} onChange={(e) => setLinkChoice(e.target.value)}>
-              <option value="">¿Es la misma asignatura de otro curso (p. ej. una suspendida)? Vincúlala aquí…</option>
-              {unlinkedSubjects.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} — {ESTADO_LABELS[s.estado]}</option>
-              ))}
-            </select>
-            <button
-              className="btn-primary"
-              onClick={() => { if (linkChoice) { onLinkSubject(linkChoice); setLinkChoice(""); } }}
-              disabled={!linkChoice}
-              style={!linkChoice ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-            >
-              Vincular a este curso
-            </button>
-          </div>
-        )}
       </div>
 
       {approvingSubject && (
@@ -606,23 +617,23 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
 const WEAR_FACTOR_INFO = {
   intensidad: {
     label: "Intensidad",
-    explain: "Minutos de media que le echabas cada día activo durante tu peor tramo. Cuanto más alto, más fuerte era la sesión típica.",
+    explain: "Minutos de media que estudiaste cada día activo, durante el tramo más exigente de esta asignatura.",
     raw: (f) => `${f.intensidad.toFixed(0)} min/día`,
   },
   duracion: {
     label: "Duración",
-    explain: "Cuántos días activos duró ese tramo sin cortarse. Distingue un sprint corto de una maratón sostenida.",
-    raw: (f) => `${f.duracion} días activos`,
+    explain: "Cuántos días activos duró ese tramo — indica si fue un sprint corto o un esfuerzo sostenido en el tiempo.",
+    raw: (f) => `${f.duracion} días`,
   },
   compresion: {
     label: "Compresión",
-    explain: "Qué parte de esos días estudiaste de verdad, sin huecos de descanso en medio.",
-    raw: (f) => `${(f.compresion * 100).toFixed(0)}% de los días`,
+    explain: "Qué porcentaje de los días de ese tramo estudiaste sin fallar ninguno — cuanto más alto, menos respiro hubo.",
+    raw: (f) => `${(f.compresion * 100).toFixed(0)}%`,
   },
   racha: {
     label: "Racha interna",
-    explain: "Tu racha más larga de días seguidos, sin fallar ni uno, dentro de ese tramo.",
-    raw: (f) => `${f.racha} días seguidos`,
+    explain: "El mayor número de días seguidos, sin ningún descanso, dentro de ese tramo.",
+    raw: (f) => `${f.racha} días`,
   },
 };
 
@@ -665,10 +676,7 @@ function DesgasteCard({ subject, desgaste }) {
           <div className="wear-factors">
             {Object.entries(WEAR_FACTOR_INFO).map(([key, info]) => (
               <div className="wear-factor-card" key={key}>
-                <div className="wear-factor-head">
-                  <span className="wear-factor-label">{info.label}</span>
-                  <span className="wear-factor-value">{desgaste.normalized[key].toFixed(1)}<span className="gauge-unit">/10</span></span>
-                </div>
+                <div className="wear-factor-label">{info.label}</div>
                 <div className="wear-factor-raw mono">{info.raw(desgaste.rawFactors)}</div>
                 <div className="wear-factor-explain">{info.explain}</div>
               </div>
@@ -761,10 +769,7 @@ function ClasificacionDetail({ subject, subjects, entries }) {
             <div className="wear-factors">
               {Object.entries(WEAR_FACTOR_INFO).map(([key, info]) => (
                 <div className="wear-factor-card" key={key}>
-                  <div className="wear-factor-head">
-                    <span className="wear-factor-label">{info.label}</span>
-                    <span className="wear-factor-value">{d.normalized[key].toFixed(1)}<span className="gauge-unit">/10</span></span>
-                  </div>
+                  <div className="wear-factor-label">{info.label}</div>
                   <div className="wear-factor-raw mono">{info.raw(d.rawFactors)}</div>
                   <div className="wear-factor-explain">{info.explain}</div>
                 </div>
@@ -855,6 +860,71 @@ function ClasificacionTab({ subjects, entries }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  TAB: HISTORIAL (todos los registros de todas las asignaturas)       */
+/* ------------------------------------------------------------------ */
+
+function HistorialTab({ subjects, entries, cursos }) {
+  const [cursoFilter, setCursoFilter] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("");
+  const [visibleCount, setVisibleCount] = useState(30);
+
+  const rows = useMemo(() => {
+    let list = getAllEntriesFlat(subjects, entries, "desc");
+    if (cursoFilter) {
+      const c = cursos.find((x) => x.id === cursoFilter);
+      if (c) list = list.filter((e) => (!c.startDate || e.date >= c.startDate) && (!c.endDate || e.date <= c.endDate));
+    }
+    if (subjectFilter) list = list.filter((e) => e.subjectId === subjectFilter);
+    return list;
+  }, [subjects, entries, cursos, cursoFilter, subjectFilter]);
+
+  useEffect(() => { setVisibleCount(30); }, [cursoFilter, subjectFilter]);
+
+  return (
+    <div>
+      <div className="panel">
+        <div className="panel-title-row">
+          <div className="panel-title" style={{ marginBottom: 0 }}>Historial general</div>
+          <div className="btn-row" style={{ marginTop: 0 }}>
+            <select className="input-field subject-select" value={cursoFilter} onChange={(e) => setCursoFilter(e.target.value)}>
+              <option value="">Todos los cursos</option>
+              {cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select className="input-field subject-select" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
+              <option value="">Todas las asignaturas</option>
+              {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="panel-subtitle">Todos los registros diarios de todas las asignaturas, mezclados y ordenados por fecha.</div>
+        {rows.length === 0 && <div className="empty-hint">No hay registros para este filtro.</div>}
+        {rows.length > 0 && (
+          <>
+            <div className="log-list">
+              {rows.slice(0, visibleCount).map((e, i) => (
+                <div key={i} className="log-item" style={{ cursor: "default" }}>
+                  <span className="log-date">{formatShort(e.date)}</span>
+                  <span className="log-detail">
+                    <span className="log-chip" style={{ borderColor: e.subjectColor }}>{e.subjectName}</span>
+                  </span>
+                  <span className="log-total mono">{hm(e.minutes)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="history-footer">
+              <span className="empty-hint" style={{ padding: "8px 0" }}>{rows.length} registro(s)</span>
+              {visibleCount < rows.length && (
+                <button className="btn-ghost btn-small" onClick={() => setVisibleCount((n) => n + 30)}>Cargar más</button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  CONEXIÓN CON GOOGLE SHEETS (Apps Script)                           */
 /* ------------------------------------------------------------------ */
 
@@ -921,16 +991,16 @@ export default function App() {
   }, [data]);
 
   const curso = useMemo(() => data && data.cursos.find((c) => c.id === data.activeCursoId), [data]);
+  const cursoEntries = useMemo(
+    () => (data && curso ? entriesInRange(data.entries, curso.startDate, curso.endDate) : {}),
+    [data, curso]
+  );
   const cursoSubjects = useMemo(
-    () => (data && curso ? data.subjects.filter((s) => curso.subjectIds.includes(s.id)) : []),
+    () => (data && curso ? subjectsWithActivityInRange(data.subjects, data.entries, curso.startDate, curso.endDate) : []),
     [data, curso]
   );
-  const loggableSubjects = useMemo(() => cursoSubjects.filter((s) => s.estado !== "aprobada"), [cursoSubjects]);
-  const unlinkedSubjects = useMemo(
-    () => (data && curso ? data.subjects.filter((s) => !curso.subjectIds.includes(s.id) && s.estado !== "aprobada") : []),
-    [data, curso]
-  );
-  const stats = useMemo(() => (data && cursoSubjects ? computeStats(cursoSubjects, data.entries) : null), [data, cursoSubjects]);
+  const loggableSubjects = useMemo(() => (data ? data.subjects.filter((s) => s.estado !== "aprobada") : []), [data]);
+  const stats = useMemo(() => (data && curso ? computeStats(cursoSubjects, cursoEntries) : null), [data, curso, cursoSubjects, cursoEntries]);
 
   function handleSaveDay(date, loggableIds, values) {
     setData((d) => {
@@ -958,30 +1028,15 @@ export default function App() {
   function handleAddSubject(name, credits) {
     setData((d) => {
       const newSub = { id: uid("sub"), name, credits, target: null, color: PALETTE[d.subjects.length % PALETTE.length], estado: "en_curso", mergedInto: null, frozen: null };
-      return {
-        ...d,
-        subjects: [...d.subjects, newSub],
-        cursos: d.cursos.map((c) => (c.id !== curso.id ? c : { ...c, subjectIds: [...c.subjectIds, newSub.id] })),
-      };
+      return { ...d, subjects: [...d.subjects, newSub] };
     });
   }
 
-  function handleLinkSubject(subjectId) {
-    setData((d) => ({
-      ...d,
-      cursos: d.cursos.map((c) => (c.id !== curso.id || c.subjectIds.includes(subjectId) ? c : { ...c, subjectIds: [...c.subjectIds, subjectId] })),
-    }));
-  }
-
-  function handleUnlinkSubject(subjectId) {
+  function handleDeleteSubject(subjectId) {
     setData((d) => {
-      const cursos = d.cursos.map((c) => (c.id !== curso.id ? c : { ...c, subjectIds: c.subjectIds.filter((id) => id !== subjectId) }));
-      const stillLinked = cursos.some((c) => c.subjectIds.includes(subjectId));
       const hasEntries = Object.values(d.entries).some((day) => day[subjectId] > 0);
-      if (stillLinked || hasEntries) {
-        return { ...d, cursos };
-      }
-      return { ...d, cursos, subjects: d.subjects.filter((s) => s.id !== subjectId) };
+      if (hasEntries) return d;
+      return { ...d, subjects: d.subjects.filter((s) => s.id !== subjectId) };
     });
   }
 
@@ -1004,9 +1059,9 @@ export default function App() {
     });
   }
 
-  function handleAddCurso(name) {
+  function handleAddCurso(name, startDate, endDate) {
     const id = uid("curso");
-    setData((d) => ({ ...d, activeCursoId: id, cursos: [...d.cursos, { id, name, subjectIds: [] }] }));
+    setData((d) => ({ ...d, activeCursoId: id, cursos: [...d.cursos, { id, name, startDate, endDate }] }));
   }
 
   function handleRemoveCurso(id) {
@@ -1058,6 +1113,7 @@ export default function App() {
         <Tab id="trayectoria" active={tab === "trayectoria"} onClick={setTab}>Trayectoria</Tab>
         <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
         <Tab id="clasificacion" active={tab === "clasificacion"} onClick={setTab}>Clasificación</Tab>
+        <Tab id="historial" active={tab === "historial"} onClick={setTab}>Historial</Tab>
         <Tab id="asignaturas" active={tab === "asignaturas"} onClick={setTab}>Asignaturas</Tab>
       </nav>
 
@@ -1072,21 +1128,19 @@ export default function App() {
           />
         )}
         {tab === "panel" && <PanelTab stats={stats} />}
-        {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={data.entries} stats={stats} />}
+        {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={cursoEntries} stats={stats} />}
         {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
         {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} entries={data.entries} />}
+        {tab === "historial" && <HistorialTab subjects={data.subjects} entries={data.entries} cursos={data.cursos} />}
         {tab === "asignaturas" && (
           <AsignaturasTab
             subjects={data.subjects}
-            cursoSubjects={cursoSubjects}
-            unlinkedSubjects={unlinkedSubjects}
-            curso={curso}
+            entries={data.entries}
             cursos={data.cursos}
             activeCursoId={data.activeCursoId}
             onSelectCurso={(id) => setData((d) => ({ ...d, activeCursoId: id }))}
             onAddSubject={handleAddSubject}
-            onLinkSubject={handleLinkSubject}
-            onUnlinkSubject={handleUnlinkSubject}
+            onDeleteSubject={handleDeleteSubject}
             onUpdateSubject={handleUpdateSubject}
             onChangeEstado={handleChangeEstado}
             onApprove={handleApprove}
@@ -1293,10 +1347,8 @@ const CSS = `
   .wear-factors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   @media (max-width: 560px) { .wear-factors { grid-template-columns: 1fr; } }
   .wear-factor-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-  .wear-factor-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
-  .wear-factor-label { font-size: 12.5px; font-weight: 700; color: var(--text); }
-  .wear-factor-value { font-family: ui-monospace, monospace; font-size: 20px; font-weight: 700; color: var(--cyan); }
-  .wear-factor-raw { font-size: 11.5px; color: var(--text-dim); margin-bottom: 6px; }
+  .wear-factor-label { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .wear-factor-raw { font-family: ui-monospace, monospace; font-size: 20px; font-weight: 700; color: var(--cyan); margin-bottom: 6px; }
   .wear-factor-explain { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
 
   .merge-select { margin-top: 6px; font-size: 11.5px; color: var(--text-dim); padding: 5px 8px; }

@@ -62,26 +62,41 @@ export function hm(minutes) {
 /* ------------------------------------------------------------------ */
 /*  ESQUEMA DE DATOS Y MIGRACIÓN                                       */
 /*                                                                      */
-/*  v2: { schemaVersion, activeCursoId,                                 */
-/*        cursos: [{ id, name, subjectIds: [] }],   ← solo agrupación   */
+/*  v3: { schemaVersion, activeCursoId,                                 */
+/*        cursos: [{ id, name, startDate, endDate }],  ← solo un rango  */
+/*                  de fechas, ya no "posee" asignaturas                */
 /*        subjects: [{ id, name, credits, target, color,                */
 /*                      estado: 'en_curso'|'suspendida'|'aprobada',     */
 /*                      mergedInto: null | subjectId,  ← ver más abajo  */
 /*                      frozen: null | {...} }],    ← entidad global    */
 /*        entries: { [fecha]: { [subjectId]: minutos } } }  ← global    */
 /*                                                                       */
+/*  Cada asignatura es una entidad única y persistente con su propia     */
+/*  lista de registros diarios. El "curso académico" ya no se vincula    */
+/*  manualmente a las asignaturas — es solo un filtro automático por     */
+/*  fecha: un registro pertenece al curso cuyo rango [startDate,endDate] */
+/*  contiene su fecha. Ver subjectsWithActivityInRange/entriesInRange.   */
+/*                                                                       */
 /*  `mergedInto`: cuando una asignatura (p. ej. una convalidada por      */
 /*  Erasmus) cuenta, a efectos de clasificación histórica, como parte    */
 /*  de otra (la asignatura "oficial" a la que equivale), se marca con    */
 /*  mergedInto = id de esa otra asignatura. Sigue existiendo como        */
-/*  entidad independiente en Panel/Trayectoria/Bitácora/Desgaste (para   */
-/*  poder compararla con el resto de asignaturas de ese curso), pero sus */
-/*  minutos se suman a los de la asignatura destino solo al calcular     */
+/*  entidad independiente en Panel/Trayectoria/Bitácora/Desgaste, pero    */
+/*  sus minutos se suman a los de la asignatura destino solo al calcular */
 /*  horas/crédito y días totales en Clasificación histórica, y no        */
 /*  aparece como fila propia allí.                                      */
 /* ------------------------------------------------------------------ */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
+
+/** Si el nombre de un curso sigue el patrón "AAAA-AAAA" (p. ej.
+ * "2025-2026"), infiere su rango como año académico español estándar:
+ * 1 de septiembre del primer año al 31 de agosto del segundo. */
+export function inferCursoRange(name) {
+  const m = /^(\d{4})-(\d{4})$/.exec((name || "").trim());
+  if (!m) return null;
+  return { startDate: `${m[1]}-09-01`, endDate: `${m[2]}-08-31` };
+}
 
 export function buildDefaultData() {
   const subjects = DEFAULT_SUBJECT_DEFS.map((s, i) => ({
@@ -106,26 +121,34 @@ export function buildDefaultData() {
   return {
     schemaVersion: SCHEMA_VERSION,
     activeCursoId: "curso_2025_2026",
-    cursos: [{ id: "curso_2025_2026", name: "2025-2026", subjectIds: subjects.map((s) => s.id) }],
+    cursos: [{ id: "curso_2025_2026", name: "2025-2026", ...inferCursoRange("2025-2026") }],
     subjects,
     entries,
   };
 }
 
-/** Convierte el esquema viejo (subjects/entries anidados en cada curso) al nuevo
- * esquema global. Idempotente: si ya viene en v2, la devuelve tal cual. */
+/** Convierte cualquier esquema anterior al v3 actual (global, con cursos
+ * como simple rango de fechas). Idempotente. */
 export function migrateData(raw) {
   if (!raw) return null;
   if (raw.schemaVersion === SCHEMA_VERSION && Array.isArray(raw.subjects) && raw.entries) {
-    // ya en v2: por si viene de una versión anterior de v2, aseguramos que
-    // todas las asignaturas tengan el campo mergedInto.
-    if (raw.subjects.every((s) => "mergedInto" in s)) return raw;
-    return { ...raw, subjects: raw.subjects.map((s) => ({ mergedInto: null, ...s })) };
+    if (raw.subjects.every((s) => "mergedInto" in s) && raw.cursos.every((c) => "startDate" in c)) return raw;
+    return {
+      ...raw,
+      subjects: raw.subjects.map((s) => ({ mergedInto: null, ...s })),
+      cursos: raw.cursos.map((c) => ("startDate" in c ? c : { id: c.id, name: c.name, ...(inferCursoRange(c.name) || fallbackCursoRange(c, raw)) })),
+    };
   }
 
+  // v2 (subjectIds por curso) o esquema original (subjects/entries anidados
+  // en cada curso): en ambos casos, primero recolectamos subjects/entries
+  // a nivel global igual que antes, y luego convertimos cada curso a un
+  // rango de fechas (inferido del nombre, o de las fechas de sus entries).
   const subjectsById = {};
   const entries = {};
-  const cursos = (raw.cursos || []).map((c) => {
+  const rawCursos = raw.cursos || [];
+  const cursoSubjectIds = [];
+  rawCursos.forEach((c) => {
     const subjectIds = [];
     (c.subjects || []).forEach((s) => {
       subjectIds.push(s.id);
@@ -142,11 +165,18 @@ export function migrateData(raw) {
         };
       }
     });
+    (c.subjectIds || []).forEach((id) => subjectIds.push(id));
     Object.entries(c.entries || {}).forEach(([date, bySubject]) => {
       entries[date] = { ...(entries[date] || {}), ...bySubject };
     });
-    return { id: c.id, name: c.name, subjectIds };
+    cursoSubjectIds.push({ curso: c, subjectIds });
   });
+
+  const cursos = cursoSubjectIds.map(({ curso: c, subjectIds }) => ({
+    id: c.id,
+    name: c.name,
+    ...(inferCursoRange(c.name) || fallbackCursoRange({ ...c, subjectIds }, { entries })),
+  }));
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -155,6 +185,49 @@ export function migrateData(raw) {
     subjects: Object.values(subjectsById),
     entries,
   };
+}
+
+/** Si un curso migrado no tiene nombre "AAAA-AAAA", deduce un rango a
+ * partir de las fechas mínima/máxima de las entries de sus asignaturas
+ * (v2), expandido a año natural completo para no cortar el historial. */
+function fallbackCursoRange(curso, { entries }) {
+  const ids = new Set(curso.subjectIds || []);
+  let min = null, max = null;
+  Object.entries(entries).forEach(([date, bySubject]) => {
+    if (Object.keys(bySubject).some((id) => ids.has(id) && bySubject[id] > 0)) {
+      if (!min || date < min) min = date;
+      if (!max || date > max) max = date;
+    }
+  });
+  if (!min) return { startDate: null, endDate: null };
+  return { startDate: `${min.slice(0, 4)}-01-01`, endDate: `${max.slice(0, 4)}-12-31` };
+}
+
+/* ------------------------------------------------------------------ */
+/*  FILTRO AUTOMÁTICO POR CURSO ACADÉMICO (rango de fechas)            */
+/* ------------------------------------------------------------------ */
+
+/** Subconjunto de `entries` cuya fecha cae dentro de [start, end] (ambos
+ * inclusive; cualquiera de los dos puede ser null para no acotar por ese
+ * lado). */
+export function entriesInRange(entries, start, end) {
+  const out = {};
+  Object.entries(entries).forEach(([date, bySubject]) => {
+    if ((!start || date >= start) && (!end || date <= end)) out[date] = bySubject;
+  });
+  return out;
+}
+
+/** Asignaturas que tienen al menos un registro con minutos > 0 dentro del
+ * rango de fechas dado — así se decide qué asignaturas "pertenecen" a un
+ * curso académico, sin que el usuario tenga que vincular nada a mano. */
+export function subjectsWithActivityInRange(subjects, entries, start, end) {
+  const ranged = entriesInRange(entries, start, end);
+  const activeIds = new Set();
+  Object.values(ranged).forEach((bySubject) => {
+    Object.entries(bySubject).forEach(([id, minutes]) => { if (minutes > 0) activeIds.add(id); });
+  });
+  return subjects.filter((s) => activeIds.has(s.id));
 }
 
 /* ------------------------------------------------------------------ */
@@ -247,6 +320,23 @@ export function getSubjectEntries(entries, subjectId, order = "desc") {
     .filter((e) => e.minutes > 0)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return order === "desc" ? list.reverse() : list;
+}
+
+/** Listado plano de TODOS los registros diarios de TODAS las asignaturas
+ * (en_curso, suspendida y aprobada), mezclados y ordenados por fecha
+ * (desc por defecto) — para la vista de historial general. */
+export function getAllEntriesFlat(subjects, entries, order = "desc") {
+  const out = [];
+  Object.entries(entries).forEach(([date, bySubject]) => {
+    Object.entries(bySubject).forEach(([subjectId, minutes]) => {
+      if (!minutes) return;
+      const subject = subjects.find((s) => s.id === subjectId);
+      if (!subject) return;
+      out.push({ date, minutes, subjectId, subjectName: subject.name, subjectColor: subject.color });
+    });
+  });
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.subjectName.localeCompare(b.subjectName)));
+  return order === "desc" ? out.reverse() : out;
 }
 
 /** Ids de las asignaturas cuyos minutos cuentan, combinados, para `subjectId`
