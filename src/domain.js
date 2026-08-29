@@ -358,13 +358,21 @@ export function wearLabel(score) {
   return "Extremo";
 }
 
+/** Mínimo de asignaturas aprobadas y comparables para que el índice de
+ * desgaste se considere una referencia estable (si no, se marca como dato
+ * provisional en la interfaz — puede cambiar mucho con cada aprobación). */
+export const WEAR_STABLE_MIN_SAMPLE = 5;
+
 /**
- * Calcula el desgaste de una asignatura a partir de su bloque peor.
- * - `priorRawFactorsList`: factores brutos del bloque peor de otras asignaturas
- *   ya "aprobada" y comparables (para calcular los topes de normalización).
- * - `includeSelf`: al congelar (aprobar) esta asignatura, ella misma entra a
- *   formar parte del conjunto que define los topes; en una vista previa (aún
- *   no aprobada) no.
+ * Calcula el desgaste de una asignatura a partir de su bloque peor. Se
+ * recalcula siempre al vuelo (nunca se guarda como valor fijo): el tope de
+ * cada factor es el máximo histórico ACTUAL entre todas las asignaturas
+ * aprobada y comparables, así que puede cambiar de una aprobación a otra.
+ * - `priorRawFactorsList`: factores brutos del bloque peor de otras
+ *   asignaturas ya "aprobada" y comparables (para fijar los topes).
+ * - `includeSelf`: si esta asignatura es "aprobada", ella misma entra a
+ *   formar parte del conjunto que define los topes; si es una vista previa
+ *   (aún no aprobada), no.
  * Devuelve { comparable: false } si no hay ningún bloque con >= 3 días activos.
  * Devuelve { comparable: true, hasTopes: false, ... } si es comparable pero
  * todavía no existe ninguna asignatura aprobada con la que fijar un tope.
@@ -378,7 +386,7 @@ export function computeDesgaste(subjectId, entries, priorRawFactorsList, { inclu
   const rawFactors = rawFactorsOf(worst);
   const list = includeSelf ? [...priorRawFactorsList, rawFactors] : priorRawFactorsList;
   if (list.length === 0) {
-    return { comparable: true, hasTopes: false, rawFactors, worstBlock: worst };
+    return { comparable: true, hasTopes: false, rawFactors, worstBlock: worst, sampleSize: list.length };
   }
 
   const topes = computeTopes(list);
@@ -404,17 +412,29 @@ export function computeDesgaste(subjectId, entries, priorRawFactorsList, { inclu
     indice,
     etiqueta: wearLabel(indice),
     worstBlock: worst,
+    sampleSize: list.length,
+    provisional: list.length < WEAR_STABLE_MIN_SAMPLE,
     formulaVersion: WEAR_FORMULA_VERSION,
     weights: WEAR_WEIGHTS,
   };
 }
 
-/** Lista de factores brutos de todas las asignaturas ya aprobada y comparables
- * (excluyendo, si se pasa, la propia asignatura — útil al recalcular). */
-export function priorComparableRawFactors(subjects, excludeSubjectId = null) {
+/** Factores brutos del bloque peor de una asignatura (o null si no es
+ * comparable), calculados siempre en el momento a partir de sus entries. */
+function ownRawFactors(subjectId, entries) {
+  const asc = getSubjectEntries(entries, subjectId, "asc");
+  const worst = selectWorstBlock(detectBlocks(asc));
+  return worst ? rawFactorsOf(worst) : null;
+}
+
+/** Lista, calculada al vuelo, de los factores brutos de todas las
+ * asignaturas ya aprobada y comparables (excluyendo, si se pasa, la propia
+ * asignatura). Define los topes de normalización vigentes ahora mismo. */
+export function priorComparableRawFactors(subjects, entries, excludeSubjectId = null) {
   return subjects
-    .filter((s) => s.id !== excludeSubjectId && s.estado === "aprobada" && s.frozen?.desgaste?.comparable && s.frozen.desgaste.hasTopes)
-    .map((s) => s.frozen.desgaste.rawFactors);
+    .filter((s) => s.id !== excludeSubjectId && s.estado === "aprobada")
+    .map((s) => ownRawFactors(s.id, entries))
+    .filter(Boolean);
 }
 
 /* ------------------------------------------------------------------ */
@@ -422,22 +442,20 @@ export function priorComparableRawFactors(subjects, excludeSubjectId = null) {
 /* ------------------------------------------------------------------ */
 
 /** Marca una asignatura como aprobada: congela nota, cursos necesarios,
- * horas/crédito, días totales y el índice de desgaste con los topes
- * del historial hasta este momento. No se recalcula después.
+ * horas/crédito y días totales. El índice de desgaste NO se congela aquí —
+ * se recalcula siempre al vuelo (ver computeDesgaste) para que los topes de
+ * normalización reflejen el historial completo y actualizado, no solo el
+ * que existía en el momento de aprobar esta asignatura en concreto.
  *
  * Horas/crédito y días totales se calculan sobre el historial combinado
  * (esta asignatura + cualquier otra fusionada con mergedInto), porque son
- * las cifras de "cuánto costó de verdad"; el desgaste (peor tramo) se
- * calcula solo con el historial propio de esta asignatura. */
+ * las cifras de "cuánto costó de verdad". */
 export function freezeApproval(subject, { entries, subjects, nota, cursosNecesarios, fechaAprobacion = isoToday() }) {
   const combinedAsc = getCombinedEntries(entries, subjects, subject.id);
   const firstDate = combinedAsc[0]?.date ?? null;
   const minutosTotales = combinedAsc.reduce((a, e) => a + e.minutes, 0);
   const horasPorCredito = subject.credits > 0 ? minutosTotales / 60 / subject.credits : 0;
   const diasTotales = firstDate ? daysBetween(firstDate, fechaAprobacion) + 1 : 0;
-
-  const priorRaw = priorComparableRawFactors(subjects, subject.id);
-  const desgaste = computeDesgaste(subject.id, entries, priorRaw, { includeSelf: true });
 
   return {
     ...subject,
@@ -450,7 +468,6 @@ export function freezeApproval(subject, { entries, subjects, nota, cursosNecesar
       horasPorCredito: +horasPorCredito.toFixed(3),
       diasTotales,
       minutosTotales,
-      desgaste,
     },
   };
 }

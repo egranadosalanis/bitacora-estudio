@@ -475,6 +475,13 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
 
       <div className="panel">
         <div className="panel-title">Asignaturas de {curso.name}</div>
+        <div className="panel-subtitle">
+          Dos mecanismos distintos, no los mezcles: <strong>"Vincular asignatura ya existente"</strong> (más abajo) es para
+          cuando es la MISMA asignatura que ya tenías en otro curso — p. ej. la suspendiste el año pasado y la retomas
+          ahora, o necesitas registrar horas suyas en varios cursos seguidos. <strong>"Combinar con"</strong> (en cada fila)
+          es para cuando son DOS asignaturas distintas que cuentan como una sola por una convalidación — p. ej. una
+          asignatura de Erasmus que te reconocieron como otra de tu plan de estudios.
+        </div>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -505,9 +512,9 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
                           value={s.mergedInto || ""}
                           onChange={(e) => onUpdateSubject(s.id, { mergedInto: e.target.value || null })}
                         >
-                          <option value="">Cuenta por separado en el histórico</option>
+                          <option value="">No combinar (cuenta por separado)</option>
                           {mergeOptions.map((o) => (
-                            <option key={o.id} value={o.id}>Combinar con: {o.name}</option>
+                            <option key={o.id} value={o.id}>Convalidada como: {o.name}</option>
                           ))}
                         </select>
                       )}
@@ -561,7 +568,7 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
         {unlinkedSubjects.length > 0 && (
           <div className="btn-row" style={{ marginTop: 10 }}>
             <select className="input-field" value={linkChoice} onChange={(e) => setLinkChoice(e.target.value)}>
-              <option value="">Vincular asignatura ya existente (p. ej. una suspendida)…</option>
+              <option value="">¿Es la misma asignatura de otro curso (p. ej. una suspendida)? Vincúlala aquí…</option>
               {unlinkedSubjects.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} — {ESTADO_LABELS[s.estado]}</option>
               ))}
@@ -620,7 +627,7 @@ const WEAR_FACTOR_INFO = {
 };
 
 function DesgasteCard({ subject, desgaste }) {
-  const isFrozen = subject.estado === "aprobada";
+  const isEnCurso = subject.estado !== "aprobada";
   const wb = desgaste.worstBlock;
   return (
     <div className="panel wear-card">
@@ -628,7 +635,7 @@ function DesgasteCard({ subject, desgaste }) {
         <div>
           <span className="dot" style={{ background: subject.color }} />
           <strong>{subject.name}</strong>
-          {!isFrozen && <span className="wear-provisional">provisional</span>}
+          {isEnCurso && <span className="wear-provisional">vista previa, aún sin aprobar</span>}
         </div>
         <EstadoBadge estado={subject.estado} />
       </div>
@@ -644,6 +651,9 @@ function DesgasteCard({ subject, desgaste }) {
             <span className="wear-index-value">{desgaste.indice.toFixed(1)}</span>
             <div>
               <span className={`wear-label wear-label-${desgaste.etiqueta.toLowerCase()}`}>{desgaste.etiqueta}</span>
+              {desgaste.provisional && (
+                <span className="wear-sample-warning">Provisional — basado en solo {desgaste.sampleSize} asignatura{desgaste.sampleSize === 1 ? "" : "s"}</span>
+              )}
               {wb && (
                 <div className="wear-index-sub">
                   Tu peor tramo fue del {formatShort(wb.first)} al {formatShort(wb.last)}: {wb.dias_activos} días
@@ -673,18 +683,16 @@ function DesgasteCard({ subject, desgaste }) {
 function DesgasteTab({ cursoSubjects, subjects, entries }) {
   const rows = useMemo(() => {
     return cursoSubjects.map((s) => {
-      if (s.estado === "aprobada") {
-        return { subject: s, desgaste: s.frozen?.desgaste || { comparable: false } };
-      }
-      const prior = priorComparableRawFactors(subjects);
-      const desgaste = computeDesgaste(s.id, entries, prior, { includeSelf: false });
+      const isAprobada = s.estado === "aprobada";
+      const prior = priorComparableRawFactors(subjects, entries, s.id);
+      const desgaste = computeDesgaste(s.id, entries, prior, { includeSelf: isAprobada });
       return { subject: s, desgaste };
     }).sort((a, b) => {
-      const ai = a.desgaste.comparable && a.desgaste.hasTopes !== false ? (a.desgaste.indice ?? -1) : -2;
-      const bi = b.desgaste.comparable && b.desgaste.hasTopes !== false ? (b.desgaste.indice ?? -1) : -2;
+      const ai = a.desgaste.comparable && a.desgaste.hasTopes ? a.desgaste.indice : -2;
+      const bi = b.desgaste.comparable && b.desgaste.hasTopes ? b.desgaste.indice : -2;
       if (a.subject.estado === "aprobada" && b.subject.estado !== "aprobada") return -1;
       if (b.subject.estado === "aprobada" && a.subject.estado !== "aprobada") return 1;
-      return (bi ?? -2) - (ai ?? -2);
+      return bi - ai;
     });
   }, [cursoSubjects, subjects, entries]);
 
@@ -694,8 +702,10 @@ function DesgasteTab({ cursoSubjects, subjects, entries }) {
     <div>
       <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
         Mide el tramo de estudio más exigente de cada asignatura de este curso, comparado con tu propio historial.
-        Para las asignaturas ya aprobadas el número queda congelado para siempre; para las que siguen en curso se
-        muestra una vista previa que cambiará hasta que las apruebes.
+        El índice se recalcula siempre con los datos actuales (incluso para las asignaturas ya aprobadas), porque
+        el tope de referencia de cada factor es el máximo histórico entre todas tus asignaturas aprobadas — puede
+        subir o bajar según apruebas otras. Para las que siguen en curso se muestra además una vista previa de lo
+        que saldría si las aprobaras hoy.
       </div>
       {rows.map(({ subject, desgaste }) => (
         <DesgasteCard key={subject.id} subject={subject} desgaste={desgaste} />
@@ -716,9 +726,10 @@ const CLASIF_COLUMNS = [
   { key: "nota", label: "Nota" },
 ];
 
-function ClasificacionDetail({ subject, subjects }) {
+function ClasificacionDetail({ subject, subjects, entries }) {
   const f = subject.frozen;
-  const d = f.desgaste;
+  const prior = priorComparableRawFactors(subjects, entries, subject.id);
+  const d = computeDesgaste(subject.id, entries, prior, { includeSelf: true });
   const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
   return (
     <div>
@@ -740,7 +751,12 @@ function ClasificacionDetail({ subject, subjects }) {
           <>
             <div className="wear-index-row">
               <span className="wear-index-value">{d.indice.toFixed(1)}</span>
-              <span className={`wear-label wear-label-${d.etiqueta.toLowerCase()}`}>{d.etiqueta}</span>
+              <div>
+                <span className={`wear-label wear-label-${d.etiqueta.toLowerCase()}`}>{d.etiqueta}</span>
+                {d.provisional && (
+                  <span className="wear-sample-warning">Provisional — basado en solo {d.sampleSize} asignatura{d.sampleSize === 1 ? "" : "s"}</span>
+                )}
+              </div>
             </div>
             <div className="wear-factors">
               {Object.entries(WEAR_FACTOR_INFO).map(([key, info]) => (
@@ -764,7 +780,7 @@ function ClasificacionDetail({ subject, subjects }) {
   );
 }
 
-function ClasificacionTab({ subjects }) {
+function ClasificacionTab({ subjects, entries }) {
   const [sortKey, setSortKey] = useState("horasPorCredito");
   const [sortDir, setSortDir] = useState("desc");
   const [detailId, setDetailId] = useState(null);
@@ -831,7 +847,7 @@ function ClasificacionTab({ subjects }) {
 
       {detailSubject && (
         <Modal title={detailSubject.name} onClose={() => setDetailId(null)} wide>
-          <ClasificacionDetail subject={detailSubject} subjects={subjects} />
+          <ClasificacionDetail subject={detailSubject} subjects={subjects} entries={entries} />
         </Modal>
       )}
     </div>
@@ -1058,7 +1074,7 @@ export default function App() {
         {tab === "panel" && <PanelTab stats={stats} />}
         {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={data.entries} stats={stats} />}
         {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
-        {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} />}
+        {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} entries={data.entries} />}
         {tab === "asignaturas" && (
           <AsignaturasTab
             subjects={data.subjects}
@@ -1265,6 +1281,10 @@ const CSS = `
     min-width: 78px; text-align: right;
   }
   .wear-index-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; max-width: 440px; }
+  .wear-sample-warning {
+    font-size: 10.5px; font-weight: 700; color: var(--amber); background: rgba(245,166,35,0.1);
+    border: 1px solid rgba(245,166,35,0.35); border-radius: 20px; padding: 3px 9px; margin-left: 8px;
+  }
   .wear-label { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
   .wear-label-llevadero { color: var(--green); background: rgba(61,220,132,0.1); }
   .wear-label-moderado { color: var(--cyan); background: rgba(79,216,234,0.1); }
