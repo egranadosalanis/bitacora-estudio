@@ -392,25 +392,32 @@ function TrayectoriaTab({ cursoSubjects, entries, stats }) {
 /*  TAB: ASIGNATURAS (gestion de cursos y asignaturas)                 */
 /* ------------------------------------------------------------------ */
 
-function ApprovalForm({ subject, onConfirm, onCancel }) {
+function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   const [nota, setNota] = useState("");
-  const [convocatorias, setConvocatorias] = useState("1");
+  const [cursosNecesarios, setCursosNecesarios] = useState("1");
+  const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
   return (
     <div>
       <p className="panel-subtitle">
         Vas a marcar <strong>{subject.name}</strong> como aprobada. Esto congela para siempre sus métricas de
         clasificación histórica y su índice de desgaste con los datos de hoy — no se recalculan después.
       </p>
+      {mergedSources.length > 0 && (
+        <p className="panel-subtitle">
+          Se sumarán también las horas de: <strong>{mergedSources.map((s) => s.name).join(", ")}</strong> (combinadas
+          para el histórico).
+        </p>
+      )}
       <div className="field-row">
         <label className="field-label">Nota obtenida</label>
         <input type="number" step="0.1" className="input-field input-num" value={nota} onChange={(e) => setNota(e.target.value)} />
       </div>
       <div className="field-row">
-        <label className="field-label">Convocatorias / cursos necesarios</label>
-        <input type="number" min="1" step="1" className="input-field input-num" value={convocatorias} onChange={(e) => setConvocatorias(e.target.value)} />
+        <label className="field-label">Cursos necesarios</label>
+        <input type="number" min="1" step="1" className="input-field input-num" value={cursosNecesarios} onChange={(e) => setCursosNecesarios(e.target.value)} />
       </div>
       <div className="btn-row">
-        <button className="btn-primary" onClick={() => onConfirm({ nota, convocatorias })}>Confirmar aprobación</button>
+        <button className="btn-primary" onClick={() => onConfirm({ nota, cursosNecesarios })}>Confirmar aprobación</button>
         <button className="btn-ghost" onClick={onCancel}>Cancelar</button>
       </div>
     </div>
@@ -480,48 +487,69 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
               </tr>
             </thead>
             <tbody>
-              {cursoSubjects.map((s) => (
-                <tr key={s.id}>
-                  <td>
-                    <span className="dot" style={{ background: s.color }} />
-                    <input
-                      className="input-field input-inline"
-                      value={s.name}
-                      onChange={(e) => onUpdateSubject(s.id, { name: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <select
-                      className="input-field input-inline estado-select"
-                      value={s.estado}
-                      onChange={(e) => {
-                        if (e.target.value === "aprobada") setApprovingId(s.id);
-                        else onChangeEstado(s.id, e.target.value);
-                      }}
-                    >
-                      <option value="en_curso">En curso</option>
-                      <option value="suspendida">Suspendida</option>
-                      <option value="aprobada">Aprobada</option>
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      type="number" min="1" step="1" className="input-field input-inline input-num"
-                      value={s.credits}
-                      onChange={(e) => onUpdateSubject(s.id, { credits: parseFloat(e.target.value) || 0 })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number" min="0" step="0.1" className="input-field input-inline input-num"
-                      placeholder="opcional"
-                      value={s.target ?? ""}
-                      onChange={(e) => onUpdateSubject(s.id, { target: e.target.value === "" ? null : parseFloat(e.target.value) })}
-                    />
-                  </td>
-                  <td><button className="btn-ghost btn-small" onClick={() => onUnlinkSubject(s.id)}>Quitar</button></td>
-                </tr>
-              ))}
+              {cursoSubjects.map((s) => {
+                const mergeOptions = subjects.filter((o) => o.id !== s.id && !o.mergedInto);
+                const hasOwnSources = subjects.some((o) => o.mergedInto === s.id);
+                return (
+                  <tr key={s.id}>
+                    <td>
+                      <span className="dot" style={{ background: s.color }} />
+                      <input
+                        className="input-field input-inline"
+                        value={s.name}
+                        onChange={(e) => onUpdateSubject(s.id, { name: e.target.value })}
+                      />
+                      {!hasOwnSources && (
+                        <select
+                          className="input-field input-inline merge-select"
+                          value={s.mergedInto || ""}
+                          onChange={(e) => onUpdateSubject(s.id, { mergedInto: e.target.value || null })}
+                        >
+                          <option value="">Cuenta por separado en el histórico</option>
+                          {mergeOptions.map((o) => (
+                            <option key={o.id} value={o.id}>Combinar con: {o.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      {hasOwnSources && (
+                        <div className="gauge-sub" style={{ marginTop: 4 }}>
+                          Recibe horas combinadas de: {subjects.filter((o) => o.mergedInto === s.id).map((o) => o.name).join(", ")}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <select
+                        className="input-field input-inline estado-select"
+                        value={s.estado}
+                        onChange={(e) => {
+                          if (e.target.value === "aprobada") setApprovingId(s.id);
+                          else onChangeEstado(s.id, e.target.value);
+                        }}
+                      >
+                        <option value="en_curso">En curso</option>
+                        <option value="suspendida">Suspendida</option>
+                        <option value="aprobada">Aprobada</option>
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="number" min="1" step="1" className="input-field input-inline input-num"
+                        value={s.credits}
+                        onChange={(e) => onUpdateSubject(s.id, { credits: parseFloat(e.target.value) || 0 })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number" min="0" step="0.1" className="input-field input-inline input-num"
+                        placeholder="opcional"
+                        value={s.target ?? ""}
+                        onChange={(e) => onUpdateSubject(s.id, { target: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                      />
+                    </td>
+                    <td><button className="btn-ghost btn-small" onClick={() => onUnlinkSubject(s.id)}>Quitar</button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -554,8 +582,9 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
         <Modal title="Marcar asignatura como aprobada" onClose={() => setApprovingId(null)}>
           <ApprovalForm
             subject={approvingSubject}
+            subjects={subjects}
             onCancel={() => setApprovingId(null)}
-            onConfirm={({ nota, convocatorias }) => { onApprove(approvingSubject.id, { nota, convocatorias }); setApprovingId(null); }}
+            onConfirm={({ nota, cursosNecesarios }) => { onApprove(approvingSubject.id, { nota, cursosNecesarios }); setApprovingId(null); }}
           />
         </Modal>
       )}
@@ -566,6 +595,29 @@ function AsignaturasTab({ subjects, cursoSubjects, unlinkedSubjects, curso, onAd
 /* ------------------------------------------------------------------ */
 /*  TAB: DESGASTE (peor tramo, normalizado y personal)                 */
 /* ------------------------------------------------------------------ */
+
+const WEAR_FACTOR_INFO = {
+  intensidad: {
+    label: "Intensidad",
+    explain: "Minutos de media que le echabas cada día activo durante tu peor tramo. Cuanto más alto, más fuerte era la sesión típica.",
+    raw: (f) => `${f.intensidad.toFixed(0)} min/día`,
+  },
+  duracion: {
+    label: "Duración",
+    explain: "Cuántos días activos duró ese tramo sin cortarse. Distingue un sprint corto de una maratón sostenida.",
+    raw: (f) => `${f.duracion} días activos`,
+  },
+  compresion: {
+    label: "Compresión",
+    explain: "Qué parte de esos días estudiaste de verdad, sin huecos de descanso en medio.",
+    raw: (f) => `${(f.compresion * 100).toFixed(0)}% de los días`,
+  },
+  racha: {
+    label: "Racha interna",
+    explain: "Tu racha más larga de días seguidos, sin fallar ni uno, dentro de ese tramo.",
+    raw: (f) => `${f.racha} días seguidos`,
+  },
+};
 
 function DesgasteCard({ subject, desgaste }) {
   const isFrozen = subject.estado === "aprobada";
@@ -581,33 +633,46 @@ function DesgasteCard({ subject, desgaste }) {
         <EstadoBadge estado={subject.estado} />
       </div>
       {!desgaste.comparable && (
-        <div className="empty-hint">No comparable — datos insuficientes (ningún bloque de ≥3 días activos).</div>
+        <div className="empty-hint">No comparable — datos insuficientes (ningún tramo de ≥3 días activos todavía).</div>
       )}
       {desgaste.comparable && !desgaste.hasTopes && (
-        <div className="empty-hint">Bloque peor detectado, pero aún no hay ninguna asignatura aprobada con la que fijar una referencia.</div>
+        <div className="empty-hint">Ya tiene un peor tramo detectado, pero hace falta aprobar al menos una asignatura para tener una referencia con la que compararlo.</div>
       )}
       {desgaste.comparable && desgaste.hasTopes && (
         <>
           <div className="wear-index-row">
-            <span className="wear-index-value">{desgaste.indice.toFixed(2)}<span className="gauge-unit">/10</span></span>
-            <span className={`wear-label wear-label-${desgaste.etiqueta.toLowerCase()}`}>{desgaste.etiqueta}</span>
+            <span className="wear-index-value">{desgaste.indice.toFixed(1)}</span>
+            <div>
+              <span className={`wear-label wear-label-${desgaste.etiqueta.toLowerCase()}`}>{desgaste.etiqueta}</span>
+              {wb && (
+                <div className="wear-index-sub">
+                  Tu peor tramo fue del {formatShort(wb.first)} al {formatShort(wb.last)}: {wb.dias_activos} días
+                  estudiando una media de {wb.intensidad.toFixed(0)} min/día.
+                </div>
+              )}
+            </div>
           </div>
           <div className="wear-factors">
-            <div className="wear-factor"><span>Intensidad</span><span className="mono">{desgaste.normalized.intensidad.toFixed(1)}/10 · {desgaste.rawFactors.intensidad.toFixed(0)} min/día</span></div>
-            <div className="wear-factor"><span>Duración</span><span className="mono">{desgaste.normalized.duracion.toFixed(1)}/10 · {desgaste.rawFactors.duracion} días</span></div>
-            <div className="wear-factor"><span>Compresión</span><span className="mono">{desgaste.normalized.compresion.toFixed(1)}/10 · {(desgaste.rawFactors.compresion * 100).toFixed(0)}%</span></div>
-            <div className="wear-factor"><span>Racha interna</span><span className="mono">{desgaste.normalized.racha.toFixed(1)}/10 · {desgaste.rawFactors.racha} d</span></div>
+            {Object.entries(WEAR_FACTOR_INFO).map(([key, info]) => (
+              <div className="wear-factor-card" key={key}>
+                <div className="wear-factor-head">
+                  <span className="wear-factor-label">{info.label}</span>
+                  <span className="wear-factor-value">{desgaste.normalized[key].toFixed(1)}<span className="gauge-unit">/10</span></span>
+                </div>
+                <div className="wear-factor-raw mono">{info.raw(desgaste.rawFactors)}</div>
+                <div className="wear-factor-explain">{info.explain}</div>
+              </div>
+            ))}
           </div>
         </>
       )}
-      {wb && <div className="gauge-sub">Peor tramo: {formatShort(wb.first)} → {formatShort(wb.last)}</div>}
     </div>
   );
 }
 
-function DesgasteTab({ subjects, entries }) {
+function DesgasteTab({ cursoSubjects, subjects, entries }) {
   const rows = useMemo(() => {
-    return subjects.map((s) => {
+    return cursoSubjects.map((s) => {
       if (s.estado === "aprobada") {
         return { subject: s, desgaste: s.frozen?.desgaste || { comparable: false } };
       }
@@ -621,16 +686,16 @@ function DesgasteTab({ subjects, entries }) {
       if (b.subject.estado === "aprobada" && a.subject.estado !== "aprobada") return 1;
       return (bi ?? -2) - (ai ?? -2);
     });
-  }, [subjects, entries]);
+  }, [cursoSubjects, subjects, entries]);
 
-  if (rows.length === 0) return <div className="panel"><div className="empty-hint">Todavía no hay asignaturas.</div></div>;
+  if (rows.length === 0) return <div className="panel"><div className="empty-hint">Todavía no hay asignaturas en este curso.</div></div>;
 
   return (
     <div>
       <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
-        Mide el tramo de estudio más exigente de cada asignatura, comparado con tu propio historial. Para las
-        asignaturas ya aprobadas el número queda congelado para siempre; para las que siguen en curso se muestra
-        una vista previa que cambiará hasta que las apruebes.
+        Mide el tramo de estudio más exigente de cada asignatura de este curso, comparado con tu propio historial.
+        Para las asignaturas ya aprobadas el número queda congelado para siempre; para las que siguen en curso se
+        muestra una vista previa que cambiará hasta que las apruebes.
       </div>
       {rows.map(({ subject, desgaste }) => (
         <DesgasteCard key={subject.id} subject={subject} desgaste={desgaste} />
@@ -647,35 +712,47 @@ const CLASIF_COLUMNS = [
   { key: "name", label: "Asignatura" },
   { key: "horasPorCredito", label: "Horas/crédito" },
   { key: "diasTotales", label: "Días totales" },
-  { key: "convocatorias", label: "Convocatorias" },
+  { key: "cursosNecesarios", label: "Cursos necesarios" },
   { key: "nota", label: "Nota" },
 ];
 
-function ClasificacionDetail({ subject }) {
+function ClasificacionDetail({ subject, subjects }) {
   const f = subject.frozen;
   const d = f.desgaste;
+  const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
   return (
     <div>
       <div className="stat-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
         <StatCard label="Horas / crédito" value={f.horasPorCredito.toFixed(2)} accent="#4FD8EA" />
         <StatCard label="Días totales" value={`${f.diasTotales} d`} accent="#F5A623" />
-        <StatCard label="Convocatorias" value={f.convocatorias ?? "—"} accent="#A78BFA" />
+        <StatCard label="Cursos necesarios" value={f.cursosNecesarios ?? "—"} accent="#A78BFA" />
         <StatCard label="Nota" value={f.nota ?? "—"} accent="#3DDC84" />
       </div>
+      {mergedSources.length > 0 && (
+        <div className="gauge-sub" style={{ padding: "0 4px 4px" }}>
+          Incluye las horas combinadas de: {mergedSources.map((s) => s.name).join(", ")}
+        </div>
+      )}
       <div className="panel" style={{ marginTop: 4 }}>
         <div className="panel-title">Desgaste</div>
         {!d.comparable && <div className="empty-hint">No comparable — datos insuficientes.</div>}
         {d.comparable && d.hasTopes && (
           <>
             <div className="wear-index-row">
-              <span className="wear-index-value">{d.indice.toFixed(2)}<span className="gauge-unit">/10</span></span>
+              <span className="wear-index-value">{d.indice.toFixed(1)}</span>
               <span className={`wear-label wear-label-${d.etiqueta.toLowerCase()}`}>{d.etiqueta}</span>
             </div>
             <div className="wear-factors">
-              <div className="wear-factor"><span>Intensidad</span><span className="mono">{d.normalized.intensidad.toFixed(1)}/10 · {d.rawFactors.intensidad.toFixed(0)} min/día</span></div>
-              <div className="wear-factor"><span>Duración</span><span className="mono">{d.normalized.duracion.toFixed(1)}/10 · {d.rawFactors.duracion} días</span></div>
-              <div className="wear-factor"><span>Compresión</span><span className="mono">{d.normalized.compresion.toFixed(1)}/10 · {(d.rawFactors.compresion * 100).toFixed(0)}%</span></div>
-              <div className="wear-factor"><span>Racha interna</span><span className="mono">{d.normalized.racha.toFixed(1)}/10 · {d.rawFactors.racha} d</span></div>
+              {Object.entries(WEAR_FACTOR_INFO).map(([key, info]) => (
+                <div className="wear-factor-card" key={key}>
+                  <div className="wear-factor-head">
+                    <span className="wear-factor-label">{info.label}</span>
+                    <span className="wear-factor-value">{d.normalized[key].toFixed(1)}<span className="gauge-unit">/10</span></span>
+                  </div>
+                  <div className="wear-factor-raw mono">{info.raw(d.rawFactors)}</div>
+                  <div className="wear-factor-explain">{info.explain}</div>
+                </div>
+              ))}
             </div>
           </>
         )}
@@ -692,14 +769,14 @@ function ClasificacionTab({ subjects }) {
   const [sortDir, setSortDir] = useState("desc");
   const [detailId, setDetailId] = useState(null);
 
-  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen);
+  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen && !s.mergedInto);
 
   const rows = useMemo(() => {
     const list = approved.map((s) => ({
       id: s.id, name: s.name, color: s.color,
       horasPorCredito: s.frozen.horasPorCredito,
       diasTotales: s.frozen.diasTotales,
-      convocatorias: s.frozen.convocatorias ?? 0,
+      cursosNecesarios: s.frozen.cursosNecesarios ?? 0,
       nota: s.frozen.nota ?? 0,
     }));
     list.sort((a, b) => {
@@ -743,7 +820,7 @@ function ClasificacionTab({ subjects }) {
                   <td><span className="dot" style={{ background: r.color }} />{r.name}</td>
                   <td className="mono">{r.horasPorCredito.toFixed(2)}</td>
                   <td className="mono">{r.diasTotales}</td>
-                  <td className="mono">{r.convocatorias || "—"}</td>
+                  <td className="mono">{r.cursosNecesarios || "—"}</td>
                   <td className="mono">{r.nota || "—"}</td>
                 </tr>
               ))}
@@ -754,7 +831,7 @@ function ClasificacionTab({ subjects }) {
 
       {detailSubject && (
         <Modal title={detailSubject.name} onClose={() => setDetailId(null)} wide>
-          <ClasificacionDetail subject={detailSubject} />
+          <ClasificacionDetail subject={detailSubject} subjects={subjects} />
         </Modal>
       )}
     </div>
@@ -864,7 +941,7 @@ export default function App() {
 
   function handleAddSubject(name, credits) {
     setData((d) => {
-      const newSub = { id: uid("sub"), name, credits, target: null, color: PALETTE[d.subjects.length % PALETTE.length], estado: "en_curso", frozen: null };
+      const newSub = { id: uid("sub"), name, credits, target: null, color: PALETTE[d.subjects.length % PALETTE.length], estado: "en_curso", mergedInto: null, frozen: null };
       return {
         ...d,
         subjects: [...d.subjects, newSub],
@@ -903,10 +980,10 @@ export default function App() {
     }));
   }
 
-  function handleApprove(subjectId, { nota, convocatorias }) {
+  function handleApprove(subjectId, { nota, cursosNecesarios }) {
     setData((d) => {
       const subject = d.subjects.find((s) => s.id === subjectId);
-      const approved = freezeApproval(subject, { entries: d.entries, subjects: d.subjects, nota, convocatorias });
+      const approved = freezeApproval(subject, { entries: d.entries, subjects: d.subjects, nota, cursosNecesarios });
       return { ...d, subjects: d.subjects.map((s) => (s.id === subjectId ? approved : s)) };
     });
   }
@@ -980,7 +1057,7 @@ export default function App() {
         )}
         {tab === "panel" && <PanelTab stats={stats} />}
         {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={data.entries} stats={stats} />}
-        {tab === "desgaste" && <DesgasteTab subjects={data.subjects} entries={data.entries} />}
+        {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
         {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} />}
         {tab === "asignaturas" && (
           <AsignaturasTab
@@ -1178,20 +1255,31 @@ const CSS = `
   .badge-estado-suspendida { color: var(--amber); border-color: rgba(245,166,35,0.4); background: rgba(245,166,35,0.08); }
   .badge-estado-aprobada { color: var(--green); border-color: rgba(61,220,132,0.4); background: rgba(61,220,132,0.08); }
 
-  .wear-card { padding: 16px 20px; }
-  .wear-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .wear-card { padding: 18px 20px 20px; }
+  .wear-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .wear-card-head strong { font-size: 15px; }
   .wear-provisional { font-size: 10px; color: var(--text-dim); margin-left: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
-  .wear-index-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
-  .wear-index-value { font-family: ui-monospace, monospace; font-size: 28px; font-weight: 700; }
-  .wear-label { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .wear-index-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .wear-index-value {
+    font-family: ui-monospace, monospace; font-size: 46px; font-weight: 800; line-height: 1;
+    min-width: 78px; text-align: right;
+  }
+  .wear-index-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; max-width: 440px; }
+  .wear-label { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
   .wear-label-llevadero { color: var(--green); background: rgba(61,220,132,0.1); }
   .wear-label-moderado { color: var(--cyan); background: rgba(79,216,234,0.1); }
   .wear-label-duro { color: var(--amber); background: rgba(245,166,35,0.1); }
   .wear-label-extremo { color: var(--red); background: rgba(255,92,92,0.1); }
-  .wear-factors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 20px; }
+  .wear-factors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   @media (max-width: 560px) { .wear-factors { grid-template-columns: 1fr; } }
-  .wear-factor { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }
-  .wear-factor span:first-child { color: var(--text); }
+  .wear-factor-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .wear-factor-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+  .wear-factor-label { font-size: 12.5px; font-weight: 700; color: var(--text); }
+  .wear-factor-value { font-family: ui-monospace, monospace; font-size: 20px; font-weight: 700; color: var(--cyan); }
+  .wear-factor-raw { font-size: 11.5px; color: var(--text-dim); margin-bottom: 6px; }
+  .wear-factor-explain { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+
+  .merge-select { margin-top: 6px; font-size: 11.5px; color: var(--text-dim); padding: 5px 8px; }
 
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(6,10,20,0.7); backdrop-filter: blur(2px);

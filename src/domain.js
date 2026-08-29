@@ -66,8 +66,19 @@ export function hm(minutes) {
 /*        cursos: [{ id, name, subjectIds: [] }],   ← solo agrupación   */
 /*        subjects: [{ id, name, credits, target, color,                */
 /*                      estado: 'en_curso'|'suspendida'|'aprobada',     */
+/*                      mergedInto: null | subjectId,  ← ver más abajo  */
 /*                      frozen: null | {...} }],    ← entidad global    */
 /*        entries: { [fecha]: { [subjectId]: minutos } } }  ← global    */
+/*                                                                       */
+/*  `mergedInto`: cuando una asignatura (p. ej. una convalidada por      */
+/*  Erasmus) cuenta, a efectos de clasificación histórica, como parte    */
+/*  de otra (la asignatura "oficial" a la que equivale), se marca con    */
+/*  mergedInto = id de esa otra asignatura. Sigue existiendo como        */
+/*  entidad independiente en Panel/Trayectoria/Bitácora/Desgaste (para   */
+/*  poder compararla con el resto de asignaturas de ese curso), pero sus */
+/*  minutos se suman a los de la asignatura destino solo al calcular     */
+/*  horas/crédito y días totales en Clasificación histórica, y no        */
+/*  aparece como fila propia allí.                                      */
 /* ------------------------------------------------------------------ */
 
 export const SCHEMA_VERSION = 2;
@@ -80,6 +91,7 @@ export function buildDefaultData() {
     target: null,
     color: PALETTE[i % PALETTE.length],
     estado: "en_curso",
+    mergedInto: null,
     frozen: null,
   }));
   const nameToId = Object.fromEntries(subjects.map((s) => [s.name, s.id]));
@@ -104,7 +116,12 @@ export function buildDefaultData() {
  * esquema global. Idempotente: si ya viene en v2, la devuelve tal cual. */
 export function migrateData(raw) {
   if (!raw) return null;
-  if (raw.schemaVersion === SCHEMA_VERSION && Array.isArray(raw.subjects) && raw.entries) return raw;
+  if (raw.schemaVersion === SCHEMA_VERSION && Array.isArray(raw.subjects) && raw.entries) {
+    // ya en v2: por si viene de una versión anterior de v2, aseguramos que
+    // todas las asignaturas tengan el campo mergedInto.
+    if (raw.subjects.every((s) => "mergedInto" in s)) return raw;
+    return { ...raw, subjects: raw.subjects.map((s) => ({ mergedInto: null, ...s })) };
+  }
 
   const subjectsById = {};
   const entries = {};
@@ -120,6 +137,7 @@ export function migrateData(raw) {
           target: s.target ?? null,
           color: s.color,
           estado: s.estado || "en_curso",
+          mergedInto: s.mergedInto ?? null,
           frozen: s.frozen || null,
         };
       }
@@ -229,6 +247,28 @@ export function getSubjectEntries(entries, subjectId, order = "desc") {
     .filter((e) => e.minutes > 0)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return order === "desc" ? list.reverse() : list;
+}
+
+/** Ids de las asignaturas cuyos minutos cuentan, combinados, para `subjectId`
+ * en la clasificación histórica: ella misma más cualquier otra con
+ * mergedInto === subjectId (p. ej. una convalidada por Erasmus). */
+export function getMergedSourceIds(subjects, subjectId) {
+  return subjects.filter((s) => s.mergedInto === subjectId).map((s) => s.id);
+}
+
+/** Historial combinado (fecha + minutos sumados) de una asignatura y todas
+ * las que tiene fusionadas (mergedInto) para el cómputo histórico. */
+export function getCombinedEntries(entries, subjects, subjectId) {
+  const ids = [subjectId, ...getMergedSourceIds(subjects, subjectId)];
+  const byDate = {};
+  ids.forEach((id) => {
+    getSubjectEntries(entries, id, "asc").forEach((e) => {
+      byDate[e.date] = (byDate[e.date] || 0) + e.minutes;
+    });
+  });
+  return Object.entries(byDate)
+    .map(([date, minutes]) => ({ date, minutes }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
 /* ------------------------------------------------------------------ */
@@ -381,13 +421,18 @@ export function priorComparableRawFactors(subjects, excludeSubjectId = null) {
 /*  CONGELAR ASIGNATURA (marcar "aprobada")                            */
 /* ------------------------------------------------------------------ */
 
-/** Marca una asignatura como aprobada: congela nota, convocatorias,
+/** Marca una asignatura como aprobada: congela nota, cursos necesarios,
  * horas/crédito, días totales y el índice de desgaste con los topes
- * del historial hasta este momento. No se recalcula después. */
-export function freezeApproval(subject, { entries, subjects, nota, convocatorias, fechaAprobacion = isoToday() }) {
-  const subjectEntriesAsc = getSubjectEntries(entries, subject.id, "asc");
-  const firstDate = subjectEntriesAsc[0]?.date ?? null;
-  const minutosTotales = subjectEntriesAsc.reduce((a, e) => a + e.minutes, 0);
+ * del historial hasta este momento. No se recalcula después.
+ *
+ * Horas/crédito y días totales se calculan sobre el historial combinado
+ * (esta asignatura + cualquier otra fusionada con mergedInto), porque son
+ * las cifras de "cuánto costó de verdad"; el desgaste (peor tramo) se
+ * calcula solo con el historial propio de esta asignatura. */
+export function freezeApproval(subject, { entries, subjects, nota, cursosNecesarios, fechaAprobacion = isoToday() }) {
+  const combinedAsc = getCombinedEntries(entries, subjects, subject.id);
+  const firstDate = combinedAsc[0]?.date ?? null;
+  const minutosTotales = combinedAsc.reduce((a, e) => a + e.minutes, 0);
   const horasPorCredito = subject.credits > 0 ? minutosTotales / 60 / subject.credits : 0;
   const diasTotales = firstDate ? daysBetween(firstDate, fechaAprobacion) + 1 : 0;
 
@@ -399,7 +444,7 @@ export function freezeApproval(subject, { entries, subjects, nota, convocatorias
     estado: "aprobada",
     frozen: {
       nota: nota !== "" && nota != null ? parseFloat(nota) : null,
-      convocatorias: convocatorias !== "" && convocatorias != null ? parseInt(convocatorias, 10) : null,
+      cursosNecesarios: cursosNecesarios !== "" && cursosNecesarios != null ? parseInt(cursosNecesarios, 10) : null,
       fechaInicio: firstDate,
       fechaAprobacion,
       horasPorCredito: +horasPorCredito.toFixed(3),
