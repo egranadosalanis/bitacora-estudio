@@ -138,9 +138,9 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
 
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
 
-  // El contador mide tiempo real transcurrido, así que solo tiene sentido
-  // para la fecha de hoy — si cambias de fecha (o de curso, lo que también
-  // cambia la fecha) se para y se resetea.
+  // Si cambias de fecha (o de curso) a media sesión, el contador se para y
+  // se resetea — así el tiempo medido nunca se cuela sin querer en el día
+  // equivocado.
   useEffect(() => {
     setTimerRunning(false);
     setTimerStartedAt(null);
@@ -201,9 +201,6 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
         <div className="field-row">
           <label className="field-label">Fecha</label>
           <input type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} className="input-field" />
-          {date !== todayIso && todayIso >= minDate && todayIso <= maxDate && (
-            <button className="btn-ghost btn-small" onClick={() => setDate(todayIso)}>Hoy</button>
-          )}
         </div>
         {loggableSubjects.length === 0 ? (
           <div className="empty-hint">No hay asignaturas activas (todas están aprobadas o no has añadido ninguna todavía).</div>
@@ -211,25 +208,14 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
           <>
             <div className="seg-control" style={{ marginBottom: 14 }}>
               <button className={`seg-btn ${mode === "manual" ? "seg-btn-active" : ""}`} onClick={() => setMode("manual")}>Manual</button>
-              <button
-                className={`seg-btn ${mode === "contador" ? "seg-btn-active" : ""}`}
-                onClick={() => {
-                  setMode("contador");
-                  if (todayIso >= minDate && todayIso <= maxDate) setDate(todayIso);
-                }}
-              >
-                Contador
-              </button>
+              <button className={`seg-btn ${mode === "contador" ? "seg-btn-active" : ""}`} onClick={() => setMode("contador")}>Contador</button>
             </div>
 
-            {mode === "contador" && date !== todayIso && (
-              <div className="empty-hint">
-                El contador solo está disponible para el día de hoy ({formatMedium(todayIso)}) — usa el botón "Hoy" junto a la fecha.
-              </div>
-            )}
-
-            {mode === "contador" && date === todayIso && (
+            {mode === "contador" && (
               <div className="timer-box">
+                <div className="gauge-sub" style={{ marginBottom: 8 }}>
+                  Lo que mida el contador se sumará al registro de {formatMedium(date)} — cambia la fecha arriba si es para otro día.
+                </div>
                 <div className="field-row">
                   <label className="field-label">Asignatura</label>
                   <select
@@ -261,7 +247,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
                 </div>
                 {parseFloat(values[timerSubjectId]) > 0 && (
                   <div className="gauge-sub">
-                    Ya hay {values[timerSubjectId]} min guardados hoy para esta asignatura — el contador se sumará a eso.
+                    Ya hay {values[timerSubjectId]} min para esta asignatura ese día — el contador se sumará a eso.
                   </div>
                 )}
               </div>
@@ -661,11 +647,10 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   );
 }
 
-function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado, onUpdateCursoDates }) {
+function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado }) {
   const [newSubject, setNewSubject] = useState({ name: "", credits: "" });
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
-  const [editDates, setEditDates] = useState({ startDate: "", endDate: "" });
 
   function addSubject() {
     if (!newSubject.name.trim() || !newSubject.credits) return;
@@ -692,21 +677,6 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
   const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
   const curso = cursos.find((c) => c.id === activeCursoId);
-
-  useEffect(() => {
-    setEditDates({ startDate: curso?.startDate || "", endDate: curso?.endDate || "" });
-  }, [curso?.id]);
-
-  const datesChanged = curso && (editDates.startDate !== curso.startDate || editDates.endDate !== curso.endDate);
-  const datesValid = editDates.startDate && editDates.endDate && editDates.startDate <= editDates.endDate;
-  const overlappingCurso = curso && datesValid
-    ? cursos.find((c) => c.id !== curso.id && editDates.startDate <= c.endDate && c.startDate <= editDates.endDate)
-    : null;
-
-  function saveCursoDates() {
-    if (!curso || !datesValid) return;
-    onUpdateCursoDates(curso.id, editDates.startDate, editDates.endDate);
-  }
 
   return (
     <div>
@@ -748,25 +718,6 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
             Añadir curso
           </button>
         </div>
-
-        {curso && (
-          <>
-            <div className="btn-row" style={{ marginTop: 12, alignItems: "center" }}>
-              <span className="gauge-sub" style={{ margin: 0 }}>Fechas de {curso.name}:</span>
-              <input type="date" className="input-field" value={editDates.startDate} onChange={(e) => setEditDates((v) => ({ ...v, startDate: e.target.value }))} />
-              <span className="gauge-sub" style={{ margin: 0 }}>→</span>
-              <input type="date" className="input-field" value={editDates.endDate} onChange={(e) => setEditDates((v) => ({ ...v, endDate: e.target.value }))} />
-              {datesChanged && (
-                <button className="btn-ghost btn-small" onClick={saveCursoDates} disabled={!datesValid}>Guardar fechas</button>
-              )}
-            </div>
-            {datesChanged && overlappingCurso && (
-              <div className="gauge-sub" style={{ color: "var(--amber)", marginTop: 6 }}>
-                Este rango se solapa con {overlappingCurso.name} — un registro en esos días de solape aparecería en los dos cursos a la vez.
-              </div>
-            )}
-          </>
-        )}
       </div>
 
       <div className="panel">
@@ -1417,13 +1368,6 @@ export default function App() {
     }));
   }
 
-  function handleUpdateCursoDates(id, startDate, endDate) {
-    setData((d) => ({
-      ...d,
-      cursos: d.cursos.map((c) => (c.id === id ? { ...c, startDate, endDate } : c)),
-    }));
-  }
-
   function handleRemoveCurso(id) {
     setData((d) => {
       if (d.cursos.length === 1) return d;
@@ -1507,7 +1451,6 @@ export default function App() {
             onAddCurso={handleAddCurso}
             onRemoveCurso={handleRemoveCurso}
             onToggleCursoEstado={handleToggleCursoEstado}
-            onUpdateCursoDates={handleUpdateCursoDates}
           />
         )}
       </main>
