@@ -180,6 +180,11 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     setTimerStartedAt(null);
     setTimerRunning(false);
   }
+  function resetTimer() {
+    setTimerAccumulatedMs(0);
+    setTimerStartedAt(null);
+    setTimerRunning(false);
+  }
 
   const dayTotal = loggableSubjects.reduce((acc, s) => acc + (parseFloat(values[s.id]) || 0), 0);
   const hasEntryToday = !!entries[date] && loggableSubjects.some((s) => entries[date][s.id] > 0);
@@ -235,6 +240,11 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
                   <button className="btn-primary" onClick={finishTimer} disabled={timerElapsedMs < 1000}>
                     Fin — meter en el registro
                   </button>
+                  {timerElapsedMs >= 1000 && (
+                    <button className="btn-ghost" onClick={resetTimer} title="Vuelve el contador a 00:00 sin meter nada en el registro">
+                      Reiniciar
+                    </button>
+                  )}
                 </div>
                 {parseFloat(values[timerSubjectId]) > 0 && (
                   <div className="gauge-sub">
