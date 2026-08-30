@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
-  buildDefaultData, migrateData, computeStats, getSubjectEntries, getAllEntriesFlat,
+  buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, priorComparableRawFactors, freezeApproval,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange,
 } from "./domain.js";
@@ -966,10 +966,10 @@ export default function App() {
     (async () => {
       try {
         const value = await cloudLoad();
-        setData(migrateData(value ? JSON.parse(value) : buildDefaultData()));
+        setData(applyHistoricalImport(migrateData(value ? JSON.parse(value) : buildDefaultData())));
         setCloudError(null);
       } catch (e) {
-        setData(migrateData(buildDefaultData()));
+        setData(applyHistoricalImport(migrateData(buildDefaultData())));
         setCloudError(String((e && e.message) || e));
       }
     })();
