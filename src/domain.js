@@ -274,22 +274,6 @@ export function subjectsForRegisterInCurso(subjects, entries, curso) {
   return [...active, ...empty];
 }
 
-/** Asignaturas a mostrar en la pestaña Desgaste para un curso concreto:
- * las ya aprobada aparecen solo en el curso donde se aprobaron (según
- * frozen.fechaAprobacion), no en todos los cursos donde tengan actividad
- * — así una asignatura multi-curso (p. ej. suspendida un año y aprobada
- * al siguiente) no se repite. Las que siguen en curso/suspendida se
- * muestran, como antes, en los cursos donde tengan actividad. */
-export function subjectsForDesgasteInCurso(subjects, entries, curso) {
-  return subjects.filter((s) => {
-    if (s.estado === "aprobada" && s.frozen?.fechaAprobacion) {
-      const d = s.frozen.fechaAprobacion;
-      return (!curso.startDate || d >= curso.startDate) && (!curso.endDate || d <= curso.endDate);
-    }
-    return subjectsWithActivityInRange([s], entries, curso.startDate, curso.endDate).length > 0;
-  });
-}
-
 /* ------------------------------------------------------------------ */
 /*  CALCULOS DERIVADOS — vista "En curso" / "Panel" / "Trayectoria"    */
 /*  (operan sobre un subconjunto de asignaturas + el mapa global de     */

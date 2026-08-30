@@ -7,7 +7,7 @@ import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, priorComparableRawFactors, freezeApproval,
-  inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso, subjectsForDesgasteInCurso,
+  inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 
 /* ------------------------------------------------------------------ */
@@ -367,7 +367,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats }) {
               <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2}>
                 {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} formatter={(v) => hm(v)} />
+              <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} itemStyle={{ color: "#E7ECF5" }} formatter={(v) => hm(v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#8291AC" }} />
             </PieChart>
           </ResponsiveContainer>
@@ -381,7 +381,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
             <XAxis dataKey="name" stroke="#8291AC" fontSize={11} />
             <YAxis stroke="#8291AC" fontSize={11} />
-            <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} />
+            <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} itemStyle={{ color: "#E7ECF5" }} />
             <Bar dataKey="horasPorCredito" radius={[4, 4, 0, 0]}>
               {barData.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Bar>
@@ -428,7 +428,7 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   );
 }
 
-function AsignaturasTab({ subjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso }) {
+function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso }) {
   const [newSubject, setNewSubject] = useState({ name: "", credits: "" });
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
@@ -457,6 +457,7 @@ function AsignaturasTab({ subjects, entries, onAddSubject, onDeleteSubject, onUp
 
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
   const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
+  const curso = cursos.find((c) => c.id === activeCursoId);
 
   return (
     <div>
@@ -498,7 +499,7 @@ function AsignaturasTab({ subjects, entries, onAddSubject, onDeleteSubject, onUp
       </div>
 
       <div className="panel">
-        <div className="panel-title">Asignaturas</div>
+        <div className="panel-title">Asignaturas de {curso?.name}</div>
         <div className="panel-subtitle">
           Si esta asignatura convalida o equivale a otra con nombre distinto que cursaste antes, puedes combinarla con
           ella desde "Combinar con". Sus horas, días y cursos necesarios se sumarán a la asignatura que finalmente apruebes.
@@ -515,7 +516,7 @@ function AsignaturasTab({ subjects, entries, onAddSubject, onDeleteSubject, onUp
               </tr>
             </thead>
             <tbody>
-              {subjects.map((s) => {
+              {cursoSubjects.map((s) => {
                 const mergeOptions = subjects.filter((o) => o.id !== s.id && !o.mergedInto);
                 const hasOwnSources = subjects.some((o) => o.mergedInto === s.id);
                 const deletable = !hasEntries(s.id);
@@ -536,7 +537,7 @@ function AsignaturasTab({ subjects, entries, onAddSubject, onDeleteSubject, onUp
                         >
                           <option value="">No combinar (cuenta por separado)</option>
                           {mergeOptions.map((o) => (
-                            <option key={o.id} value={o.id}>Convalidada como: {o.name}</option>
+                            <option key={o.id} value={o.id}>Combinada con: {o.name}</option>
                           ))}
                         </select>
                       )}
@@ -863,71 +864,6 @@ function ClasificacionTab({ subjects, entries }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  TAB: HISTORIAL (todos los registros de todas las asignaturas)       */
-/* ------------------------------------------------------------------ */
-
-function HistorialTab({ subjects, entries, cursos }) {
-  const [cursoFilter, setCursoFilter] = useState("");
-  const [subjectFilter, setSubjectFilter] = useState("");
-  const [visibleCount, setVisibleCount] = useState(30);
-
-  const rows = useMemo(() => {
-    let list = getAllEntriesFlat(subjects, entries, "desc");
-    if (cursoFilter) {
-      const c = cursos.find((x) => x.id === cursoFilter);
-      if (c) list = list.filter((e) => (!c.startDate || e.date >= c.startDate) && (!c.endDate || e.date <= c.endDate));
-    }
-    if (subjectFilter) list = list.filter((e) => e.subjectId === subjectFilter);
-    return list;
-  }, [subjects, entries, cursos, cursoFilter, subjectFilter]);
-
-  useEffect(() => { setVisibleCount(30); }, [cursoFilter, subjectFilter]);
-
-  return (
-    <div>
-      <div className="panel">
-        <div className="panel-title-row">
-          <div className="panel-title" style={{ marginBottom: 0 }}>Historial general</div>
-          <div className="btn-row" style={{ marginTop: 0 }}>
-            <select className="input-field subject-select" value={cursoFilter} onChange={(e) => setCursoFilter(e.target.value)}>
-              <option value="">Todos los cursos</option>
-              {cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <select className="input-field subject-select" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
-              <option value="">Todas las asignaturas</option>
-              {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="panel-subtitle">Todos los registros diarios de todas las asignaturas, mezclados y ordenados por fecha.</div>
-        {rows.length === 0 && <div className="empty-hint">No hay registros para este filtro.</div>}
-        {rows.length > 0 && (
-          <>
-            <div className="log-list">
-              {rows.slice(0, visibleCount).map((e, i) => (
-                <div key={i} className="log-item" style={{ cursor: "default" }}>
-                  <span className="log-date">{formatShort(e.date)}</span>
-                  <span className="log-detail">
-                    <span className="log-chip" style={{ borderColor: e.subjectColor }}>{e.subjectName}</span>
-                  </span>
-                  <span className="log-total mono">{hm(e.minutes)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="history-footer">
-              <span className="empty-hint" style={{ padding: "8px 0" }}>{rows.length} registro(s)</span>
-              {visibleCount < rows.length && (
-                <button className="btn-ghost btn-small" onClick={() => setVisibleCount((n) => n + 30)}>Cargar más</button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  CONEXIÓN CON GOOGLE SHEETS (Apps Script)                           */
 /* ------------------------------------------------------------------ */
 
@@ -1002,13 +938,13 @@ export default function App() {
     () => (data && curso ? subjectsWithActivityInRange(data.subjects, data.entries, curso.startDate, curso.endDate) : []),
     [data, curso]
   );
-  const loggableSubjects = useMemo(
-    () => (data && curso ? subjectsForRegisterInCurso(data.subjects, data.entries, curso).filter((s) => s.estado !== "aprobada") : []),
+  const cursoSubjectsForManagement = useMemo(
+    () => (data && curso ? subjectsForRegisterInCurso(data.subjects, data.entries, curso) : []),
     [data, curso]
   );
-  const desgasteSubjects = useMemo(
-    () => (data && curso ? subjectsForDesgasteInCurso(data.subjects, data.entries, curso) : []),
-    [data, curso]
+  const loggableSubjects = useMemo(
+    () => cursoSubjectsForManagement.filter((s) => s.estado !== "aprobada"),
+    [cursoSubjectsForManagement]
   );
   const stats = useMemo(() => (data && curso ? computeStats(cursoSubjects, cursoEntries) : null), [data, curso, cursoSubjects, cursoEntries]);
 
@@ -1126,7 +1062,6 @@ export default function App() {
         <Tab id="trayectoria" active={tab === "trayectoria"} onClick={setTab}>Trayectoria</Tab>
         <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
         <Tab id="clasificacion" active={tab === "clasificacion"} onClick={setTab}>Clasificación</Tab>
-        <Tab id="historial" active={tab === "historial"} onClick={setTab}>Historial</Tab>
         <Tab id="asignaturas" active={tab === "asignaturas"} onClick={setTab}>Asignaturas</Tab>
       </nav>
 
@@ -1142,12 +1077,12 @@ export default function App() {
         )}
         {tab === "panel" && <PanelTab stats={stats} />}
         {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={cursoEntries} stats={stats} />}
-        {tab === "desgaste" && <DesgasteTab cursoSubjects={desgasteSubjects} subjects={data.subjects} entries={data.entries} />}
+        {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
         {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} entries={data.entries} />}
-        {tab === "historial" && <HistorialTab subjects={data.subjects} entries={data.entries} cursos={data.cursos} />}
         {tab === "asignaturas" && (
           <AsignaturasTab
             subjects={data.subjects}
+            cursoSubjects={cursoSubjectsForManagement}
             entries={data.entries}
             cursos={data.cursos}
             activeCursoId={data.activeCursoId}
