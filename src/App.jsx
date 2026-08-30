@@ -678,11 +678,11 @@ const WEAR_FACTOR_INFO = {
   },
 };
 
-function DesgasteCard({ subject, desgaste }) {
+function DesgasteCard({ subject, desgaste, bare }) {
   const isEnCurso = subject.estado !== "aprobada";
   const wb = desgaste.worstBlock;
   return (
-    <div className="panel wear-card">
+    <div className={bare ? "" : "panel wear-card"}>
       <div className="wear-card-head">
         <div>
           <span className="dot" style={{ background: subject.color }} />
@@ -729,7 +729,95 @@ function DesgasteCard({ subject, desgaste }) {
   );
 }
 
+/** Para cada asignatura "oficial" (no fusionada dentro de otra), calcula el
+ * desgaste de ella misma y el de cualquier asignatura combinada con
+ * "Combinar con", y se queda con el mayor de los dos — p. ej. si Calcolo
+ * Numerico está combinada con Métodos Matemáticos y su tramo fue más duro,
+ * la clasificación general muestra el desgaste de Calcolo Numerico bajo
+ * el nombre de Métodos Matemáticos. */
+function buildDesgasteRanking(subjects, entries) {
+  const targets = subjects.filter((s) => !s.mergedInto);
+  return targets.map((target) => {
+    const members = [target, ...subjects.filter((s) => s.mergedInto === target.id)];
+    const computed = members.map((m) => {
+      const prior = priorComparableRawFactors(subjects, entries, m.id);
+      const desgaste = computeDesgaste(m.id, entries, prior, { includeSelf: m.estado === "aprobada" });
+      return { subject: m, desgaste };
+    });
+    const ranked = computed.filter((c) => c.desgaste.comparable && c.desgaste.hasTopes);
+    const best = ranked.length > 0 ? ranked.reduce((a, b) => (b.desgaste.indice > a.desgaste.indice ? b : a)) : null;
+    return { target, best };
+  }).sort((a, b) => {
+    if (!a.best && !b.best) return a.target.name.localeCompare(b.target.name);
+    if (!a.best) return 1;
+    if (!b.best) return -1;
+    return b.best.desgaste.indice - a.best.desgaste.indice;
+  });
+}
+
+function DesgasteRankingTab({ subjects, entries }) {
+  const [detailId, setDetailId] = useState(null);
+  const groups = useMemo(() => buildDesgasteRanking(subjects, entries), [subjects, entries]);
+  const detailGroup = detailId ? groups.find((g) => g.target.id === detailId) : null;
+
+  return (
+    <div>
+      <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
+        Todas tus asignaturas, de la más a la menos dura. Si una asignatura está combinada con otra distinta
+        ("Combinar con"), se muestra el mayor desgaste entre las dos — p. ej. si Calcolo Numerico (combinada con
+        Métodos Matemáticos) tuvo el tramo más duro, es su número el que aparece aquí.
+      </div>
+      <div className="panel">
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Asignatura</th>
+                <th>Estado</th>
+                <th>Desgaste</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((g, i) => (
+                <tr key={g.target.id} className={g.best ? "clickable-row" : ""} onClick={() => g.best && setDetailId(g.target.id)}>
+                  <td className="mono">{i + 1}</td>
+                  <td>
+                    <span className="dot" style={{ background: g.target.color }} />
+                    {g.target.name}
+                    {g.best && g.best.subject.id !== g.target.id && (
+                      <div className="gauge-sub">Desgaste mostrado: {g.best.subject.name}</div>
+                    )}
+                  </td>
+                  <td><EstadoBadge estado={g.target.estado} /></td>
+                  <td>
+                    {g.best ? (
+                      <span className={`wear-label wear-label-${g.best.desgaste.etiqueta.toLowerCase()}`}>
+                        {g.best.desgaste.indice.toFixed(1)} · {g.best.desgaste.etiqueta}
+                      </span>
+                    ) : (
+                      <span className="mono" style={{ color: "var(--text-dim)" }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {detailGroup && detailGroup.best && (
+        <Modal title={detailGroup.target.name} onClose={() => setDetailId(null)} wide>
+          <DesgasteCard subject={detailGroup.best.subject} desgaste={detailGroup.best.desgaste} bare />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 function DesgasteTab({ cursoSubjects, subjects, entries }) {
+  const [view, setView] = useState("curso");
+
   const rows = useMemo(() => {
     return cursoSubjects.map((s) => {
       const isAprobada = s.estado === "aprobada";
@@ -745,20 +833,33 @@ function DesgasteTab({ cursoSubjects, subjects, entries }) {
     });
   }, [cursoSubjects, subjects, entries]);
 
-  if (rows.length === 0) return <div className="panel"><div className="empty-hint">Todavía no hay asignaturas en este curso.</div></div>;
-
   return (
     <div>
-      <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
-        Mide el tramo de estudio más exigente de cada asignatura de este curso, comparado con tu propio historial.
-        El índice se recalcula siempre con los datos actuales (incluso para las asignaturas ya aprobadas), porque
-        el tope de referencia de cada factor es el máximo histórico entre todas tus asignaturas aprobadas — puede
-        subir o bajar según apruebas otras. Para las que siguen en curso se muestra además una vista previa de lo
-        que saldría si las aprobaras hoy.
+      <div className="seg-control" style={{ marginBottom: 16, display: "inline-flex" }}>
+        <button className={`seg-btn ${view === "curso" ? "seg-btn-active" : ""}`} onClick={() => setView("curso")}>Por curso</button>
+        <button className={`seg-btn ${view === "ranking" ? "seg-btn-active" : ""}`} onClick={() => setView("ranking")}>Clasificación de desgaste</button>
       </div>
-      {rows.map(({ subject, desgaste }) => (
-        <DesgasteCard key={subject.id} subject={subject} desgaste={desgaste} />
-      ))}
+
+      {view === "ranking" && <DesgasteRankingTab subjects={subjects} entries={entries} />}
+
+      {view === "curso" && (
+        rows.length === 0 ? (
+          <div className="panel"><div className="empty-hint">Todavía no hay asignaturas en este curso.</div></div>
+        ) : (
+          <div>
+            <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
+              Mide el tramo de estudio más exigente de cada asignatura de este curso, comparado con tu propio historial.
+              El índice se recalcula siempre con los datos actuales (incluso para las asignaturas ya aprobadas), porque
+              el tope de referencia de cada factor es el máximo histórico entre todas tus asignaturas aprobadas — puede
+              subir o bajar según apruebas otras. Para las que siguen en curso se muestra además una vista previa de lo
+              que saldría si las aprobaras hoy.
+            </div>
+            {rows.map(({ subject, desgaste }) => (
+              <DesgasteCard key={subject.id} subject={subject} desgaste={desgaste} />
+            ))}
+          </div>
+        )
+      )}
     </div>
   );
 }
