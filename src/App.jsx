@@ -879,11 +879,20 @@ const CLASIF_COLUMNS = [
 function ClasificacionDetail({ subject, subjects, entries }) {
   const f = subject.frozen;
   const c = computeClassification(subject, entries, subjects);
-  const prior = priorComparableRawFactors(subjects, entries, subject.id);
-  const d = computeDesgaste(subject.id, entries, prior, { includeSelf: true });
   const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
   const activeSources = mergedSources.filter((s) => s.estado === "aprobada");
   const pendingSources = mergedSources.filter((s) => s.estado !== "aprobada");
+
+  const wearMembers = [subject, ...activeSources];
+  const wearComputed = wearMembers.map((m) => {
+    const prior = priorComparableRawFactors(subjects, entries, m.id);
+    return { subject: m, desgaste: computeDesgaste(m.id, entries, prior, { includeSelf: true }) };
+  });
+  const wearRanked = wearComputed.filter((w) => w.desgaste.comparable && w.desgaste.hasTopes);
+  const wearBest = wearRanked.length > 0
+    ? wearRanked.reduce((a, b) => (b.desgaste.indice > a.desgaste.indice ? b : a))
+    : wearComputed[0];
+  const d = wearBest.desgaste;
   return (
     <div>
       <div className="stat-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
@@ -904,6 +913,11 @@ function ClasificacionDetail({ subject, subjects, entries }) {
       )}
       <div className="panel" style={{ marginTop: 4 }}>
         <div className="panel-title">Desgaste</div>
+        {wearBest.subject.id !== subject.id && (
+          <div className="gauge-sub" style={{ marginBottom: 6 }}>
+            Desgaste mostrado: {wearBest.subject.name} (la que más costó)
+          </div>
+        )}
         {!d.comparable && <div className="empty-hint">No comparable — datos insuficientes.</div>}
         {d.comparable && d.hasTopes && (
           <>
