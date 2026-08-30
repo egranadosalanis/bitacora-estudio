@@ -201,6 +201,9 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
         <div className="field-row">
           <label className="field-label">Fecha</label>
           <input type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} className="input-field" />
+          {date !== todayIso && todayIso >= minDate && todayIso <= maxDate && (
+            <button className="btn-ghost btn-small" onClick={() => setDate(todayIso)}>Hoy</button>
+          )}
         </div>
         {loggableSubjects.length === 0 ? (
           <div className="empty-hint">No hay asignaturas activas (todas están aprobadas o no has añadido ninguna todavía).</div>
@@ -208,11 +211,21 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
           <>
             <div className="seg-control" style={{ marginBottom: 14 }}>
               <button className={`seg-btn ${mode === "manual" ? "seg-btn-active" : ""}`} onClick={() => setMode("manual")}>Manual</button>
-              <button className={`seg-btn ${mode === "contador" ? "seg-btn-active" : ""}`} onClick={() => setMode("contador")}>Contador</button>
+              <button
+                className={`seg-btn ${mode === "contador" ? "seg-btn-active" : ""}`}
+                onClick={() => {
+                  setMode("contador");
+                  if (todayIso >= minDate && todayIso <= maxDate) setDate(todayIso);
+                }}
+              >
+                Contador
+              </button>
             </div>
 
             {mode === "contador" && date !== todayIso && (
-              <div className="empty-hint">El contador solo está disponible para el día de hoy — cambia la fecha a hoy para usarlo.</div>
+              <div className="empty-hint">
+                El contador solo está disponible para el día de hoy ({formatMedium(todayIso)}) — usa el botón "Hoy" junto a la fecha.
+              </div>
             )}
 
             {mode === "contador" && date === todayIso && (
