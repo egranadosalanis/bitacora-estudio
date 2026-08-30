@@ -37,15 +37,25 @@ export function uid(prefix) {
 /*  UTILIDADES DE FECHA                                                */
 /* ------------------------------------------------------------------ */
 
+// Todas las fechas de la app son strings "AAAA-MM-DD" sin hora — se tratan
+// siempre como fechas puras en UTC (Date.UTC / getUTC*), nunca en la zona
+// horaria local. Si no, en cualquier zona con offset positivo (p. ej.
+// Europe/Madrid, UTC+2) `new Date(iso + "T00:00:00")` se interpreta en
+// local y, al volver a convertir a ISO (que es UTC), la fecha retrocede un
+// día — con offset suficientemente grande, addDays(iso, 1) puede devolver
+// la MISMA fecha de entrada, lo que vuelve infinito cualquier bucle tipo
+// `for (d = start; d <= end; d = addDays(d, 1))`.
 export function isoToday() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 export function parseISO(iso) {
-  return new Date(iso + "T00:00:00");
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
 }
 export function addDays(iso, n) {
   const d = parseISO(iso);
-  d.setDate(d.getDate() + n);
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 export function daysBetween(a, b) {
@@ -53,15 +63,15 @@ export function daysBetween(a, b) {
 }
 export function formatShort(iso) {
   const d = parseISO(iso);
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", timeZone: "UTC" });
 }
 export function formatLong(iso) {
   const d = parseISO(iso);
-  return d.toLocaleDateString("es-ES", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+  return d.toLocaleDateString("es-ES", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
 }
 export function formatMedium(iso) {
   const d = parseISO(iso);
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 }
 export function hm(minutes) {
   const m = Math.round(minutes);
@@ -135,7 +145,7 @@ export function buildDefaultData() {
   return {
     schemaVersion: SCHEMA_VERSION,
     activeCursoId: "curso_2025_2026",
-    cursos: [{ id: "curso_2025_2026", name: "2025-2026", ...inferCursoRange("2025-2026") }],
+    cursos: [{ id: "curso_2025_2026", name: "2025-2026", estado: "en_curso", ...inferCursoRange("2025-2026") }],
     subjects,
     entries,
   };
@@ -146,11 +156,15 @@ export function buildDefaultData() {
 export function migrateData(raw) {
   if (!raw) return null;
   if (raw.schemaVersion === SCHEMA_VERSION && Array.isArray(raw.subjects) && raw.entries) {
-    if (raw.subjects.every((s) => "mergedInto" in s && "originCursoId" in s) && raw.cursos.every((c) => "startDate" in c)) return raw;
+    if (raw.subjects.every((s) => "mergedInto" in s && "originCursoId" in s) && raw.cursos.every((c) => "startDate" in c && "estado" in c)) {
+      return raw;
+    }
     return {
       ...raw,
       subjects: raw.subjects.map((s) => ({ mergedInto: null, originCursoId: null, ...s })),
-      cursos: raw.cursos.map((c) => ("startDate" in c ? c : { id: c.id, name: c.name, ...(inferCursoRange(c.name) || fallbackCursoRange(c, raw)) })),
+      cursos: backfillCursoEstado(
+        raw.cursos.map((c) => ("startDate" in c ? c : { id: c.id, name: c.name, ...(inferCursoRange(c.name) || fallbackCursoRange(c, raw)) }))
+      ),
     };
   }
 
@@ -204,10 +218,21 @@ export function migrateData(raw) {
   return {
     schemaVersion: SCHEMA_VERSION,
     activeCursoId: raw.activeCursoId,
-    cursos,
+    cursos: backfillCursoEstado(cursos),
     subjects: Object.values(subjectsById).map((s) => ({ ...s, originCursoId: originBySubjectId[s.id] ?? null })),
     entries,
   };
+}
+
+/** Rellena el estado ("en_curso"/"terminado") de los cursos que todavía no
+ * lo tengan — el que empieza más tarde se toma como el curso en marcha, el
+ * resto se marcan como terminados. Solo afecta a cursos migrados desde antes
+ * de que existiera este campo; a partir de aquí cada curso lleva su propio
+ * estado explícito, editable a mano desde Asignaturas. */
+function backfillCursoEstado(cursos) {
+  if (cursos.every((c) => "estado" in c)) return cursos;
+  const latestStart = cursos.reduce((max, c) => (c.startDate > max ? c.startDate : max), cursos[0]?.startDate ?? "");
+  return cursos.map((c) => ("estado" in c ? c : { ...c, estado: c.startDate === latestStart ? "en_curso" : "terminado" }));
 }
 
 /** Si un curso migrado no tiene nombre "AAAA-AAAA", deduce un rango a

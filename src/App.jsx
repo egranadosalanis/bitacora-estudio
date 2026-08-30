@@ -326,19 +326,19 @@ function HoursPerCreditTooltip({ active, payload }) {
 
 function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
   const today = isoToday();
-  const isPastCurso = !!curso && curso.endDate < today;
+  const isTerminado = !!curso && curso.estado === "terminado";
   const cuatrimestreSplit = curso ? `${curso.endDate.slice(0, 4)}-02-01` : null;
-  const [range, setRange] = useState(isPastCurso ? "1c" : 90);
+  const [range, setRange] = useState(isTerminado ? "1c" : 90);
   const [trayView, setTrayView] = useState("acumulado");
 
   useEffect(() => {
-    setRange(isPastCurso ? "1c" : 90);
-  }, [curso?.id, isPastCurso]);
+    setRange(isTerminado ? "1c" : 90);
+  }, [curso?.id, isTerminado]);
 
   const chartDates = useMemo(() => {
     const all = [...stats.activeDates].sort();
     if (all.length === 0) return [];
-    if (isPastCurso) {
+    if (isTerminado) {
       if (range === "all") return all;
       if (range === "1c") return all.filter((d) => d < cuatrimestreSplit);
       return all.filter((d) => d >= cuatrimestreSplit);
@@ -346,7 +346,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
     if (range === 0) return all;
     const from = addDays(today, -range);
     return all.filter((d) => d >= from);
-  }, [stats.activeDates, range, isPastCurso, cuatrimestreSplit, today]);
+  }, [stats.activeDates, range, isTerminado, cuatrimestreSplit, today]);
 
   const areaData = chartDates.map((d) => {
     const row = { date: formatShort(d) };
@@ -354,10 +354,19 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
     return row;
   });
 
+  // Días naturales del curso hasta hoy (o hasta que terminó): incluye los
+  // días sin estudio como ceros, para que tanto el acumulado como su
+  // derivada respeten el tiempo real transcurrido — dos huecos de estudio
+  // separados por semanas no deben quedar pegados uno al otro en el eje X.
+  const gridEnd = curso.endDate < today ? curso.endDate : today;
+  const allDays = [];
+  for (let d = curso.startDate; d <= gridEnd; d = addDays(d, 1)) allDays.push(d);
+
   let acc = 0;
-  const cumulativeData = [...stats.activeDates].sort().map((d) => {
-    acc += stats.dailyTotals[d];
-    return { date: formatShort(d), horas: +(acc / 60).toFixed(1), horasDia: +(stats.dailyTotals[d] / 60).toFixed(2) };
+  const cumulativeData = allDays.map((d) => {
+    const minutosDia = stats.dailyTotals[d] || 0;
+    acc += minutosDia;
+    return { date: formatShort(d), horas: +(acc / 60).toFixed(2), horasDia: +(minutosDia / 60).toFixed(2) };
   });
 
   const pieData = stats.perSubject.filter((s) => s.total > 0).map((s) => ({ name: s.name, value: s.total, color: s.color }));
@@ -375,7 +384,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
         <div className="panel-title-row">
           <div className="panel-title" style={{ marginBottom: 0 }}>Minutos diarios por asignatura</div>
           <div className="seg-control">
-            {isPastCurso ? (
+            {isTerminado ? (
               [
                 { key: "1c", label: "1er cuatrimestre" },
                 { key: "2c", label: "2º cuatrimestre" },
@@ -524,7 +533,7 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   );
 }
 
-function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso }) {
+function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado }) {
   const [newSubject, setNewSubject] = useState({ name: "", credits: "" });
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
@@ -566,7 +575,10 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
         <div className="curso-list">
           {cursos.map((c) => (
             <div key={c.id} className={`curso-chip ${c.id === activeCursoId ? "curso-chip-active" : ""}`}>
-              <button onClick={() => onSelectCurso(c.id)} title={`${c.startDate} → ${c.endDate}`}>{c.name}</button>
+              <button onClick={() => onSelectCurso(c.id)} title={`${c.startDate} → ${c.endDate}`}>
+                {c.name}
+                {c.estado === "terminado" && <span className="curso-badge">terminado</span>}
+              </button>
               {cursos.length > 1 && (
                 <span className="curso-remove" onClick={() => onRemoveCurso(c.id)}>×</span>
               )}
@@ -595,10 +607,20 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
       </div>
 
       <div className="panel">
-        <div className="panel-title">Asignaturas de {curso?.name}</div>
+        <div className="panel-title-row">
+          <div className="panel-title" style={{ marginBottom: 0 }}>Asignaturas de {curso?.name}</div>
+          {curso && (
+            <button className="btn-ghost btn-small" onClick={() => onToggleCursoEstado(curso.id)}>
+              {curso.estado === "terminado" ? "Marcar como en curso" : "Marcar como terminado"}
+            </button>
+          )}
+        </div>
         <div className="panel-subtitle">
           Si esta asignatura convalida o equivale a otra con nombre distinto que cursaste antes, puedes combinarla con
           ella desde "Combinar con". Sus horas, días y cursos necesarios se sumarán a la asignatura que finalmente apruebes.
+          {curso?.estado === "terminado"
+            ? " Este curso está marcado como terminado: en Trayectoria se muestra por cuatrimestres en vez de por días."
+            : " Este curso está en marcha: en Trayectoria se muestra por los últimos 30/90 días."}
         </div>
         <div className="table-wrap">
           <table className="data-table">
@@ -1222,7 +1244,14 @@ export default function App() {
 
   function handleAddCurso(name, startDate, endDate) {
     const id = uid("curso");
-    setData((d) => ({ ...d, activeCursoId: id, cursos: [...d.cursos, { id, name, startDate, endDate }] }));
+    setData((d) => ({ ...d, activeCursoId: id, cursos: [...d.cursos, { id, name, startDate, endDate, estado: "en_curso" }] }));
+  }
+
+  function handleToggleCursoEstado(id) {
+    setData((d) => ({
+      ...d,
+      cursos: d.cursos.map((c) => (c.id === id ? { ...c, estado: c.estado === "terminado" ? "en_curso" : "terminado" } : c)),
+    }));
   }
 
   function handleRemoveCurso(id) {
@@ -1307,6 +1336,7 @@ export default function App() {
             onApprove={handleApprove}
             onAddCurso={handleAddCurso}
             onRemoveCurso={handleRemoveCurso}
+            onToggleCursoEstado={handleToggleCursoEstado}
           />
         )}
       </main>
@@ -1475,6 +1505,7 @@ const CSS = `
   .curso-chip { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 20px; overflow: hidden; }
   .curso-chip button { background: var(--panel-2); color: var(--text-dim); border: none; padding: 8px 14px; font-size: 12px; cursor: pointer; font-family: ui-monospace, monospace; }
   .curso-chip-active button { background: var(--cyan); color: #06131C; font-weight: 700; }
+  .curso-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; margin-left: 6px; }
   .curso-remove { padding: 0 10px; color: var(--text-dim); cursor: pointer; font-size: 14px; }
   .curso-remove:hover { color: var(--red); }
 
