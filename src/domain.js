@@ -120,6 +120,7 @@ export function buildDefaultData() {
     color: PALETTE[i % PALETTE.length],
     estado: "en_curso",
     mergedInto: null,
+    originCursoId: null,
     frozen: null,
   }));
   const nameToId = Object.fromEntries(subjects.map((s) => [s.name, s.id]));
@@ -145,10 +146,10 @@ export function buildDefaultData() {
 export function migrateData(raw) {
   if (!raw) return null;
   if (raw.schemaVersion === SCHEMA_VERSION && Array.isArray(raw.subjects) && raw.entries) {
-    if (raw.subjects.every((s) => "mergedInto" in s) && raw.cursos.every((c) => "startDate" in c)) return raw;
+    if (raw.subjects.every((s) => "mergedInto" in s && "originCursoId" in s) && raw.cursos.every((c) => "startDate" in c)) return raw;
     return {
       ...raw,
-      subjects: raw.subjects.map((s) => ({ mergedInto: null, ...s })),
+      subjects: raw.subjects.map((s) => ({ mergedInto: null, originCursoId: null, ...s })),
       cursos: raw.cursos.map((c) => ("startDate" in c ? c : { id: c.id, name: c.name, ...(inferCursoRange(c.name) || fallbackCursoRange(c, raw)) })),
     };
   }
@@ -157,7 +158,12 @@ export function migrateData(raw) {
   // en cada curso): en ambos casos, primero recolectamos subjects/entries
   // a nivel global igual que antes, y luego convertimos cada curso a un
   // rango de fechas (inferido del nombre, o de las fechas de sus entries).
+  // El curso en el que aparecía cada asignatura se conserva como
+  // `originCursoId` — solo se usa como pista para el registro diario
+  // cuando la asignatura todavía no tiene ningún minuto registrado (ver
+  // subjectsForRegisterInCurso), no vuelve a haber vínculo manual.
   const subjectsById = {};
+  const originBySubjectId = {};
   const entries = {};
   const rawCursos = raw.cursos || [];
   const cursoSubjectIds = [];
@@ -176,9 +182,13 @@ export function migrateData(raw) {
           mergedInto: s.mergedInto ?? null,
           frozen: s.frozen || null,
         };
+        originBySubjectId[s.id] = c.id;
       }
     });
-    (c.subjectIds || []).forEach((id) => subjectIds.push(id));
+    (c.subjectIds || []).forEach((id) => {
+      subjectIds.push(id);
+      if (!(id in originBySubjectId)) originBySubjectId[id] = c.id;
+    });
     Object.entries(c.entries || {}).forEach(([date, bySubject]) => {
       entries[date] = { ...(entries[date] || {}), ...bySubject };
     });
@@ -195,7 +205,7 @@ export function migrateData(raw) {
     schemaVersion: SCHEMA_VERSION,
     activeCursoId: raw.activeCursoId,
     cursos,
-    subjects: Object.values(subjectsById),
+    subjects: Object.values(subjectsById).map((s) => ({ ...s, originCursoId: originBySubjectId[s.id] ?? null })),
     entries,
   };
 }
@@ -241,6 +251,43 @@ export function subjectsWithActivityInRange(subjects, entries, start, end) {
     Object.entries(bySubject).forEach(([id, minutes]) => { if (minutes > 0) activeIds.add(id); });
   });
   return subjects.filter((s) => activeIds.has(s.id));
+}
+
+/** Si una asignatura tiene algún registro con minutos > 0, en cualquier
+ * fecha (útil para no ocultar del registro diario una asignatura recién
+ * creada, que todavía no "pertenece" a ningún curso por fecha). */
+export function subjectHasAnyEntries(entries, subjectId) {
+  return Object.values(entries).some((bySubject) => bySubject[subjectId] > 0);
+}
+
+/** Asignaturas a mostrar en el registro diario (Bitácora) para un curso
+ * concreto: las que tienen actividad en su rango de fechas (como el resto
+ * de vistas), más las recién creadas sin ningún registro todavía cuyo
+ * `originCursoId` (el curso que estaba seleccionado al crearlas) coincida
+ * con este — así una asignatura vacía no se cuela en todos los cursos. */
+export function subjectsForRegisterInCurso(subjects, entries, curso) {
+  const active = subjectsWithActivityInRange(subjects, entries, curso.startDate, curso.endDate);
+  const activeIds = new Set(active.map((s) => s.id));
+  const empty = subjects.filter(
+    (s) => !activeIds.has(s.id) && !subjectHasAnyEntries(entries, s.id) && s.originCursoId === curso.id
+  );
+  return [...active, ...empty];
+}
+
+/** Asignaturas a mostrar en la pestaña Desgaste para un curso concreto:
+ * las ya aprobada aparecen solo en el curso donde se aprobaron (según
+ * frozen.fechaAprobacion), no en todos los cursos donde tengan actividad
+ * — así una asignatura multi-curso (p. ej. suspendida un año y aprobada
+ * al siguiente) no se repite. Las que siguen en curso/suspendida se
+ * muestran, como antes, en los cursos donde tengan actividad. */
+export function subjectsForDesgasteInCurso(subjects, entries, curso) {
+  return subjects.filter((s) => {
+    if (s.estado === "aprobada" && s.frozen?.fechaAprobacion) {
+      const d = s.frozen.fechaAprobacion;
+      return (!curso.startDate || d >= curso.startDate) && (!curso.endDate || d <= curso.endDate);
+    }
+    return subjectsWithActivityInRange([s], entries, curso.startDate, curso.endDate).length > 0;
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -606,7 +653,7 @@ export function applyHistoricalImport(data) {
     return {
       id, name: def.name, credits: def.credits, target: null,
       color: PALETTE[(data.subjects.length + i) % PALETTE.length],
-      estado: def.estado, mergedInto: null, frozen: null,
+      estado: def.estado, mergedInto: null, originCursoId: null, frozen: null,
     };
   });
 

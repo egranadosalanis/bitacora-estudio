@@ -7,7 +7,7 @@ import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, priorComparableRawFactors, freezeApproval,
-  inferCursoRange, entriesInRange, subjectsWithActivityInRange,
+  inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso, subjectsForDesgasteInCurso,
 } from "./domain.js";
 
 /* ------------------------------------------------------------------ */
@@ -83,10 +83,12 @@ function Modal({ title, onClose, children, wide }) {
 /*  TAB: BITACORA (registro diario + historial completo)               */
 /* ------------------------------------------------------------------ */
 
+const HISTORY_ALL = ""; // sentinel: "Histórico (todas las asignaturas)"
+
 function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay }) {
   const [date, setDate] = useState(isoToday());
   const [values, setValues] = useState({});
-  const [historySubjectId, setHistorySubjectId] = useState(loggableSubjects[0]?.id || cursoSubjects[0]?.id || null);
+  const [historySubjectId, setHistorySubjectId] = useState(HISTORY_ALL);
   const [visibleCount, setVisibleCount] = useState(20);
 
   useEffect(() => {
@@ -96,17 +98,15 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     setValues(next);
   }, [date, loggableSubjects, entries]);
 
-  useEffect(() => {
-    if (!historySubjectId && cursoSubjects[0]) setHistorySubjectId(cursoSubjects[0].id);
-  }, [cursoSubjects, historySubjectId]);
-
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
 
   const dayTotal = loggableSubjects.reduce((acc, s) => acc + (parseFloat(values[s.id]) || 0), 0);
   const hasEntryToday = !!entries[date] && loggableSubjects.some((s) => entries[date][s.id] > 0);
 
-  const historySubject = cursoSubjects.find((s) => s.id === historySubjectId) || null;
-  const history = historySubject ? getSubjectEntries(entries, historySubject.id, "desc") : [];
+  const historySubject = historySubjectId !== HISTORY_ALL ? cursoSubjects.find((s) => s.id === historySubjectId) : null;
+  const history = historySubjectId === HISTORY_ALL
+    ? getAllEntriesFlat(cursoSubjects, entries, "desc")
+    : (historySubject ? getSubjectEntries(entries, historySubject.id, "desc") : []);
 
   return (
     <div className="grid-2">
@@ -167,22 +167,25 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
 
       <div className="panel">
         <div className="panel-title-row">
-          <div className="panel-title" style={{ marginBottom: 0 }}>Historial completo</div>
-          {cursoSubjects.length > 0 && (
-            <select className="input-field subject-select" value={historySubjectId || ""} onChange={(e) => setHistorySubjectId(e.target.value)}>
-              {cursoSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          )}
+          <div className="panel-title" style={{ marginBottom: 0 }}>{historySubjectId === HISTORY_ALL ? "Últimos registros" : "Historial completo"}</div>
+          <select className="input-field subject-select" value={historySubjectId} onChange={(e) => setHistorySubjectId(e.target.value)}>
+            <option value={HISTORY_ALL}>Histórico (todas las asignaturas)</option>
+            {cursoSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
         </div>
-        {history.length === 0 && <div className="empty-hint">Todavía no hay registros para esta asignatura.</div>}
+        {history.length === 0 && <div className="empty-hint">Todavía no hay registros{historySubjectId === HISTORY_ALL ? " en este curso" : " para esta asignatura"}.</div>}
         {history.length > 0 && (
           <>
             <div className="log-list">
               {history.slice(0, visibleCount).map((e) => (
-                <button key={e.date} className="log-item" onClick={() => setDate(e.date)}>
+                <button key={historySubjectId === HISTORY_ALL ? `${e.date}-${e.subjectId}` : e.date} className="log-item" onClick={() => setDate(e.date)}>
                   <span className="log-date">{formatShort(e.date)}</span>
                   <span className="log-detail">
-                    <span className="log-chip" style={{ borderColor: historySubject?.color }}>{formatMedium(e.date)}</span>
+                    {historySubjectId === HISTORY_ALL ? (
+                      <span className="log-chip" style={{ borderColor: e.subjectColor }}>{e.subjectName}</span>
+                    ) : (
+                      <span className="log-chip" style={{ borderColor: historySubject?.color }}>{formatMedium(e.date)}</span>
+                    )}
                   </span>
                   <span className="log-total mono">{hm(e.minutes)}</span>
                 </button>
@@ -999,7 +1002,14 @@ export default function App() {
     () => (data && curso ? subjectsWithActivityInRange(data.subjects, data.entries, curso.startDate, curso.endDate) : []),
     [data, curso]
   );
-  const loggableSubjects = useMemo(() => (data ? data.subjects.filter((s) => s.estado !== "aprobada") : []), [data]);
+  const loggableSubjects = useMemo(
+    () => (data && curso ? subjectsForRegisterInCurso(data.subjects, data.entries, curso).filter((s) => s.estado !== "aprobada") : []),
+    [data, curso]
+  );
+  const desgasteSubjects = useMemo(
+    () => (data && curso ? subjectsForDesgasteInCurso(data.subjects, data.entries, curso) : []),
+    [data, curso]
+  );
   const stats = useMemo(() => (data && curso ? computeStats(cursoSubjects, cursoEntries) : null), [data, curso, cursoSubjects, cursoEntries]);
 
   function handleSaveDay(date, loggableIds, values) {
@@ -1027,7 +1037,10 @@ export default function App() {
 
   function handleAddSubject(name, credits) {
     setData((d) => {
-      const newSub = { id: uid("sub"), name, credits, target: null, color: PALETTE[d.subjects.length % PALETTE.length], estado: "en_curso", mergedInto: null, frozen: null };
+      const newSub = {
+        id: uid("sub"), name, credits, target: null, color: PALETTE[d.subjects.length % PALETTE.length],
+        estado: "en_curso", mergedInto: null, originCursoId: curso?.id ?? null, frozen: null,
+      };
       return { ...d, subjects: [...d.subjects, newSub] };
     });
   }
@@ -1129,7 +1142,7 @@ export default function App() {
         )}
         {tab === "panel" && <PanelTab stats={stats} />}
         {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={cursoEntries} stats={stats} />}
-        {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
+        {tab === "desgaste" && <DesgasteTab cursoSubjects={desgasteSubjects} subjects={data.subjects} entries={data.entries} />}
         {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} entries={data.entries} />}
         {tab === "historial" && <HistorialTab subjects={data.subjects} entries={data.entries} cursos={data.cursos} />}
         {tab === "asignaturas" && (
