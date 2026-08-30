@@ -455,7 +455,7 @@ export function getApprovedCombinedEntries(entries, subjects, subjectId) {
 /*  VISTA "DESGASTE" — bloques de estudio, bloque peor, índice          */
 /* ------------------------------------------------------------------ */
 
-const BLOQUE_UMBRAL_DESCANSO = 3; // días de descanso que aún no rompen el bloque
+const BLOQUE_UMBRAL_DESCANSO = 2; // días de descanso que aún no rompen el bloque
 const BLOQUE_MIN_DIAS_ACTIVOS = 3; // mínimo para ser candidato a "peor bloque"
 
 export const WEAR_WEIGHTS = { intensidad: 0.30, duracion: 0.30, compresion: 0.20, racha: 0.20 };
@@ -466,7 +466,7 @@ export const WEAR_TOPES = { intensidad: 300, duracion: 18, racha: 10, compresion
 export const WEAR_FORMULA_VERSION = "v2";
 
 /** Agrupa el historial (ascendente) de una asignatura en bloques de estudio
- * consecutivos o casi consecutivos (corte: más de 3 días de descanso). */
+ * consecutivos o casi consecutivos (corte: más de 2 días de descanso). */
 export function detectBlocks(subjectEntriesAsc) {
   const groups = [];
   let current = null;

@@ -91,6 +91,16 @@ function clampDate(d, min, max) {
   return d;
 }
 
+function formatElapsed(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
@@ -103,6 +113,13 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   const [values, setValues] = useState({});
   const [historySubjectId, setHistorySubjectId] = useState(HISTORY_ALL);
   const [visibleCount, setVisibleCount] = useState(20);
+
+  const [mode, setMode] = useState("manual"); // 'manual' | 'contador'
+  const [timerSubjectId, setTimerSubjectId] = useState(null);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerStartedAt, setTimerStartedAt] = useState(null);
+  const [timerAccumulatedMs, setTimerAccumulatedMs] = useState(0);
+  const [, setTimerTick] = useState(0);
 
   // Al cambiar de curso, la fecha y la asignatura de historial seleccionadas
   // pueden quedar fuera de rango o dejar de existir en el nuevo curso — se
@@ -120,6 +137,49 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   }, [date, loggableSubjects, entries]);
 
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
+
+  // El contador mide tiempo real transcurrido, así que solo tiene sentido
+  // para la fecha de hoy — si cambias de fecha (o de curso, lo que también
+  // cambia la fecha) se para y se resetea.
+  useEffect(() => {
+    setTimerRunning(false);
+    setTimerStartedAt(null);
+    setTimerAccumulatedMs(0);
+  }, [date]);
+
+  useEffect(() => {
+    if (!timerSubjectId || !loggableSubjects.some((s) => s.id === timerSubjectId)) {
+      setTimerSubjectId(loggableSubjects[0]?.id ?? null);
+    }
+  }, [loggableSubjects, timerSubjectId]);
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    const id = setInterval(() => setTimerTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [timerRunning]);
+
+  const timerElapsedMs = timerAccumulatedMs + (timerRunning && timerStartedAt ? Date.now() - timerStartedAt : 0);
+
+  function startTimer() {
+    setTimerStartedAt(Date.now());
+    setTimerRunning(true);
+  }
+  function pauseTimer() {
+    setTimerAccumulatedMs((ms) => ms + (timerStartedAt ? Date.now() - timerStartedAt : 0));
+    setTimerStartedAt(null);
+    setTimerRunning(false);
+  }
+  function finishTimer() {
+    const totalMs = timerAccumulatedMs + (timerRunning && timerStartedAt ? Date.now() - timerStartedAt : 0);
+    const addedMinutes = Math.round(totalMs / 60000);
+    if (addedMinutes > 0 && timerSubjectId) {
+      setValues((v) => ({ ...v, [timerSubjectId]: String((parseFloat(v[timerSubjectId]) || 0) + addedMinutes) }));
+    }
+    setTimerAccumulatedMs(0);
+    setTimerStartedAt(null);
+    setTimerRunning(false);
+  }
 
   const dayTotal = loggableSubjects.reduce((acc, s) => acc + (parseFloat(values[s.id]) || 0), 0);
   const hasEntryToday = !!entries[date] && loggableSubjects.some((s) => entries[date][s.id] > 0);
@@ -141,25 +201,70 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
           <div className="empty-hint">No hay asignaturas activas (todas están aprobadas o no has añadido ninguna todavía).</div>
         ) : (
           <>
-            <div className="subject-inputs">
-              {loggableSubjects.map((s) => (
-                <div className="field-row" key={s.id}>
-                  <label className="field-label">
-                    <span className="dot" style={{ background: s.color }} />
-                    {s.name}
-                  </label>
-                  <div className="input-with-unit">
-                    <input
-                      type="number" min="0" step="5" placeholder="0"
-                      value={values[s.id] || ""}
-                      onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
-                      className="input-field input-num"
-                    />
-                    <span className="unit-tag">min</span>
-                  </div>
-                </div>
-              ))}
+            <div className="seg-control" style={{ marginBottom: 14 }}>
+              <button className={`seg-btn ${mode === "manual" ? "seg-btn-active" : ""}`} onClick={() => setMode("manual")}>Manual</button>
+              <button className={`seg-btn ${mode === "contador" ? "seg-btn-active" : ""}`} onClick={() => setMode("contador")}>Contador</button>
             </div>
+
+            {mode === "contador" && date !== todayIso && (
+              <div className="empty-hint">El contador solo está disponible para el día de hoy — cambia la fecha a hoy para usarlo.</div>
+            )}
+
+            {mode === "contador" && date === todayIso && (
+              <div className="timer-box">
+                <div className="field-row">
+                  <label className="field-label">Asignatura</label>
+                  <select
+                    className="input-field"
+                    value={timerSubjectId || ""}
+                    onChange={(e) => setTimerSubjectId(e.target.value)}
+                    disabled={timerRunning}
+                  >
+                    {loggableSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div className="timer-display mono">{formatElapsed(timerElapsedMs)}</div>
+                <div className="btn-row">
+                  {!timerRunning ? (
+                    <button className="btn-primary" onClick={startTimer} disabled={!timerSubjectId}>
+                      {timerElapsedMs > 0 ? "Reanudar" : "Iniciar"}
+                    </button>
+                  ) : (
+                    <button className="btn-ghost" onClick={pauseTimer}>Pausar</button>
+                  )}
+                  <button className="btn-primary" onClick={finishTimer} disabled={timerElapsedMs < 1000}>
+                    Fin — meter en el registro
+                  </button>
+                </div>
+                {parseFloat(values[timerSubjectId]) > 0 && (
+                  <div className="gauge-sub">
+                    Ya hay {values[timerSubjectId]} min guardados hoy para esta asignatura — el contador se sumará a eso.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mode === "manual" && (
+              <div className="subject-inputs">
+                {loggableSubjects.map((s) => (
+                  <div className="field-row" key={s.id}>
+                    <label className="field-label">
+                      <span className="dot" style={{ background: s.color }} />
+                      {s.name}
+                    </label>
+                    <div className="input-with-unit">
+                      <input
+                        type="number" min="0" step="5" placeholder="0"
+                        value={values[s.id] || ""}
+                        onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
+                        className="input-field input-num"
+                      />
+                      <span className="unit-tag">min</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="day-total-row">
               <span>Total del día</span>
               <span className="mono">{hm(dayTotal)}</span>
@@ -1435,6 +1540,11 @@ const CSS = `
   .subject-select { width: auto; max-width: 220px; }
   .unit-tag { font-size: 11px; color: var(--text-dim); }
   .subject-inputs { margin: 14px 0; }
+  .timer-box { margin: 14px 0; }
+  .timer-display {
+    font-size: 42px; font-weight: 800; text-align: center; letter-spacing: 0.03em;
+    padding: 18px 0 6px; color: var(--cyan);
+  }
   .day-total-row {
     display: flex; justify-content: space-between; font-size: 13px; color: var(--text-dim);
     border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 6px;
