@@ -661,10 +661,11 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   );
 }
 
-function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado }) {
+function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado, onUpdateCursoDates }) {
   const [newSubject, setNewSubject] = useState({ name: "", credits: "" });
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
+  const [editDates, setEditDates] = useState({ startDate: "", endDate: "" });
 
   function addSubject() {
     if (!newSubject.name.trim() || !newSubject.credits) return;
@@ -691,6 +692,21 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
   const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
   const curso = cursos.find((c) => c.id === activeCursoId);
+
+  useEffect(() => {
+    setEditDates({ startDate: curso?.startDate || "", endDate: curso?.endDate || "" });
+  }, [curso?.id]);
+
+  const datesChanged = curso && (editDates.startDate !== curso.startDate || editDates.endDate !== curso.endDate);
+  const datesValid = editDates.startDate && editDates.endDate && editDates.startDate <= editDates.endDate;
+  const overlappingCurso = curso && datesValid
+    ? cursos.find((c) => c.id !== curso.id && editDates.startDate <= c.endDate && c.startDate <= editDates.endDate)
+    : null;
+
+  function saveCursoDates() {
+    if (!curso || !datesValid) return;
+    onUpdateCursoDates(curso.id, editDates.startDate, editDates.endDate);
+  }
 
   return (
     <div>
@@ -732,6 +748,25 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
             Añadir curso
           </button>
         </div>
+
+        {curso && (
+          <>
+            <div className="btn-row" style={{ marginTop: 12, alignItems: "center" }}>
+              <span className="gauge-sub" style={{ margin: 0 }}>Fechas de {curso.name}:</span>
+              <input type="date" className="input-field" value={editDates.startDate} onChange={(e) => setEditDates((v) => ({ ...v, startDate: e.target.value }))} />
+              <span className="gauge-sub" style={{ margin: 0 }}>→</span>
+              <input type="date" className="input-field" value={editDates.endDate} onChange={(e) => setEditDates((v) => ({ ...v, endDate: e.target.value }))} />
+              {datesChanged && (
+                <button className="btn-ghost btn-small" onClick={saveCursoDates} disabled={!datesValid}>Guardar fechas</button>
+              )}
+            </div>
+            {datesChanged && overlappingCurso && (
+              <div className="gauge-sub" style={{ color: "var(--amber)", marginTop: 6 }}>
+                Este rango se solapa con {overlappingCurso.name} — un registro en esos días de solape aparecería en los dos cursos a la vez.
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="panel">
@@ -1382,6 +1417,13 @@ export default function App() {
     }));
   }
 
+  function handleUpdateCursoDates(id, startDate, endDate) {
+    setData((d) => ({
+      ...d,
+      cursos: d.cursos.map((c) => (c.id === id ? { ...c, startDate, endDate } : c)),
+    }));
+  }
+
   function handleRemoveCurso(id) {
     setData((d) => {
       if (d.cursos.length === 1) return d;
@@ -1465,6 +1507,7 @@ export default function App() {
             onAddCurso={handleAddCurso}
             onRemoveCurso={handleRemoveCurso}
             onToggleCursoEstado={handleToggleCursoEstado}
+            onUpdateCursoDates={handleUpdateCursoDates}
           />
         )}
       </main>
