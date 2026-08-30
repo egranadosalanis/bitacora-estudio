@@ -6,7 +6,7 @@ import {
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
-  computeDesgaste, priorComparableRawFactors, freezeApproval, computeClassification,
+  computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 
@@ -290,9 +290,11 @@ function PanelTab({ stats }) {
 
 function HoursPerCreditTooltip({ active, payload }) {
   if (!active || !payload || !payload.length) return null;
+  const p = payload[0].payload;
   return (
     <div style={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#E7ECF5" }}>
-      {payload[0].value.toFixed(2)}
+      <div style={{ marginBottom: 2 }}>{p.fullName}</div>
+      <div className="mono">{p.horasPorCredito.toFixed(2)}</div>
     </div>
   );
 }
@@ -301,16 +303,29 @@ function HoursPerCreditTooltip({ active, payload }) {
 /*  TAB: TRAYECTORIA (graficos)                                        */
 /* ------------------------------------------------------------------ */
 
-function TrayectoriaTab({ cursoSubjects, entries, stats }) {
-  const [range, setRange] = useState(90);
+function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
+  const today = isoToday();
+  const isPastCurso = !!curso && curso.endDate < today;
+  const cuatrimestreSplit = curso ? `${curso.endDate.slice(0, 4)}-02-01` : null;
+  const [range, setRange] = useState(isPastCurso ? "1c" : 90);
+  const [trayView, setTrayView] = useState("acumulado");
+
+  useEffect(() => {
+    setRange(isPastCurso ? "1c" : 90);
+  }, [curso?.id, isPastCurso]);
 
   const chartDates = useMemo(() => {
     const all = [...stats.activeDates].sort();
     if (all.length === 0) return [];
+    if (isPastCurso) {
+      if (range === "all") return all;
+      if (range === "1c") return all.filter((d) => d < cuatrimestreSplit);
+      return all.filter((d) => d >= cuatrimestreSplit);
+    }
     if (range === 0) return all;
-    const from = addDays(isoToday(), -range);
+    const from = addDays(today, -range);
     return all.filter((d) => d >= from);
-  }, [stats.activeDates, range]);
+  }, [stats.activeDates, range, isPastCurso, cuatrimestreSplit, today]);
 
   const areaData = chartDates.map((d) => {
     const row = { date: formatShort(d) };
@@ -321,12 +336,17 @@ function TrayectoriaTab({ cursoSubjects, entries, stats }) {
   let acc = 0;
   const cumulativeData = [...stats.activeDates].sort().map((d) => {
     acc += stats.dailyTotals[d];
-    return { date: formatShort(d), horas: +(acc / 60).toFixed(1) };
+    return { date: formatShort(d), horas: +(acc / 60).toFixed(1), horasDia: +(stats.dailyTotals[d] / 60).toFixed(2) };
   });
 
   const pieData = stats.perSubject.filter((s) => s.total > 0).map((s) => ({ name: s.name, value: s.total, color: s.color }));
 
-  const barData = stats.perSubject.map((s) => ({ name: s.name.length > 12 ? s.name.slice(0, 12) + "…" : s.name, horasPorCredito: +s.hoursPerCredit.toFixed(2), color: s.color }));
+  const barData = stats.perSubject.map((s) => ({
+    name: s.name.length > 12 ? s.name.slice(0, 12) + "…" : s.name,
+    fullName: s.name,
+    horasPorCredito: +s.hoursPerCredit.toFixed(2),
+    color: s.color,
+  }));
 
   return (
     <div>
@@ -334,11 +354,23 @@ function TrayectoriaTab({ cursoSubjects, entries, stats }) {
         <div className="panel-title-row">
           <div className="panel-title" style={{ marginBottom: 0 }}>Minutos diarios por asignatura</div>
           <div className="seg-control">
-            {[30, 90, 0].map((r) => (
-              <button key={r} className={`seg-btn ${range === r ? "seg-btn-active" : ""}`} onClick={() => setRange(r)}>
-                {r === 0 ? "Todo el curso" : `${r} d`}
-              </button>
-            ))}
+            {isPastCurso ? (
+              [
+                { key: "1c", label: "1er cuatrimestre" },
+                { key: "2c", label: "2º cuatrimestre" },
+                { key: "all", label: "Todo el curso" },
+              ].map((r) => (
+                <button key={r.key} className={`seg-btn ${range === r.key ? "seg-btn-active" : ""}`} onClick={() => setRange(r.key)}>
+                  {r.label}
+                </button>
+              ))
+            ) : (
+              [30, 90, 0].map((r) => (
+                <button key={r} className={`seg-btn ${range === r ? "seg-btn-active" : ""}`} onClick={() => setRange(r)}>
+                  {r === 0 ? "Todo el curso" : `${r} d`}
+                </button>
+              ))
+            )}
           </div>
         </div>
         <ResponsiveContainer width="100%" height={280}>
@@ -357,23 +389,41 @@ function TrayectoriaTab({ cursoSubjects, entries, stats }) {
 
       <div className="grid-2">
         <div className="panel">
-          <div className="panel-title">Horas acumuladas en el curso</div>
+          <div className="panel-title-row">
+            <div className="panel-title" style={{ marginBottom: 0 }}>
+              {trayView === "acumulado" ? "Horas acumuladas en el curso" : "Ritmo diario (derivada)"}
+            </div>
+            <div className="seg-control">
+              <button className={`seg-btn ${trayView === "acumulado" ? "seg-btn-active" : ""}`} onClick={() => setTrayView("acumulado")}>Acumulado</button>
+              <button className={`seg-btn ${trayView === "derivada" ? "seg-btn-active" : ""}`} onClick={() => setTrayView("derivada")}>Derivada</button>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={230}>
-            <LineChart data={cumulativeData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
-              <XAxis dataKey="date" stroke="#8291AC" fontSize={11} minTickGap={40} />
-              <YAxis stroke="#8291AC" fontSize={11} />
-              <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} />
-              <Line type="monotone" dataKey="horas" stroke="#4FD8EA" strokeWidth={2} dot={false} />
-            </LineChart>
+            {trayView === "acumulado" ? (
+              <LineChart data={cumulativeData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
+                <XAxis dataKey="date" stroke="#8291AC" fontSize={11} minTickGap={40} />
+                <YAxis stroke="#8291AC" fontSize={11} />
+                <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} formatter={(v) => [`${v} h`, "Acumulado"]} />
+                <Line type="monotone" dataKey="horas" stroke="#4FD8EA" strokeWidth={2} dot={false} />
+              </LineChart>
+            ) : (
+              <BarChart data={cumulativeData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
+                <XAxis dataKey="date" stroke="#8291AC" fontSize={11} minTickGap={40} />
+                <YAxis stroke="#8291AC" fontSize={11} />
+                <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} formatter={(v) => [`${v} h`, "Ese día"]} />
+                <Bar dataKey="horasDia" fill="#F5A623" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            )}
           </ResponsiveContainer>
         </div>
 
         <div className="panel">
           <div className="panel-title">Distribución del esfuerzo</div>
-          <ResponsiveContainer width="100%" height={230}>
+          <ResponsiveContainer width="100%" height={260}>
             <PieChart>
-              <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2}>
+              <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={70} paddingAngle={2}>
                 {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
               <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} itemStyle={{ color: "#E7ECF5" }} formatter={(v) => hm(v)} />
@@ -694,18 +744,12 @@ function DesgasteCard({ subject, desgaste, bare }) {
       {!desgaste.comparable && (
         <div className="empty-hint">No comparable — datos insuficientes (ningún tramo de ≥3 días activos todavía).</div>
       )}
-      {desgaste.comparable && !desgaste.hasTopes && (
-        <div className="empty-hint">Ya tiene un peor tramo detectado, pero hace falta aprobar al menos una asignatura para tener una referencia con la que compararlo.</div>
-      )}
-      {desgaste.comparable && desgaste.hasTopes && (
+      {desgaste.comparable && (
         <>
           <div className="wear-index-row">
             <span className="wear-index-value">{desgaste.indice.toFixed(1)}</span>
             <div>
               <span className={`wear-label wear-label-${desgaste.etiqueta.toLowerCase()}`}>{desgaste.etiqueta}</span>
-              {desgaste.provisional && (
-                <span className="wear-sample-warning">Provisional — basado en solo {desgaste.sampleSize} asignatura{desgaste.sampleSize === 1 ? "" : "s"}</span>
-              )}
               {wb && (
                 <div className="wear-index-sub">
                   Tu peor tramo fue del {formatShort(wb.first)} al {formatShort(wb.last)}: {wb.dias_activos} días
@@ -739,12 +783,8 @@ function buildDesgasteRanking(subjects, entries) {
   const targets = subjects.filter((s) => !s.mergedInto);
   return targets.map((target) => {
     const members = [target, ...subjects.filter((s) => s.mergedInto === target.id)];
-    const computed = members.map((m) => {
-      const prior = priorComparableRawFactors(subjects, entries, m.id);
-      const desgaste = computeDesgaste(m.id, entries, prior, { includeSelf: m.estado === "aprobada" });
-      return { subject: m, desgaste };
-    });
-    const ranked = computed.filter((c) => c.desgaste.comparable && c.desgaste.hasTopes);
+    const computed = members.map((m) => ({ subject: m, desgaste: computeDesgaste(m.id, entries) }));
+    const ranked = computed.filter((c) => c.desgaste.comparable);
     const best = ranked.length > 0 ? ranked.reduce((a, b) => (b.desgaste.indice > a.desgaste.indice ? b : a)) : null;
     return { target, best };
   }).sort((a, b) => {
@@ -819,14 +859,9 @@ function DesgasteTab({ cursoSubjects, subjects, entries }) {
   const [view, setView] = useState("curso");
 
   const rows = useMemo(() => {
-    return cursoSubjects.map((s) => {
-      const isAprobada = s.estado === "aprobada";
-      const prior = priorComparableRawFactors(subjects, entries, s.id);
-      const desgaste = computeDesgaste(s.id, entries, prior, { includeSelf: isAprobada });
-      return { subject: s, desgaste };
-    }).sort((a, b) => {
-      const ai = a.desgaste.comparable && a.desgaste.hasTopes ? a.desgaste.indice : -2;
-      const bi = b.desgaste.comparable && b.desgaste.hasTopes ? b.desgaste.indice : -2;
+    return cursoSubjects.map((s) => ({ subject: s, desgaste: computeDesgaste(s.id, entries) })).sort((a, b) => {
+      const ai = a.desgaste.comparable ? a.desgaste.indice : -2;
+      const bi = b.desgaste.comparable ? b.desgaste.indice : -2;
       if (a.subject.estado === "aprobada" && b.subject.estado !== "aprobada") return -1;
       if (b.subject.estado === "aprobada" && a.subject.estado !== "aprobada") return 1;
       return bi - ai;
@@ -848,11 +883,10 @@ function DesgasteTab({ cursoSubjects, subjects, entries }) {
         ) : (
           <div>
             <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
-              Mide el tramo de estudio más exigente de cada asignatura de este curso, comparado con tu propio historial.
-              El índice se recalcula siempre con los datos actuales (incluso para las asignaturas ya aprobadas), porque
-              el tope de referencia de cada factor es el máximo histórico entre todas tus asignaturas aprobadas — puede
-              subir o bajar según apruebas otras. Para las que siguen en curso se muestra además una vista previa de lo
-              que saldría si las aprobaras hoy.
+              Mide el tramo de estudio más exigente de cada asignatura de este curso, normalizado contra un tope fijo
+              por factor (Intensidad 300 min/día, Duración 18 días, Compresión 90%, Racha interna 10 días), así que el
+              índice de una asignatura no cambia según apruebes otras. Para las que siguen en curso se muestra además
+              una vista previa de lo que saldría si las aprobaras hoy.
             </div>
             {rows.map(({ subject, desgaste }) => (
               <DesgasteCard key={subject.id} subject={subject} desgaste={desgaste} />
@@ -871,7 +905,7 @@ function DesgasteTab({ cursoSubjects, subjects, entries }) {
 const CLASIF_COLUMNS = [
   { key: "name", label: "Asignatura" },
   { key: "horasPorCredito", label: "Horas/crédito" },
-  { key: "diasTotales", label: "Días totales" },
+  { key: "horasTotales", label: "Horas totales" },
   { key: "cursosNecesarios", label: "Cursos necesarios" },
   { key: "nota", label: "Nota" },
 ];
@@ -884,11 +918,8 @@ function ClasificacionDetail({ subject, subjects, entries }) {
   const pendingSources = mergedSources.filter((s) => s.estado !== "aprobada");
 
   const wearMembers = [subject, ...activeSources];
-  const wearComputed = wearMembers.map((m) => {
-    const prior = priorComparableRawFactors(subjects, entries, m.id);
-    return { subject: m, desgaste: computeDesgaste(m.id, entries, prior, { includeSelf: true }) };
-  });
-  const wearRanked = wearComputed.filter((w) => w.desgaste.comparable && w.desgaste.hasTopes);
+  const wearComputed = wearMembers.map((m) => ({ subject: m, desgaste: computeDesgaste(m.id, entries) }));
+  const wearRanked = wearComputed.filter((w) => w.desgaste.comparable);
   const wearBest = wearRanked.length > 0
     ? wearRanked.reduce((a, b) => (b.desgaste.indice > a.desgaste.indice ? b : a))
     : wearComputed[0];
@@ -919,15 +950,12 @@ function ClasificacionDetail({ subject, subjects, entries }) {
           </div>
         )}
         {!d.comparable && <div className="empty-hint">No comparable — datos insuficientes.</div>}
-        {d.comparable && d.hasTopes && (
+        {d.comparable && (
           <>
             <div className="wear-index-row">
               <span className="wear-index-value">{d.indice.toFixed(1)}</span>
               <div>
                 <span className={`wear-label wear-label-${d.etiqueta.toLowerCase()}`}>{d.etiqueta}</span>
-                {d.provisional && (
-                  <span className="wear-sample-warning">Provisional — basado en solo {d.sampleSize} asignatura{d.sampleSize === 1 ? "" : "s"}</span>
-                )}
               </div>
             </div>
             <div className="wear-factors">
@@ -962,7 +990,7 @@ function ClasificacionTab({ subjects, entries }) {
       return {
         id: s.id, name: s.name, color: s.color,
         horasPorCredito: c.horasPorCredito,
-        diasTotales: c.diasTotales,
+        horasTotales: +(c.minutosTotales / 60).toFixed(1),
         cursosNecesarios: s.frozen.cursosNecesarios ?? 0,
         nota: s.frozen.nota ?? 0,
       };
@@ -1007,7 +1035,7 @@ function ClasificacionTab({ subjects, entries }) {
                 <tr key={r.id} className="clickable-row" onClick={() => setDetailId(r.id)}>
                   <td><span className="dot" style={{ background: r.color }} />{r.name}</td>
                   <td className="mono">{r.horasPorCredito.toFixed(2)}</td>
-                  <td className="mono">{r.diasTotales}</td>
+                  <td className="mono">{r.horasTotales.toFixed(1)}</td>
                   <td className="mono">{r.cursosNecesarios || "—"}</td>
                   <td className="mono">{r.nota || "—"}</td>
                 </tr>
@@ -1239,7 +1267,7 @@ export default function App() {
           />
         )}
         {tab === "panel" && <PanelTab stats={stats} />}
-        {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={cursoEntries} stats={stats} />}
+        {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={cursoEntries} stats={stats} curso={curso} />}
         {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
         {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} entries={data.entries} />}
         {tab === "asignaturas" && (
@@ -1446,10 +1474,6 @@ const CSS = `
     min-width: 78px; text-align: right;
   }
   .wear-index-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; max-width: 440px; }
-  .wear-sample-warning {
-    font-size: 10.5px; font-weight: 700; color: var(--amber); background: rgba(245,166,35,0.1);
-    border: 1px solid rgba(245,166,35,0.35); border-radius: 20px; padding: 3px 9px; margin-left: 8px;
-  }
   .wear-label { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
   .wear-label-llevadero { color: var(--green); background: rgba(61,220,132,0.1); }
   .wear-label-moderado { color: var(--cyan); background: rgba(79,216,234,0.1); }

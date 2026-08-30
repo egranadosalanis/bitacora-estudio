@@ -434,7 +434,11 @@ const BLOQUE_UMBRAL_DESCANSO = 3; // días de descanso que aún no rompen el blo
 const BLOQUE_MIN_DIAS_ACTIVOS = 3; // mínimo para ser candidato a "peor bloque"
 
 export const WEAR_WEIGHTS = { intensidad: 0.30, duracion: 0.30, compresion: 0.20, racha: 0.20 };
-export const WEAR_FORMULA_VERSION = "v1";
+/** Topes fijos (valor 10/10) de cada factor — ya no dependen del historial
+ * de otras asignaturas, así el índice de una asignatura es siempre el mismo
+ * número pase lo que pase con el resto. */
+export const WEAR_TOPES = { intensidad: 300, duracion: 18, racha: 10, compresion: 0.9 };
+export const WEAR_FORMULA_VERSION = "v2";
 
 /** Agrupa el historial (ascendente) de una asignatura en bloques de estudio
  * consecutivos o casi consecutivos (corte: más de 3 días de descanso). */
@@ -490,17 +494,6 @@ function rawFactorsOf(block) {
   };
 }
 
-function computeTopes(rawFactorList) {
-  const topes = { intensidad: 0, duracion: 0, compresion: 0, racha: 0 };
-  rawFactorList.forEach((f) => {
-    topes.intensidad = Math.max(topes.intensidad, f.intensidad);
-    topes.duracion = Math.max(topes.duracion, f.duracion);
-    topes.compresion = Math.max(topes.compresion, f.compresion);
-    topes.racha = Math.max(topes.racha, f.racha);
-  });
-  return topes;
-}
-
 function normalizeFactor(raw, tope) {
   if (!tope) return 0;
   return Math.min(raw / tope, 1) * 10;
@@ -513,43 +506,25 @@ export function wearLabel(score) {
   return "Extremo";
 }
 
-/** Mínimo de asignaturas aprobadas y comparables para que el índice de
- * desgaste se considere una referencia estable (si no, se marca como dato
- * provisional en la interfaz — puede cambiar mucho con cada aprobación). */
-export const WEAR_STABLE_MIN_SAMPLE = 5;
-
 /**
- * Calcula el desgaste de una asignatura a partir de su bloque peor. Se
- * recalcula siempre al vuelo (nunca se guarda como valor fijo): el tope de
- * cada factor es el máximo histórico ACTUAL entre todas las asignaturas
- * aprobada y comparables, así que puede cambiar de una aprobación a otra.
- * - `priorRawFactorsList`: factores brutos del bloque peor de otras
- *   asignaturas ya "aprobada" y comparables (para fijar los topes).
- * - `includeSelf`: si esta asignatura es "aprobada", ella misma entra a
- *   formar parte del conjunto que define los topes; si es una vista previa
- *   (aún no aprobada), no.
+ * Calcula el desgaste de una asignatura a partir de su bloque peor,
+ * normalizado contra topes fijos (WEAR_TOPES) — el mismo listón para todas
+ * las asignaturas, así que el índice de una no cambia según se aprueben
+ * otras. Se recalcula siempre al vuelo (nunca se guarda como valor fijo).
  * Devuelve { comparable: false } si no hay ningún bloque con >= 3 días activos.
- * Devuelve { comparable: true, hasTopes: false, ... } si es comparable pero
- * todavía no existe ninguna asignatura aprobada con la que fijar un tope.
  */
-export function computeDesgaste(subjectId, entries, priorRawFactorsList, { includeSelf = false } = {}) {
+export function computeDesgaste(subjectId, entries) {
   const subjectEntriesAsc = getSubjectEntries(entries, subjectId, "asc");
   const blocks = detectBlocks(subjectEntriesAsc);
   const worst = selectWorstBlock(blocks);
   if (!worst) return { comparable: false };
 
   const rawFactors = rawFactorsOf(worst);
-  const list = includeSelf ? [...priorRawFactorsList, rawFactors] : priorRawFactorsList;
-  if (list.length === 0) {
-    return { comparable: true, hasTopes: false, rawFactors, worstBlock: worst, sampleSize: list.length };
-  }
-
-  const topes = computeTopes(list);
   const normalized = {
-    intensidad: normalizeFactor(rawFactors.intensidad, topes.intensidad),
-    duracion: normalizeFactor(rawFactors.duracion, topes.duracion),
-    compresion: normalizeFactor(rawFactors.compresion, topes.compresion),
-    racha: normalizeFactor(rawFactors.racha, topes.racha),
+    intensidad: normalizeFactor(rawFactors.intensidad, WEAR_TOPES.intensidad),
+    duracion: normalizeFactor(rawFactors.duracion, WEAR_TOPES.duracion),
+    compresion: normalizeFactor(rawFactors.compresion, WEAR_TOPES.compresion),
+    racha: normalizeFactor(rawFactors.racha, WEAR_TOPES.racha),
   };
   const indice = +(
     WEAR_WEIGHTS.intensidad * normalized.intensidad +
@@ -560,36 +535,15 @@ export function computeDesgaste(subjectId, entries, priorRawFactorsList, { inclu
 
   return {
     comparable: true,
-    hasTopes: true,
     rawFactors,
     normalized,
-    topes,
+    topes: WEAR_TOPES,
     indice,
     etiqueta: wearLabel(indice),
     worstBlock: worst,
-    sampleSize: list.length,
-    provisional: list.length < WEAR_STABLE_MIN_SAMPLE,
     formulaVersion: WEAR_FORMULA_VERSION,
     weights: WEAR_WEIGHTS,
   };
-}
-
-/** Factores brutos del bloque peor de una asignatura (o null si no es
- * comparable), calculados siempre en el momento a partir de sus entries. */
-function ownRawFactors(subjectId, entries) {
-  const asc = getSubjectEntries(entries, subjectId, "asc");
-  const worst = selectWorstBlock(detectBlocks(asc));
-  return worst ? rawFactorsOf(worst) : null;
-}
-
-/** Lista, calculada al vuelo, de los factores brutos de todas las
- * asignaturas ya aprobada y comparables (excluyendo, si se pasa, la propia
- * asignatura). Define los topes de normalización vigentes ahora mismo. */
-export function priorComparableRawFactors(subjects, entries, excludeSubjectId = null) {
-  return subjects
-    .filter((s) => s.id !== excludeSubjectId && s.estado === "aprobada")
-    .map((s) => ownRawFactors(s.id, entries))
-    .filter(Boolean);
 }
 
 /* ------------------------------------------------------------------ */
