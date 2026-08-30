@@ -85,11 +85,32 @@ function Modal({ title, onClose, children, wide }) {
 
 const HISTORY_ALL = ""; // sentinel: "Histórico (todas las asignaturas)"
 
-function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay }) {
-  const [date, setDate] = useState(isoToday());
+function clampDate(d, min, max) {
+  if (d < min) return min;
+  if (d > max) return max;
+  return d;
+}
+
+function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, curso }) {
+  const todayIso = isoToday();
+  const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
+  // Si el curso todavía no ha empezado, no hay "hoy" válido dentro de su rango:
+  // se permite todo el curso en vez de bloquear cualquier fecha.
+  const maxDate = cappedToday >= curso.startDate ? cappedToday : curso.endDate;
+  const minDate = curso.startDate;
+
+  const [date, setDate] = useState(() => clampDate(todayIso, minDate, maxDate));
   const [values, setValues] = useState({});
   const [historySubjectId, setHistorySubjectId] = useState(HISTORY_ALL);
   const [visibleCount, setVisibleCount] = useState(20);
+
+  // Al cambiar de curso, la fecha y la asignatura de historial seleccionadas
+  // pueden quedar fuera de rango o dejar de existir en el nuevo curso — se
+  // resetean para que los registros siempre se guarden en el curso activo.
+  useEffect(() => {
+    setDate(clampDate(isoToday(), minDate, maxDate));
+    setHistorySubjectId(HISTORY_ALL);
+  }, [curso.id]);
 
   useEffect(() => {
     const existing = entries[date] || {};
@@ -114,7 +135,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
         <div className="panel-title">Registro de vuelo — {formatLong(date)}</div>
         <div className="field-row">
           <label className="field-label">Fecha</label>
-          <input type="date" value={date} max={isoToday()} onChange={(e) => setDate(e.target.value)} className="input-field" />
+          <input type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} className="input-field" />
         </div>
         {loggableSubjects.length === 0 ? (
           <div className="empty-hint">No hay asignaturas activas (todas están aprobadas o no has añadido ninguna todavía).</div>
@@ -1261,9 +1282,10 @@ export default function App() {
           <BitacoraTab
             cursoSubjects={cursoSubjects}
             loggableSubjects={loggableSubjects}
-            entries={data.entries}
+            entries={cursoEntries}
             onSaveDay={handleSaveDay}
             onDeleteDay={handleDeleteDay}
+            curso={curso}
           />
         )}
         {tab === "panel" && <PanelTab stats={stats} />}
