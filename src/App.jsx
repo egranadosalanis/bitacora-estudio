@@ -6,7 +6,7 @@ import {
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
-  computeDesgaste, priorComparableRawFactors, freezeApproval,
+  computeDesgaste, priorComparableRawFactors, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 
@@ -288,6 +288,15 @@ function PanelTab({ stats }) {
   );
 }
 
+function HoursPerCreditTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div style={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#E7ECF5" }}>
+      {payload[0].value.toFixed(2)}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  TAB: TRAYECTORIA (graficos)                                        */
 /* ------------------------------------------------------------------ */
@@ -381,7 +390,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
             <XAxis dataKey="name" stroke="#8291AC" fontSize={11} />
             <YAxis stroke="#8291AC" fontSize={11} />
-            <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} itemStyle={{ color: "#E7ECF5" }} />
+            <Tooltip content={<HoursPerCreditTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
             <Bar dataKey="horasPorCredito" radius={[4, 4, 0, 0]}>
               {barData.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Bar>
@@ -400,16 +409,32 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   const [nota, setNota] = useState("");
   const [cursosNecesarios, setCursosNecesarios] = useState("1");
   const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
+  const activeSources = mergedSources.filter((s) => s.estado === "aprobada");
+  const pendingSources = mergedSources.filter((s) => s.estado !== "aprobada");
+  const mergeTarget = subject.mergedInto ? subjects.find((s) => s.id === subject.mergedInto) : null;
   return (
     <div>
       <p className="panel-subtitle">
-        Vas a marcar <strong>{subject.name}</strong> como aprobada. Esto congela para siempre sus métricas de
-        clasificación histórica y su índice de desgaste con los datos de hoy — no se recalculan después.
+        Vas a marcar <strong>{subject.name}</strong> como aprobada. Nota y cursos necesarios quedan fijos para
+        siempre; las horas/crédito, días totales y el desgaste se siguen recalculando siempre con los datos
+        actuales, no se congelan.
       </p>
-      {mergedSources.length > 0 && (
+      {activeSources.length > 0 && (
         <p className="panel-subtitle">
-          Se sumarán también las horas de: <strong>{mergedSources.map((s) => s.name).join(", ")}</strong> (combinadas
-          para el histórico).
+          Ya suma las horas de: <strong>{activeSources.map((s) => s.name).join(", ")}</strong> (combinadas, ya aprobada).
+        </p>
+      )}
+      {pendingSources.length > 0 && (
+        <p className="panel-subtitle">
+          Combinada también con <strong>{pendingSources.map((s) => s.name).join(", ")}</strong>, pero como
+          {pendingSources.length === 1 ? " todavía no está aprobada" : " ninguna está aprobada todavía"}, sus horas
+          no cuentan aún — se sumarán solas en cuanto la apruebes.
+        </p>
+      )}
+      {mergeTarget && (
+        <p className="panel-subtitle">
+          Esta asignatura está combinada con <strong>{mergeTarget.name}</strong>: al aprobarla ahora, sus horas
+          empezarán a sumarse también a la clasificación de {mergeTarget.name}.
         </p>
       )}
       <div className="field-row">
@@ -541,11 +566,23 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
                           ))}
                         </select>
                       )}
-                      {hasOwnSources && (
-                        <div className="gauge-sub" style={{ marginTop: 4 }}>
-                          Recibe horas combinadas de: {subjects.filter((o) => o.mergedInto === s.id).map((o) => o.name).join(", ")}
-                        </div>
-                      )}
+                      {hasOwnSources && (() => {
+                        const sources = subjects.filter((o) => o.mergedInto === s.id);
+                        const active = sources.filter((o) => o.estado === "aprobada");
+                        const pending = sources.filter((o) => o.estado !== "aprobada");
+                        return (
+                          <div style={{ marginTop: 4 }}>
+                            {active.length > 0 && (
+                              <div className="gauge-sub">Combinada con: {active.map((o) => o.name).join(", ")}</div>
+                            )}
+                            {pending.length > 0 && (
+                              <div className="gauge-sub" style={{ color: "var(--amber)" }}>
+                                Combinada con (pendiente, no cuenta aún): {pending.map((o) => o.name).join(", ")}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td>
                       <select
@@ -740,20 +777,28 @@ const CLASIF_COLUMNS = [
 
 function ClasificacionDetail({ subject, subjects, entries }) {
   const f = subject.frozen;
+  const c = computeClassification(subject, entries, subjects);
   const prior = priorComparableRawFactors(subjects, entries, subject.id);
   const d = computeDesgaste(subject.id, entries, prior, { includeSelf: true });
   const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
+  const activeSources = mergedSources.filter((s) => s.estado === "aprobada");
+  const pendingSources = mergedSources.filter((s) => s.estado !== "aprobada");
   return (
     <div>
       <div className="stat-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-        <StatCard label="Horas / crédito" value={f.horasPorCredito.toFixed(2)} accent="#4FD8EA" />
-        <StatCard label="Días totales" value={`${f.diasTotales} d`} accent="#F5A623" />
+        <StatCard label="Horas / crédito" value={c.horasPorCredito.toFixed(2)} accent="#4FD8EA" />
+        <StatCard label="Días totales" value={`${c.diasTotales} d`} accent="#F5A623" />
         <StatCard label="Cursos necesarios" value={f.cursosNecesarios ?? "—"} accent="#A78BFA" />
         <StatCard label="Nota" value={f.nota ?? "—"} accent="#3DDC84" />
       </div>
-      {mergedSources.length > 0 && (
+      {activeSources.length > 0 && (
         <div className="gauge-sub" style={{ padding: "0 4px 4px" }}>
-          Incluye las horas combinadas de: {mergedSources.map((s) => s.name).join(", ")}
+          Combinada con: {activeSources.map((s) => s.name).join(", ")}
+        </div>
+      )}
+      {pendingSources.length > 0 && (
+        <div className="gauge-sub" style={{ padding: "0 4px 4px", color: "var(--amber)" }}>
+          Pendiente de combinar (aún no aprobada, no cuenta todavía): {pendingSources.map((s) => s.name).join(", ")}
         </div>
       )}
       <div className="panel" style={{ marginTop: 4 }}>
@@ -783,7 +828,7 @@ function ClasificacionDetail({ subject, subjects, entries }) {
         )}
       </div>
       <div className="gauge-sub" style={{ padding: "0 4px" }}>
-        Inicio: {f.fechaInicio ? formatMedium(f.fechaInicio) : "—"} · Aprobada: {formatMedium(f.fechaAprobacion)}
+        Inicio: {c.fechaInicio ? formatMedium(c.fechaInicio) : "—"} · Aprobada: {formatMedium(f.fechaAprobacion)}
       </div>
     </div>
   );
@@ -794,23 +839,26 @@ function ClasificacionTab({ subjects, entries }) {
   const [sortDir, setSortDir] = useState("desc");
   const [detailId, setDetailId] = useState(null);
 
-  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen && !s.mergedInto);
+  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen);
 
   const rows = useMemo(() => {
-    const list = approved.map((s) => ({
-      id: s.id, name: s.name, color: s.color,
-      horasPorCredito: s.frozen.horasPorCredito,
-      diasTotales: s.frozen.diasTotales,
-      cursosNecesarios: s.frozen.cursosNecesarios ?? 0,
-      nota: s.frozen.nota ?? 0,
-    }));
+    const list = approved.map((s) => {
+      const c = computeClassification(s, entries, subjects);
+      return {
+        id: s.id, name: s.name, color: s.color,
+        horasPorCredito: c.horasPorCredito,
+        diasTotales: c.diasTotales,
+        cursosNecesarios: s.frozen.cursosNecesarios ?? 0,
+        nota: s.frozen.nota ?? 0,
+      };
+    });
     list.sort((a, b) => {
       const av = a[sortKey], bv = b[sortKey];
       if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       return sortDir === "asc" ? av - bv : bv - av;
     });
     return list;
-  }, [approved, sortKey, sortDir]);
+  }, [approved, entries, subjects, sortKey, sortDir]);
 
   function toggleSort(key) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -1003,7 +1051,7 @@ export default function App() {
   function handleApprove(subjectId, { nota, cursosNecesarios }) {
     setData((d) => {
       const subject = d.subjects.find((s) => s.id === subjectId);
-      const approved = freezeApproval(subject, { entries: d.entries, subjects: d.subjects, nota, cursosNecesarios });
+      const approved = freezeApproval(subject, { nota, cursosNecesarios });
       return { ...d, subjects: d.subjects.map((s) => (s.id === subjectId ? approved : s)) };
     });
   }
