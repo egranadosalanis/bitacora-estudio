@@ -1243,7 +1243,7 @@ async function cloudSave(dataObj) {
 /*  APP PRINCIPAL                                                      */
 /* ------------------------------------------------------------------ */
 
-export default function App() {
+export default function App({ session, profile, onSignOut } = {}) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
@@ -1402,6 +1402,12 @@ export default function App() {
             {data.cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           {cloudError && <span className="cloud-error" title={cloudError}>⚠ nube: {cloudError}</span>}
+          {session && (
+            <div className="account-box">
+              <span className="account-email">{session.user.email}</span>
+              <button className="btn-ghost btn-small" onClick={onSignOut}>Cerrar sesión</button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -1462,7 +1468,7 @@ export default function App() {
 /*  ESTILOS                                                             */
 /* ------------------------------------------------------------------ */
 
-const CSS = `
+export const CSS = `
   :root {
     --bg: #0A0F1C;
     --panel: #121A2B;
@@ -1495,6 +1501,11 @@ const CSS = `
   }
   .app-title { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
   .header-right { display: flex; align-items: center; gap: 10px; }
+  .account-box { display: flex; align-items: center; gap: 8px; }
+  .account-email { font-size: 12px; color: var(--text-dim); }
+  .auth-card { max-width: 360px; width: 100%; }
+  .auth-error { color: var(--red); font-size: 13px; margin: 8px 0; }
+  .auth-info { color: var(--cyan); font-size: 13px; margin: 8px 0; }
   .cloud-error {
     font-size: 10.5px; color: var(--red); background: rgba(255,92,92,0.1); border: 1px solid rgba(255,92,92,0.3);
     border-radius: 20px; padding: 4px 10px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
