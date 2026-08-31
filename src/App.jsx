@@ -1,14 +1,18 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
-  buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
+  computeStats, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
+import {
+  loadUserData, saveDayEntries, deleteDayEntries, insertSubject, deleteSubject, updateSubject,
+  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso,
+} from "./supabaseData.js";
 
 /* ------------------------------------------------------------------ */
 /*  COMPONENTES DE UI GENERICOS                                        */
@@ -1212,7 +1216,11 @@ function ClasificacionTab({ subjects, entries }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  CONEXIÓN CON GOOGLE SHEETS (Apps Script)                           */
+/*  CONEXIÓN CON GOOGLE SHEETS (Apps Script) — YA NO SE USA            */
+/*  Se deja sin borrar como red de seguridad durante la migración a    */
+/*  Supabase (ver supabaseData.js). Una vez confirmado en producción   */
+/*  que todo funciona bien con Supabase, se puede eliminar este bloque */
+/*  y las variables VITE_APPS_SCRIPT_*.                                */
 /* ------------------------------------------------------------------ */
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
@@ -1243,39 +1251,89 @@ async function cloudSave(dataObj) {
 /*  APP PRINCIPAL                                                      */
 /* ------------------------------------------------------------------ */
 
+/** Una cuenta recién creada no tiene ningún curso todavía (antes,
+ * buildDefaultData() sembraba uno automáticamente en el blob de Google
+ * Sheets; con Supabase cada cuenta arranca vacía). Sin esto, la app se
+ * queda cargando para siempre porque no hay ningún curso que seleccionar. */
+function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
+  const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
+
+  function updateName(name) {
+    const inferred = inferCursoRange(name);
+    setNewCurso((v) => ({
+      ...v,
+      name,
+      startDate: inferred ? inferred.startDate : v.startDate,
+      endDate: inferred ? inferred.endDate : v.endDate,
+    }));
+  }
+
+  const canCreate = newCurso.name.trim() && newCurso.startDate && newCurso.endDate;
+
+  return (
+    <div className="app-shell app-loading">
+      <style>{CSS}</style>
+      <div className="panel auth-card">
+        <div className="panel-title">¡Bienvenido!</div>
+        <div className="panel-subtitle">Antes de empezar, crea tu primer curso académico (solo un rango de fechas).</div>
+        <div className="field-row">
+          <label className="field-label">Nombre</label>
+          <input className="input-field" placeholder="Ej. 2025-2026" value={newCurso.name} onChange={(e) => updateName(e.target.value)} />
+        </div>
+        <div className="field-row">
+          <label className="field-label">Inicio</label>
+          <input type="date" className="input-field" value={newCurso.startDate} onChange={(e) => setNewCurso((v) => ({ ...v, startDate: e.target.value }))} />
+        </div>
+        <div className="field-row">
+          <label className="field-label">Fin</label>
+          <input type="date" className="input-field" value={newCurso.endDate} onChange={(e) => setNewCurso((v) => ({ ...v, endDate: e.target.value }))} />
+        </div>
+        <div className="btn-row">
+          <button
+            className="btn-primary"
+            disabled={!canCreate}
+            onClick={() => onCreate(newCurso.name.trim(), newCurso.startDate, newCurso.endDate)}
+          >
+            Crear curso
+          </button>
+          <button className="btn-ghost" onClick={onSignOut}>Cerrar sesión ({email})</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App({ session, profile, onSignOut } = {}) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
-  const saveTimer = useRef(null);
+  const userId = session.user.id;
 
   useEffect(() => {
     (async () => {
       try {
-        const value = await cloudLoad();
-        setData(applyHistoricalImport(migrateData(value ? JSON.parse(value) : buildDefaultData())));
+        setData(await loadUserData(userId));
         setCloudError(null);
       } catch (e) {
-        setData(applyHistoricalImport(migrateData(buildDefaultData())));
         setCloudError(String((e && e.message) || e));
       }
     })();
-  }, []);
+  }, [userId]);
 
-  useEffect(() => {
-    if (!data) return;
+  // Cada acción del usuario (guardar un día, añadir una asignatura, etc.)
+  // escribe directamente en Supabase en el momento — ya no hay un guardado
+  // automático de "todo el bloque" cada pocos segundos como con Google
+  // Sheets. Si DISABLE_CLOUD_SAVE está activo (solo en local, para pruebas),
+  // se salta la escritura real y solo se actualiza la vista.
+  async function withCloudWrite(fn) {
     if (DISABLE_CLOUD_SAVE) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        await cloudSave(data);
-        setCloudError(null);
-      } catch (e) {
-        setCloudError(String((e && e.message) || e));
-      }
-    }, 700);
-    return () => clearTimeout(saveTimer.current);
-  }, [data]);
+    try {
+      await fn();
+      setCloudError(null);
+    } catch (e) {
+      setCloudError(String((e && e.message) || e));
+    }
+  }
 
   const curso = useMemo(() => data && data.cursos.find((c) => c.id === data.activeCursoId), [data]);
   const cursoEntries = useMemo(
@@ -1306,6 +1364,7 @@ export default function App({ session, profile, onSignOut } = {}) {
       else entries[date] = nextDay;
       return { ...d, entries };
     });
+    withCloudWrite(() => saveDayEntries(userId, date, loggableIds, values));
   }
 
   function handleDeleteDay(date, loggableIds) {
@@ -1317,28 +1376,43 @@ export default function App({ session, profile, onSignOut } = {}) {
       else entries[date] = nextDay;
       return { ...d, entries };
     });
+    withCloudWrite(() => deleteDayEntries(userId, date, loggableIds));
   }
 
-  function handleAddSubject(name, credits) {
-    setData((d) => {
+  // Añadir asignatura/curso necesita el id real que genera Supabase antes
+  // de poder guardarlo en el estado local (los registros de estudio se
+  // referencian a ese id), así que aquí sí se espera a la respuesta del
+  // servidor en vez de actualizar la vista primero.
+  async function handleAddSubject(name, credits) {
+    const color = PALETTE[(data?.subjects.length || 0) % PALETTE.length];
+    const originCursoId = curso?.id ?? null;
+    if (DISABLE_CLOUD_SAVE) {
       const newSub = {
-        id: uid("sub"), name, credits, target: null, color: PALETTE[d.subjects.length % PALETTE.length],
-        estado: "en_curso", mergedInto: null, originCursoId: curso?.id ?? null, frozen: null,
+        id: uid("sub"), name, credits, target: null, color,
+        estado: "en_curso", mergedInto: null, originCursoId, frozen: null,
       };
-      return { ...d, subjects: [...d.subjects, newSub] };
-    });
+      setData((d) => ({ ...d, subjects: [...d.subjects, newSub] }));
+      return;
+    }
+    try {
+      const newSub = await insertSubject(userId, { name, credits, color, originCursoId });
+      setData((d) => ({ ...d, subjects: [...d.subjects, newSub] }));
+      setCloudError(null);
+    } catch (e) {
+      setCloudError(String((e && e.message) || e));
+    }
   }
 
   function handleDeleteSubject(subjectId) {
-    setData((d) => {
-      const hasEntries = Object.values(d.entries).some((day) => day[subjectId] > 0);
-      if (hasEntries) return d;
-      return { ...d, subjects: d.subjects.filter((s) => s.id !== subjectId) };
-    });
+    const hasEntries = Object.values(data.entries).some((day) => day[subjectId] > 0);
+    if (hasEntries) return;
+    setData((d) => ({ ...d, subjects: d.subjects.filter((s) => s.id !== subjectId) }));
+    withCloudWrite(() => deleteSubject(userId, subjectId));
   }
 
   function handleUpdateSubject(subjectId, patch) {
     setData((d) => ({ ...d, subjects: d.subjects.map((s) => (s.id === subjectId ? { ...s, ...patch } : s)) }));
+    withCloudWrite(() => updateSubject(userId, subjectId, patch));
   }
 
   function handleChangeEstado(subjectId, estado) {
@@ -1346,34 +1420,50 @@ export default function App({ session, profile, onSignOut } = {}) {
       ...d,
       subjects: d.subjects.map((s) => (s.id === subjectId ? { ...s, estado, frozen: estado === "aprobada" ? s.frozen : null } : s)),
     }));
+    withCloudWrite(() => updateSubjectEstado(userId, subjectId, estado));
   }
 
   function handleApprove(subjectId, { nota, cursosNecesarios }) {
-    setData((d) => {
-      const subject = d.subjects.find((s) => s.id === subjectId);
-      const approved = freezeApproval(subject, { nota, cursosNecesarios });
-      return { ...d, subjects: d.subjects.map((s) => (s.id === subjectId ? approved : s)) };
-    });
+    const subject = data.subjects.find((s) => s.id === subjectId);
+    const approved = freezeApproval(subject, { nota, cursosNecesarios });
+    setData((d) => ({ ...d, subjects: d.subjects.map((s) => (s.id === subjectId ? approved : s)) }));
+    withCloudWrite(() => approveSubject(userId, subjectId, approved.frozen));
   }
 
-  function handleAddCurso(name, startDate, endDate) {
-    const id = uid("curso");
-    setData((d) => ({ ...d, activeCursoId: id, cursos: [...d.cursos, { id, name, startDate, endDate, estado: "en_curso" }] }));
+  async function handleAddCurso(name, startDate, endDate) {
+    if (DISABLE_CLOUD_SAVE) {
+      const id = uid("curso");
+      setData((d) => ({ ...d, activeCursoId: id, cursos: [...d.cursos, { id, name, startDate, endDate, estado: "en_curso" }] }));
+      return;
+    }
+    try {
+      const newCurso = await insertCurso(userId, { name, startDate, endDate });
+      setData((d) => ({ ...d, activeCursoId: newCurso.id, cursos: [...d.cursos, newCurso] }));
+      setCloudError(null);
+    } catch (e) {
+      setCloudError(String((e && e.message) || e));
+    }
   }
 
   function handleToggleCursoEstado(id) {
-    setData((d) => ({
-      ...d,
-      cursos: d.cursos.map((c) => (c.id === id ? { ...c, estado: c.estado === "terminado" ? "en_curso" : "terminado" } : c)),
-    }));
+    const target = data.cursos.find((c) => c.id === id);
+    const nextEstado = target?.estado === "terminado" ? "en_curso" : "terminado";
+    setData((d) => ({ ...d, cursos: d.cursos.map((c) => (c.id === id ? { ...c, estado: nextEstado } : c)) }));
+    withCloudWrite(() => updateCursoEstado(userId, id, nextEstado));
   }
 
   function handleRemoveCurso(id) {
+    if (data.cursos.length === 1) return;
     setData((d) => {
       if (d.cursos.length === 1) return d;
       const cursos = d.cursos.filter((c) => c.id !== id);
       return { ...d, activeCursoId: d.activeCursoId === id ? cursos[0].id : d.activeCursoId, cursos };
     });
+    withCloudWrite(() => deleteCurso(userId, id));
+  }
+
+  if (data && data.cursos.length === 0) {
+    return <WelcomeCreateCurso onCreate={handleAddCurso} onSignOut={onSignOut} email={session.user.email} />;
   }
 
   if (!data || !curso || !stats) {
