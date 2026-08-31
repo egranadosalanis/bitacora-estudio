@@ -1504,6 +1504,12 @@ export const CSS = `
   .account-box { display: flex; align-items: center; gap: 8px; }
   .account-email { font-size: 12px; color: var(--text-dim); }
   .auth-card { max-width: 360px; width: 100%; }
+  .password-field { position: relative; flex: 1; }
+  .password-field .input-field { width: 100%; padding-right: 38px; }
+  .password-toggle {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; font-size: 15px; padding: 4px 6px; line-height: 1;
+  }
   .auth-error { color: var(--red); font-size: 13px; margin: 8px 0; }
   .auth-info { color: var(--cyan); font-size: 13px; margin: 8px 0; }
   .cloud-error {
