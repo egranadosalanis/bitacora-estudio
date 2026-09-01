@@ -65,6 +65,56 @@ img { display: block; max-width: 100%; }
 }
 
 .brand-sm { font-size: 16px; }
+a.brand { color: var(--text); text-decoration: none; }
+a.brand:hover { color: var(--cyan); }
+
+.header-right { display: flex; align-items: center; gap: 10px; }
+
+.nav-menu-wrap { position: relative; }
+
+.nav-menu-toggle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+}
+.nav-menu-toggle span { width: 16px; height: 2px; background: var(--text); border-radius: 2px; }
+.nav-menu-toggle:hover { border-color: var(--cyan); }
+.nav-menu-toggle:hover span { background: var(--cyan); }
+
+.nav-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 220px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px -16px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+}
+.nav-menu.is-open { opacity: 1; visibility: visible; transform: translateY(0); }
+.nav-menu a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+.nav-menu a:hover { background: var(--panel-2); color: var(--cyan); }
 
 .brand-dot {
   width: 10px;
@@ -226,26 +276,6 @@ h3 {
   margin: 0;
   text-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
 }
-
-.cover-chart {
-  width: 100%;
-  max-width: 620px;
-  text-align: left;
-  box-shadow: 0 40px 100px -24px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(79, 216, 234, 0.08);
-}
-
-.trend-chart { width: 100%; height: 150px; display: block; }
-
-.chart-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-top: 14px;
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.chart-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
 /* ---------- hero ---------- */
 
@@ -424,9 +454,47 @@ h3 {
 .factor-item small { display: block; color: var(--text-dim); font-size: 11.5px; margin-bottom: 4px; }
 .factor-item strong { font-family: var(--mono); font-size: 15px; font-weight: 600; }
 
+/* ---------- widgets: comparación (misma carga de créditos) ---------- */
+
+.compare-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 44px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.compare-label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.compare-row b { font-family: var(--mono); font-size: 12px; text-align: right; }
+.compare-callout {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(245, 166, 35, 0.1);
+  border: 1px solid rgba(245, 166, 35, 0.3);
+  font-size: 12.5px;
+  color: var(--text);
+}
+.compare-callout strong { color: var(--amber); }
+
+/* ---------- widgets: panel de estadísticas ---------- */
+
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.stat-item {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.stat-item small { display: block; color: var(--text-dim); font-size: 11.5px; margin-bottom: 6px; }
+.stat-item strong { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+
+/* ---------- qué es clever (historia) ---------- */
+
+.story { padding: 90px 0 40px; }
+
 /* ---------- features / carousel ---------- */
 
-.features { padding: 90px 0 100px; overflow: hidden; }
+.features { padding: 40px 0 100px; overflow: hidden; }
 
 .carousel { position: relative; margin-top: 12px; }
 

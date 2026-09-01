@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clever — cómo instalar la app</title>
+  <meta name="description" content="Cómo instalar Clever como aplicación en tu móvil u ordenador, en menos de un minuto." />
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .install-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 26px 28px; margin-bottom: 20px; }
+    .install-card h3 { margin-top: 0; }
+    .install-card ol { color: var(--text-dim); font-size: 15px; line-height: 1.7; padding-left: 22px; margin: 0; }
+    .install-card ol li::marker { color: var(--cyan); font-family: var(--mono); }
+    .install-card strong { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" style="text-decoration:none;"><span class="brand-dot"></span>Clever</a>
+      <div class="header-right">
+        <a class="btn btn-ghost-header" href="https://bitacora-estudio.vercel.app">Entrar</a>
+        <div class="nav-menu-wrap">
+          <button class="nav-menu-toggle" type="button" data-menu-toggle aria-haspopup="true" aria-expanded="false" aria-label="Abrir menú">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-menu" data-menu>
+            <a href="index.html">Inicio</a>
+            <a href="motivacion.html">Motivación</a>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" style="padding-bottom: 20px;">
+      <div class="wrap" style="max-width: 720px;">
+        <div class="eyebrow" data-reveal>Guía rápida</div>
+        <h1 data-reveal>Cómo instalar Clever</h1>
+        <p class="lede" data-reveal style="max-width:none;">
+          Clever es una web app: no está en las tiendas de aplicaciones, pero se instala igual, directamente
+          desde el navegador, y funciona como una app más en tu pantalla de inicio.
+        </p>
+      </div>
+    </section>
+
+    <section style="padding-bottom: 90px;">
+      <div class="wrap" style="max-width: 720px;">
+
+        <div class="install-card" data-reveal>
+          <h3>📱 iPhone / iPad (Safari)</h3>
+          <ol>
+            <li>Abre <strong>bitacora-estudio.vercel.app</strong> en Safari.</li>
+            <li>Toca el icono de compartir (el cuadrado con la flecha hacia arriba).</li>
+            <li>Baja y selecciona <strong>"Añadir a pantalla de inicio"</strong>.</li>
+            <li>Confirma el nombre y toca <strong>"Añadir"</strong>.</li>
+          </ol>
+        </div>
+
+        <div class="install-card" data-reveal>
+          <h3>🤖 Android (Chrome)</h3>
+          <ol>
+            <li>Abre <strong>bitacora-estudio.vercel.app</strong> en Chrome.</li>
+            <li>Toca el menú de tres puntos, arriba a la derecha.</li>
+            <li>Selecciona <strong>"Instalar aplicación"</strong> (o "Añadir a pantalla de inicio").</li>
+            <li>Confirma — te aparecerá el icono junto al resto de tus apps.</li>
+          </ol>
+        </div>
+
+        <div class="install-card" data-reveal>
+          <h3>💻 Ordenador (Chrome / Edge)</h3>
+          <ol>
+            <li>Abre <strong>bitacora-estudio.vercel.app</strong>.</li>
+            <li>En la barra de direcciones, busca el icono de instalar (un monitor con una flecha) al final.</li>
+            <li>Haz clic en <strong>"Instalar"</strong>.</li>
+            <li>Se abrirá como una ventana propia, separada del navegador.</li>
+          </ol>
+        </div>
+
+        <div class="hero-cta" data-reveal>
+          <a class="btn btn-primary btn-lg" href="https://bitacora-estudio.vercel.app">Ir a Clever</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="brand brand-sm"><span class="brand-dot"></span>Clever</div>
+      <span class="footer-note">Hecho para estudiantes que quieren datos, no impresiones.</span>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
