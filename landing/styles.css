@@ -207,7 +207,16 @@ h3 {
     radial-gradient(760px 420px at 50% 45%, rgba(10, 15, 28, 0.05), rgba(10, 15, 28, 0.55) 78%);
 }
 
-.cover-content { position: relative; z-index: 2; text-align: center; }
+.cover-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 56px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+}
 
 .cover-slogan {
   font-size: clamp(46px, 9vw, 108px);
@@ -217,6 +226,26 @@ h3 {
   margin: 0;
   text-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
 }
+
+.cover-chart {
+  width: 100%;
+  max-width: 620px;
+  text-align: left;
+  box-shadow: 0 40px 100px -24px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(79, 216, 234, 0.08);
+}
+
+.trend-chart { width: 100%; height: 150px; display: block; }
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
 /* ---------- hero ---------- */
 
