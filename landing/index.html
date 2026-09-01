@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Clever — mide tu esfuerzo real de estudio</title>
-  <meta name="description" content="Clever registra tus minutos de estudio reales y los convierte en datos: horas por crédito, rachas y un índice de desgaste cuantificado por asignatura. Para universidad, máster o FP." />
+  <meta name="description" content="Clever registra tus minutos de estudio reales y los convierte en datos: horas por crédito, rachas y un índice de desgaste cuantificado por asignatura. Para cualquier institución que use los créditos ECTS como recompensa." />
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,6 +47,40 @@
       <div class="cover-overlay"></div>
       <div class="wrap cover-content">
         <h2 class="cover-slogan">Make it <span class="accent-blue">Clever</span>.</h2>
+
+        <div class="ui-window cover-chart" data-reveal>
+          <div class="ui-window-bar"><span></span><span></span><span></span></div>
+          <div class="ui-body">
+            <div class="ui-title-sm">Minutos diarios por asignatura — 2º cuatrimestre</div>
+            <svg class="trend-chart" viewBox="0 0 600 200" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="trendCyan" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#4FD8EA" stop-opacity="0.5" />
+                  <stop offset="100%" stop-color="#4FD8EA" stop-opacity="0" />
+                </linearGradient>
+                <linearGradient id="trendAmber" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#F5A623" stop-opacity="0.55" />
+                  <stop offset="100%" stop-color="#F5A623" stop-opacity="0" />
+                </linearGradient>
+                <linearGradient id="trendPurple" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.45" />
+                  <stop offset="100%" stop-color="#A78BFA" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <path d="M0,190 L0,150 C60,120 100,160 150,140 C200,120 240,80 300,95 C360,110 380,150 440,130 C500,110 520,60 580,50 C595,47 598,46 600,45 L600,190 Z" fill="url(#trendPurple)" />
+              <path d="M0,195 L0,170 C50,150 110,130 170,110 C230,90 260,50 320,58 C380,66 400,110 460,100 C510,92 540,55 590,44 L600,43 L600,195 Z" fill="url(#trendAmber)" />
+              <path d="M0,198 L0,185 C45,188 90,150 150,150 C210,150 240,110 300,95 C360,80 390,115 450,100 C505,86 535,35 590,28 L600,27 L600,198 Z" fill="url(#trendCyan)" />
+              <path d="M0,185 C60,120 100,160 150,140 C200,120 240,80 300,95 C360,110 380,150 440,130 C500,110 520,60 580,50 L600,45" fill="none" stroke="#A78BFA" stroke-width="2" stroke-linecap="round" />
+              <path d="M0,170 C50,150 110,130 170,110 C230,90 260,50 320,58 C380,66 400,110 460,100 C510,92 540,55 590,44" fill="none" stroke="#F5A623" stroke-width="2" stroke-linecap="round" />
+              <path d="M0,185 C45,188 90,150 150,150 C210,150 240,110 300,95 C360,80 390,115 450,100 C505,86 535,35 590,28" fill="none" stroke="#4FD8EA" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <div class="chart-legend">
+              <span><i style="background:#4FD8EA"></i>Cálculo</span>
+              <span><i style="background:#F5A623"></i>Programación</span>
+              <span><i style="background:#A78BFA"></i>Estadística</span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -54,7 +88,6 @@
     <section class="hero">
       <div class="wrap hero-inner">
         <div class="hero-copy" data-reveal>
-          <div class="eyebrow">Para universidad, máster o FP — cualquier institución que puntúe por créditos</div>
           <h1>No sabes cuánto <span class="accent-cyan">esfuerzo real</span> le has dedicado a cada asignatura.<br>Clever sí.</h1>
           <p class="lede">
             Registra tus minutos de estudio día a día y deja de guiarte por impresiones. Clever los convierte
@@ -223,8 +256,9 @@
     <!-- CTA FINAL -->
     <section class="final-cta">
       <div class="wrap final-cta-inner" data-reveal>
+        <div class="eyebrow">Para cualquier institución que use los créditos ECTS como recompensa</div>
         <h2>Empieza a medir tu esfuerzo real</h2>
-        <p class="lede">Gratis. Funciona para cualquier institución que puntúe por créditos: universidad, máster o FP.</p>
+        <p class="lede">Gratis, sin tarjeta ni compromiso.</p>
         <a class="btn btn-primary btn-lg" href="https://bitacora-estudio.vercel.app">Empieza gratis</a>
       </div>
     </section>
