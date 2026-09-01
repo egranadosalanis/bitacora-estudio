@@ -21,6 +21,35 @@
   </header>
 
   <main>
+    <!-- PORTADA: eslogan grande sobre un gráfico de trayectoria de fondo -->
+    <section class="cover">
+      <div class="cover-bg" aria-hidden="true">
+        <svg viewBox="0 0 1200 500" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <linearGradient id="areaCyan" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4FD8EA" stop-opacity="0.55" />
+              <stop offset="100%" stop-color="#4FD8EA" stop-opacity="0" />
+            </linearGradient>
+            <linearGradient id="areaAmber" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#F5A623" stop-opacity="0.55" />
+              <stop offset="100%" stop-color="#F5A623" stop-opacity="0" />
+            </linearGradient>
+            <linearGradient id="areaPurple" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.5" />
+              <stop offset="100%" stop-color="#A78BFA" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <path d="M0,420 L0,320 C120,280 180,360 260,300 C340,240 400,180 480,220 C560,260 600,340 680,300 C760,260 820,140 900,170 C980,200 1040,300 1120,260 C1160,240 1180,230 1200,225 L1200,420 Z" fill="url(#areaPurple)" />
+          <path d="M0,440 L0,380 C100,340 200,300 300,260 C400,220 460,120 560,140 C660,160 700,280 800,260 C880,244 940,150 1040,130 C1100,118 1160,140 1200,160 L1200,440 Z" fill="url(#areaAmber)" />
+          <path d="M0,460 L0,400 C90,410 170,340 260,340 C360,340 420,240 520,210 C620,180 680,260 780,230 C870,203 930,90 1030,80 C1100,73 1150,110 1200,130 L1200,460 Z" fill="url(#areaCyan)" />
+        </svg>
+      </div>
+      <div class="cover-overlay"></div>
+      <div class="wrap cover-content">
+        <h2 class="cover-slogan">Make it <span class="accent-blue">Clever</span>.</h2>
+      </div>
+    </section>
+
     <!-- HERO -->
     <section class="hero">
       <div class="wrap hero-inner">
@@ -32,16 +61,36 @@
             en datos: horas por crédito, racha de días seguidos, sesión máxima — el mapa real de dónde se ha
             ido tu esfuerzo este curso.
           </p>
-          <p class="tagline">Make it simple, make it <span class="tagline-clever">Clever</span>.</p>
           <div class="hero-cta">
             <a class="btn btn-primary btn-lg" href="https://bitacora-estudio.vercel.app">Empieza gratis</a>
             <span class="hero-cta-hint">Sin tarjeta. Registra tu primer día en menos de un minuto.</span>
           </div>
         </div>
+
         <div class="hero-shot" data-reveal>
-          <div class="shot-frame shot-frame-browser">
-            <div class="shot-frame-bar"><span></span><span></span><span></span></div>
-            <img src="assets/screenshot-panel.png" alt="Panel de Clever mostrando racha actual, racha máxima, sesión máxima y horas por crédito de cada asignatura" loading="eager" />
+          <div class="ui-window ui-window-lg">
+            <div class="ui-window-bar"><span></span><span></span><span></span></div>
+            <div class="ui-body">
+              <div class="ui-title">Registro de vuelo — hoy</div>
+              <div class="reg-row">
+                <span class="reg-subject"><span class="reg-dot" style="background:#4FD8EA"></span>Cálculo</span>
+                <span class="reg-input">45 min</span>
+              </div>
+              <div class="reg-row">
+                <span class="reg-subject"><span class="reg-dot" style="background:#F5A623"></span>Programación</span>
+                <span class="reg-input">1 h 10 min</span>
+              </div>
+              <div class="reg-row">
+                <span class="reg-subject"><span class="reg-dot" style="background:#A78BFA"></span>Estadística</span>
+                <span class="reg-input">1 h 35 min</span>
+              </div>
+              <div class="reg-row">
+                <span class="reg-subject"><span class="reg-dot" style="background:#3DDC84"></span>Historia del Arte</span>
+                <span class="reg-input reg-input-empty">0 min</span>
+              </div>
+              <div class="reg-total"><span>Total del día</span><span>3 h 30 min</span></div>
+              <button class="btn btn-primary reg-save" type="button" tabindex="-1">Guardar registro</button>
+            </div>
           </div>
         </div>
       </div>
@@ -63,8 +112,13 @@
           <article class="car-slide" data-slide>
             <span class="car-slide-label">Registra sin esfuerzo</span>
             <div class="car-slide-shot">
-              <div class="shot-frame-bar"><span></span><span></span><span></span></div>
-              <img src="assets/screenshot-bitacora.png" alt="Registro diario de minutos de estudio por asignatura, en modo manual" loading="lazy" />
+              <div class="ui-window-bar"><span></span><span></span><span></span></div>
+              <div class="ui-body ui-body-center">
+                <div class="timer-dot"></div>
+                <div class="timer-label">Grabando · Programación</div>
+                <div class="timer-display">00:42:17</div>
+                <button class="btn btn-ghost-dark timer-stop" type="button" tabindex="-1">Detener</button>
+              </div>
             </div>
             <p class="car-slide-desc">A mano o con un contador integrado que corre mientras estudias. Cada día, en segundos — nada de hojas de cálculo a rellenar por la noche.</p>
           </article>
@@ -72,8 +126,18 @@
           <article class="car-slide" data-slide>
             <span class="car-slide-label">Compárate contigo mismo</span>
             <div class="car-slide-shot">
-              <div class="shot-frame-bar"><span></span><span></span><span></span></div>
-              <img src="assets/screenshot-trayectoria.png" alt="Gráficos de trayectoria: minutos diarios por asignatura y horas acumuladas en el curso" loading="lazy" />
+              <div class="ui-window-bar"><span></span><span></span><span></span></div>
+              <div class="ui-body">
+                <div class="ui-title ui-title-sm">Horas acumuladas en el curso</div>
+                <svg class="mini-chart" viewBox="0 0 300 90" preserveAspectRatio="none">
+                  <polyline points="0,80 30,74 60,68 90,70 120,55 150,50 180,34 210,30 240,16 270,10 300,4" fill="none" stroke="#4FD8EA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <div class="bars">
+                  <div class="bar-row"><span>Programación</span><div class="bar-track"><div class="bar-fill" style="width:88%;background:#F5A623"></div></div><b>9.4 h/cr</b></div>
+                  <div class="bar-row"><span>Estadística</span><div class="bar-track"><div class="bar-fill" style="width:62%;background:#A78BFA"></div></div><b>6.2 h/cr</b></div>
+                  <div class="bar-row"><span>Cálculo</span><div class="bar-track"><div class="bar-fill" style="width:40%;background:#4FD8EA"></div></div><b>4.1 h/cr</b></div>
+                </div>
+              </div>
             </div>
             <p class="car-slide-desc">Ve tu evolución real: ritmo diario, horas acumuladas y cuánto te cuesta cada asignatura por crédito, curso tras curso.</p>
           </article>
@@ -81,8 +145,12 @@
           <article class="car-slide" data-slide>
             <span class="car-slide-label">Descubre lo que otros no cuentan</span>
             <div class="car-slide-shot car-slide-shot-teaser">
-              <div class="shot-frame-bar"><span></span><span></span><span></span></div>
-              <img src="assets/screenshot-ranking.png" alt="Adelanto de la comparación poblacional de esfuerzo por asignatura" loading="lazy" />
+              <div class="ui-window-bar"><span></span><span></span><span></span></div>
+              <div class="ui-body">
+                <div class="rank-row"><span class="rank-num">1</span><span class="rank-dot" style="background:#F5A623"></span><span class="rank-name">Tú</span><span class="rank-score hard">6.8</span></div>
+                <div class="rank-row"><span class="rank-num">2</span><span class="rank-dot" style="background:#4FD8EA"></span><span class="rank-name">Media de tu grado</span><span class="rank-score moderate">—</span></div>
+                <div class="rank-row"><span class="rank-num">3</span><span class="rank-dot" style="background:#A78BFA"></span><span class="rank-name">Percentil</span><span class="rank-score moderate">—</span></div>
+              </div>
               <div class="teaser-veil">
                 <span class="teaser-badge">Próximamente</span>
               </div>
@@ -102,12 +170,12 @@
       <div class="wrap">
         <div class="wear-head" data-reveal>
           <div class="eyebrow eyebrow-amber">La función que no vas a encontrar en ningún Excel</div>
-          <h2>El índice de desgaste: qué asignaturas te exigen más, <span class="accent-amber">medido — no imaginado</span></h2>
+          <h2>El índice de desgaste: en qué asignatura <span class="accent-amber">sufriste más</span> — medido, no imaginado</h2>
           <p class="lede">
-            Todas las carreras tienen su leyenda: "esa asignatura es un hueso", "esa es tranquila". Clever ignora
-            la fama y calcula un índice de desgaste a partir de tus minutos reales — el tramo de estudio más duro
-            que has tenido en cada asignatura, medido en cuatro factores objetivos. Un número del 0 al 10, igual
-            para todo el mundo, que no cambia según apruebes otras asignaturas.
+            Las horas por crédito ya te dicen qué asignatura exige más esfuerzo sobre el papel. El desgaste es
+            otra cosa: es tu experiencia personal — el tramo de estudio más duro que tú, en concreto, llegaste a
+            pasar en cada asignatura. Clever lo calcula a partir de tus minutos reales, en cuatro factores
+            objetivos, para que veas en cuál sufriste de verdad más — no cuál "tiene fama" de ser peor.
           </p>
           <div class="wear-factors-inline">
             <span class="wear-chip">Intensidad</span>
@@ -118,13 +186,35 @@
         </div>
 
         <div class="wear-visuals">
-          <div class="shot-frame shot-frame-wide" data-reveal>
-            <div class="shot-frame-bar"><span></span><span></span><span></span></div>
-            <img src="assets/screenshot-ranking.png" alt="Clasificación de desgaste: todas las asignaturas ordenadas de la más a la menos dura, con su índice numérico" loading="lazy" />
+          <div class="ui-window shot-frame-wide" data-reveal>
+            <div class="ui-window-bar"><span></span><span></span><span></span></div>
+            <div class="ui-body">
+              <div class="ui-title ui-title-sm">Tu experiencia, de la más a la menos dura</div>
+              <div class="rank-row"><span class="rank-num">1</span><span class="rank-dot" style="background:#F5A623"></span><span class="rank-name">Programación</span><span class="rank-badge">En curso</span><span class="rank-score extreme">8.7 · Extremo</span></div>
+              <div class="rank-row"><span class="rank-num">2</span><span class="rank-dot" style="background:#A78BFA"></span><span class="rank-name">Estadística</span><span class="rank-badge">En curso</span><span class="rank-score extreme">7.6 · Extremo</span></div>
+              <div class="rank-row"><span class="rank-num">3</span><span class="rank-dot" style="background:#FB923C"></span><span class="rank-name">Física</span><span class="rank-badge">En curso</span><span class="rank-score hard">6.8 · Duro</span></div>
+              <div class="rank-row"><span class="rank-num">4</span><span class="rank-dot" style="background:#4FD8EA"></span><span class="rank-name">Cálculo</span><span class="rank-badge">En curso</span><span class="rank-score hard">6.0 · Duro</span></div>
+              <div class="rank-row"><span class="rank-num">5</span><span class="rank-dot" style="background:#3DDC84"></span><span class="rank-name">Historia del Arte</span><span class="rank-badge">En curso</span><span class="rank-score moderate">3.4 · Moderado</span></div>
+            </div>
           </div>
-          <div class="shot-frame shot-frame-detail" data-reveal>
-            <div class="shot-frame-bar"><span></span><span></span><span></span></div>
-            <img src="assets/screenshot-desgaste.png" alt="Detalle del índice de desgaste de una asignatura, con el desglose en intensidad, duración, compresión y racha interna" loading="lazy" />
+          <div class="ui-window shot-frame-detail" data-reveal>
+            <div class="ui-window-bar"><span></span><span></span><span></span></div>
+            <div class="ui-body">
+              <div class="factor-head">
+                <span class="rank-dot" style="background:#F5A623"></span>
+                <span class="ui-title ui-title-sm">Programación</span>
+              </div>
+              <div class="factor-score-row">
+                <span class="factor-score">8.7</span>
+                <span class="rank-score extreme">Extremo</span>
+              </div>
+              <div class="factor-grid">
+                <div class="factor-item"><small>Intensidad</small><strong>210 min/día</strong></div>
+                <div class="factor-item"><small>Duración</small><strong>17 días</strong></div>
+                <div class="factor-item"><small>Compresión</small><strong>89%</strong></div>
+                <div class="factor-item"><small>Racha interna</small><strong>9 días</strong></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
