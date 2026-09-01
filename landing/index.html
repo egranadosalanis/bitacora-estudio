@@ -16,7 +16,18 @@
   <header class="site-header">
     <div class="wrap header-inner">
       <div class="brand"><span class="brand-dot"></span>Clever</div>
-      <a class="btn btn-ghost-header" href="https://bitacora-estudio.vercel.app">Entrar</a>
+      <div class="header-right">
+        <a class="btn btn-ghost-header" href="https://bitacora-estudio.vercel.app">Entrar</a>
+        <div class="nav-menu-wrap">
+          <button class="nav-menu-toggle" type="button" data-menu-toggle aria-haspopup="true" aria-expanded="false" aria-label="Abrir menú">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-menu" data-menu>
+            <a href="motivacion.html">Motivación</a>
+            <a href="instalar.html">Cómo instalar la app</a>
+          </nav>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -24,63 +35,37 @@
     <!-- PORTADA: eslogan grande sobre un gráfico de trayectoria de fondo -->
     <section class="cover">
       <div class="cover-bg" aria-hidden="true">
-        <svg viewBox="0 0 1200 500" preserveAspectRatio="xMidYMid slice">
+        <svg viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid slice">
           <defs>
             <linearGradient id="areaCyan" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#4FD8EA" stop-opacity="0.55" />
+              <stop offset="0%" stop-color="#4FD8EA" stop-opacity="0.65" />
               <stop offset="100%" stop-color="#4FD8EA" stop-opacity="0" />
             </linearGradient>
             <linearGradient id="areaAmber" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#F5A623" stop-opacity="0.55" />
+              <stop offset="0%" stop-color="#F5A623" stop-opacity="0.65" />
               <stop offset="100%" stop-color="#F5A623" stop-opacity="0" />
             </linearGradient>
             <linearGradient id="areaPurple" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.5" />
+              <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.6" />
               <stop offset="100%" stop-color="#A78BFA" stop-opacity="0" />
             </linearGradient>
           </defs>
-          <path d="M0,420 L0,320 C120,280 180,360 260,300 C340,240 400,180 480,220 C560,260 600,340 680,300 C760,260 820,140 900,170 C980,200 1040,300 1120,260 C1160,240 1180,230 1200,225 L1200,420 Z" fill="url(#areaPurple)" />
-          <path d="M0,440 L0,380 C100,340 200,300 300,260 C400,220 460,120 560,140 C660,160 700,280 800,260 C880,244 940,150 1040,130 C1100,118 1160,140 1200,160 L1200,440 Z" fill="url(#areaAmber)" />
-          <path d="M0,460 L0,400 C90,410 170,340 260,340 C360,340 420,240 520,210 C620,180 680,260 780,230 C870,203 930,90 1030,80 C1100,73 1150,110 1200,130 L1200,460 Z" fill="url(#areaCyan)" />
+          <g stroke="#E7ECF5" stroke-opacity="0.07">
+            <line x1="0" y1="120" x2="1200" y2="120" />
+            <line x1="0" y1="240" x2="1200" y2="240" />
+            <line x1="0" y1="360" x2="1200" y2="360" />
+            <line x1="0" y1="480" x2="1200" y2="480" />
+          </g>
+          <polygon fill="url(#areaAmber)" points="0,520 0,480 40,380 80,420 120,320 160,280 200,340 240,180 280,220 320,140 360,240 400,200 440,300 480,470 520,485 560,478 600,470 640,480 680,475 720,470 760,478 800,472 840,468 880,474 920,470 960,466 1000,472 1040,468 1080,474 1120,470 1160,466 1200,470 1200,520" />
+          <polygon fill="url(#areaPurple)" points="0,520 0,500 40,498 80,499 120,497 160,498 200,499 240,497 280,498 320,499 360,497 400,495 440,460 480,320 520,380 560,260 600,340 640,180 680,240 720,300 760,220 800,380 840,470 880,490 920,495 960,498 1000,497 1040,499 1080,498 1120,497 1160,499 1200,498 1200,520" />
+          <polygon fill="url(#areaCyan)" points="0,520 0,499 40,497 80,498 120,499 160,497 200,498 240,499 280,497 320,498 360,499 400,497 440,495 480,490 520,480 560,470 600,420 640,380 680,300 720,340 760,200 800,260 840,140 880,180 920,80 960,140 1000,60 1040,120 1080,160 1120,90 1160,130 1200,150 1200,520" />
+          <polyline fill="none" stroke="#4FD8EA" stroke-width="2.5" stroke-linejoin="round"
+            points="0,499 40,497 80,498 120,499 160,497 200,498 240,499 280,497 320,498 360,499 400,497 440,495 480,490 520,480 560,470 600,420 640,380 680,300 720,340 760,200 800,260 840,140 880,180 920,80 960,140 1000,60 1040,120 1080,160 1120,90 1160,130 1200,150" />
         </svg>
       </div>
       <div class="cover-overlay"></div>
       <div class="wrap cover-content">
         <h2 class="cover-slogan">Make it <span class="accent-blue">Clever</span>.</h2>
-
-        <div class="ui-window cover-chart" data-reveal>
-          <div class="ui-window-bar"><span></span><span></span><span></span></div>
-          <div class="ui-body">
-            <div class="ui-title-sm">Minutos diarios por asignatura — 2º cuatrimestre</div>
-            <svg class="trend-chart" viewBox="0 0 600 200" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="trendCyan" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#4FD8EA" stop-opacity="0.5" />
-                  <stop offset="100%" stop-color="#4FD8EA" stop-opacity="0" />
-                </linearGradient>
-                <linearGradient id="trendAmber" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#F5A623" stop-opacity="0.55" />
-                  <stop offset="100%" stop-color="#F5A623" stop-opacity="0" />
-                </linearGradient>
-                <linearGradient id="trendPurple" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#A78BFA" stop-opacity="0.45" />
-                  <stop offset="100%" stop-color="#A78BFA" stop-opacity="0" />
-                </linearGradient>
-              </defs>
-              <path d="M0,190 L0,150 C60,120 100,160 150,140 C200,120 240,80 300,95 C360,110 380,150 440,130 C500,110 520,60 580,50 C595,47 598,46 600,45 L600,190 Z" fill="url(#trendPurple)" />
-              <path d="M0,195 L0,170 C50,150 110,130 170,110 C230,90 260,50 320,58 C380,66 400,110 460,100 C510,92 540,55 590,44 L600,43 L600,195 Z" fill="url(#trendAmber)" />
-              <path d="M0,198 L0,185 C45,188 90,150 150,150 C210,150 240,110 300,95 C360,80 390,115 450,100 C505,86 535,35 590,28 L600,27 L600,198 Z" fill="url(#trendCyan)" />
-              <path d="M0,185 C60,120 100,160 150,140 C200,120 240,80 300,95 C360,110 380,150 440,130 C500,110 520,60 580,50 L600,45" fill="none" stroke="#A78BFA" stroke-width="2" stroke-linecap="round" />
-              <path d="M0,170 C50,150 110,130 170,110 C230,90 260,50 320,58 C380,66 400,110 460,100 C510,92 540,55 590,44" fill="none" stroke="#F5A623" stroke-width="2" stroke-linecap="round" />
-              <path d="M0,185 C45,188 90,150 150,150 C210,150 240,110 300,95 C360,80 390,115 450,100 C505,86 535,35 590,28" fill="none" stroke="#4FD8EA" stroke-width="2" stroke-linecap="round" />
-            </svg>
-            <div class="chart-legend">
-              <span><i style="background:#4FD8EA"></i>Cálculo</span>
-              <span><i style="background:#F5A623"></i>Programación</span>
-              <span><i style="background:#A78BFA"></i>Estadística</span>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -90,9 +75,8 @@
         <div class="hero-copy" data-reveal>
           <h1>No sabes cuánto <span class="accent-cyan">esfuerzo real</span> le has dedicado a cada asignatura.<br>Clever sí.</h1>
           <p class="lede">
-            Registra tus minutos de estudio día a día y deja de guiarte por impresiones. Clever los convierte
-            en datos: horas por crédito, racha de días seguidos, sesión máxima — el mapa real de dónde se ha
-            ido tu esfuerzo este curso.
+            Registra tus minutos de estudio y conviértelos en datos: horas por crédito, rachas, sesión máxima.
+            El mapa real de tu esfuerzo, curso a curso.
           </p>
           <div class="hero-cta">
             <a class="btn btn-primary btn-lg" href="https://bitacora-estudio.vercel.app">Empieza gratis</a>
@@ -129,86 +113,169 @@
       </div>
     </section>
 
+    <!-- QUÉ ES CLEVER: slider con la historia -->
+    <section class="story" id="story">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <h2>¿Qué es <span class="accent-blue">Clever</span>?</h2>
+        </div>
+      </div>
+
+      <div class="carousel-wrap" data-carousel-wrap>
+        <div class="carousel" data-carousel data-reveal>
+          <button class="car-arrow car-arrow-prev" type="button" data-prev aria-label="Diapositiva anterior">‹</button>
+
+          <div class="car-track" data-track>
+            <article class="car-slide" data-slide>
+              <span class="car-slide-label">El problema</span>
+              <div class="car-slide-shot">
+                <div class="ui-window-bar"><span></span><span></span><span></span></div>
+                <div class="ui-body">
+                  <div class="ui-title ui-title-sm">Sin registro real</div>
+                  <div class="beforeafter">
+                    <div class="ba-col ba-before">
+                      <small>Sin Clever</small>
+                      <strong>¿Cuánto llevo?</strong>
+                      <span>Ni idea</span>
+                    </div>
+                    <div class="ba-arrow">→</div>
+                    <div class="ba-col ba-after">
+                      <small>Con Clever</small>
+                      <strong>163 h</strong>
+                      <span>registradas este curso</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="car-slide-desc">Sin datos, no sabes si vas bien hasta que ya es tarde.</p>
+            </article>
+
+            <article class="car-slide" data-slide>
+              <span class="car-slide-label">La referencia</span>
+              <div class="car-slide-shot">
+                <div class="ui-window-bar"><span></span><span></span><span></span></div>
+                <div class="ui-body">
+                  <div class="ui-title ui-title-sm">Misma carga de créditos</div>
+                  <div class="compare-row">
+                    <div class="compare-label"><span class="rank-dot" style="background:#4FD8EA"></span>Física I <span class="rank-badge">Aprobada</span></div>
+                    <div class="bar-track"><div class="bar-fill" style="width:100%;background:#4FD8EA"></div></div>
+                    <b>120 h</b>
+                  </div>
+                  <div class="compare-row">
+                    <div class="compare-label"><span class="rank-dot" style="background:#F5A623"></span>Física II <span class="rank-badge">En curso</span></div>
+                    <div class="bar-track"><div class="bar-fill" style="width:58%;background:#F5A623"></div></div>
+                    <b>70 h</b>
+                  </div>
+                  <div class="compare-callout">Te faltan <strong>~50 h</strong></div>
+                </div>
+              </div>
+              <p class="car-slide-desc">Compárala con una asignatura similar ya aprobada y sabe cuánto te queda.</p>
+            </article>
+
+            <article class="car-slide" data-slide>
+              <span class="car-slide-label">La confianza</span>
+              <div class="car-slide-shot">
+                <div class="ui-window-bar"><span></span><span></span><span></span></div>
+                <div class="ui-body">
+                  <div class="ui-title ui-title-sm">Tu control, de un vistazo</div>
+                  <div class="stat-grid">
+                    <div class="stat-item"><small>Total registrado</small><strong>359 h 34 min</strong></div>
+                    <div class="stat-item"><small>Racha actual</small><strong>13 días</strong></div>
+                    <div class="stat-item"><small>Racha máxima</small><strong>21 días</strong></div>
+                    <div class="stat-item"><small>Sesión máxima</small><strong>3 h 40 min</strong></div>
+                  </div>
+                </div>
+              </div>
+              <p class="car-slide-desc">Llega al examen con datos, no con una sensación.</p>
+            </article>
+          </div>
+
+          <button class="car-arrow car-arrow-next" type="button" data-next aria-label="Siguiente diapositiva">›</button>
+        </div>
+
+        <div class="car-dots" data-dots></div>
+      </div>
+    </section>
+
     <!-- CARRUSEL DE FUNCIONES -->
     <section class="features" id="features">
       <div class="wrap">
         <div class="section-head" data-reveal>
-          <div class="eyebrow">Cómo funciona</div>
-          <h2>Tres formas de ver tu esfuerzo, <span class="accent-cyan">de verdad</span></h2>
+          <div class="eyebrow">Así se ve en la app</div>
+          <h2>Lo esencial, en tres pantallas</h2>
         </div>
       </div>
 
-      <div class="carousel" data-carousel data-reveal>
-        <button class="car-arrow car-arrow-prev" type="button" data-prev aria-label="Función anterior">‹</button>
+      <div class="carousel-wrap" data-carousel-wrap>
+        <div class="carousel" data-carousel data-reveal>
+          <button class="car-arrow car-arrow-prev" type="button" data-prev aria-label="Función anterior">‹</button>
 
-        <div class="car-track" data-track>
-          <article class="car-slide" data-slide>
-            <span class="car-slide-label">Registra sin esfuerzo</span>
-            <div class="car-slide-shot">
-              <div class="ui-window-bar"><span></span><span></span><span></span></div>
-              <div class="ui-body ui-body-center">
-                <div class="timer-dot"></div>
-                <div class="timer-label">Grabando · Programación</div>
-                <div class="timer-display">00:42:17</div>
-                <button class="btn btn-ghost-dark timer-stop" type="button" tabindex="-1">Detener</button>
-              </div>
-            </div>
-            <p class="car-slide-desc">A mano o con un contador integrado que corre mientras estudias. Cada día, en segundos — nada de hojas de cálculo a rellenar por la noche.</p>
-          </article>
-
-          <article class="car-slide" data-slide>
-            <span class="car-slide-label">Compárate contigo mismo</span>
-            <div class="car-slide-shot">
-              <div class="ui-window-bar"><span></span><span></span><span></span></div>
-              <div class="ui-body">
-                <div class="ui-title ui-title-sm">Horas acumuladas en el curso</div>
-                <svg class="mini-chart" viewBox="0 0 300 90" preserveAspectRatio="none">
-                  <polyline points="0,80 30,74 60,68 90,70 120,55 150,50 180,34 210,30 240,16 270,10 300,4" fill="none" stroke="#4FD8EA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <div class="bars">
-                  <div class="bar-row"><span>Programación</span><div class="bar-track"><div class="bar-fill" style="width:88%;background:#F5A623"></div></div><b>9.4 h/cr</b></div>
-                  <div class="bar-row"><span>Estadística</span><div class="bar-track"><div class="bar-fill" style="width:62%;background:#A78BFA"></div></div><b>6.2 h/cr</b></div>
-                  <div class="bar-row"><span>Cálculo</span><div class="bar-track"><div class="bar-fill" style="width:40%;background:#4FD8EA"></div></div><b>4.1 h/cr</b></div>
+          <div class="car-track" data-track>
+            <article class="car-slide" data-slide>
+              <span class="car-slide-label">Registra tu marca diaria por asignatura</span>
+              <div class="car-slide-shot">
+                <div class="ui-window-bar"><span></span><span></span><span></span></div>
+                <div class="ui-body ui-body-center">
+                  <div class="timer-dot"></div>
+                  <div class="timer-label">Grabando · Programación</div>
+                  <div class="timer-display">00:42:17</div>
+                  <button class="btn btn-ghost-dark timer-stop" type="button" tabindex="-1">Detener</button>
                 </div>
               </div>
-            </div>
-            <p class="car-slide-desc">Ve tu evolución real: ritmo diario, horas acumuladas y cuánto te cuesta cada asignatura por crédito, curso tras curso.</p>
-          </article>
+              <p class="car-slide-desc">A mano o con contador automático. Cada día, en segundos.</p>
+            </article>
 
-          <article class="car-slide" data-slide>
-            <span class="car-slide-label">Descubre lo que otros no cuentan</span>
-            <div class="car-slide-shot car-slide-shot-teaser">
-              <div class="ui-window-bar"><span></span><span></span><span></span></div>
-              <div class="ui-body">
-                <div class="rank-row"><span class="rank-num">1</span><span class="rank-dot" style="background:#F5A623"></span><span class="rank-name">Tú</span><span class="rank-score hard">6.8</span></div>
-                <div class="rank-row"><span class="rank-num">2</span><span class="rank-dot" style="background:#4FD8EA"></span><span class="rank-name">Media de tu grado</span><span class="rank-score moderate">—</span></div>
-                <div class="rank-row"><span class="rank-num">3</span><span class="rank-dot" style="background:#A78BFA"></span><span class="rank-name">Percentil</span><span class="rank-score moderate">—</span></div>
+            <article class="car-slide" data-slide>
+              <span class="car-slide-label">Compárate contigo mismo</span>
+              <div class="car-slide-shot">
+                <div class="ui-window-bar"><span></span><span></span><span></span></div>
+                <div class="ui-body">
+                  <div class="ui-title ui-title-sm">Horas acumuladas en el curso</div>
+                  <svg class="mini-chart" viewBox="0 0 300 90" preserveAspectRatio="none">
+                    <polyline points="0,80 30,74 60,68 90,70 120,55 150,50 180,34 210,30 240,16 270,10 300,4" fill="none" stroke="#4FD8EA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <div class="bars">
+                    <div class="bar-row"><span>Programación</span><div class="bar-track"><div class="bar-fill" style="width:88%;background:#F5A623"></div></div><b>9.4 h/cr</b></div>
+                    <div class="bar-row"><span>Estadística</span><div class="bar-track"><div class="bar-fill" style="width:62%;background:#A78BFA"></div></div><b>6.2 h/cr</b></div>
+                    <div class="bar-row"><span>Cálculo</span><div class="bar-track"><div class="bar-fill" style="width:40%;background:#4FD8EA"></div></div><b>4.1 h/cr</b></div>
+                  </div>
+                </div>
               </div>
-              <div class="teaser-veil">
-                <span class="teaser-badge">Próximamente</span>
+              <p class="car-slide-desc">Ritmo diario, horas acumuladas y coste por crédito — curso a curso.</p>
+            </article>
+
+            <article class="car-slide" data-slide>
+              <span class="car-slide-label">Mira la experiencia de los demás</span>
+              <div class="car-slide-shot car-slide-shot-teaser">
+                <div class="ui-window-bar"><span></span><span></span><span></span></div>
+                <div class="ui-body">
+                  <div class="rank-row"><span class="rank-num">1</span><span class="rank-dot" style="background:#F5A623"></span><span class="rank-name">Tú</span><span class="rank-score hard">6.8</span></div>
+                  <div class="rank-row"><span class="rank-num">2</span><span class="rank-dot" style="background:#4FD8EA"></span><span class="rank-name">Media de tu grado</span><span class="rank-score moderate">—</span></div>
+                  <div class="rank-row"><span class="rank-num">3</span><span class="rank-dot" style="background:#A78BFA"></span><span class="rank-name">Percentil</span><span class="rank-score moderate">—</span></div>
+                </div>
+                <div class="teaser-veil">
+                  <span class="teaser-badge">Próximamente</span>
+                </div>
               </div>
-            </div>
-            <p class="car-slide-desc">Muy pronto: compara tu esfuerzo con el de miles de estudiantes de tu mismo grado — para saber si lo que sientes es solo tuyo, o le pasa a todo el mundo.</p>
-          </article>
+              <p class="car-slide-desc">Próximamente: tu esfuerzo frente al de miles de estudiantes de tu grado.</p>
+            </article>
+          </div>
+
+          <button class="car-arrow car-arrow-next" type="button" data-next aria-label="Siguiente función">›</button>
         </div>
 
-        <button class="car-arrow car-arrow-next" type="button" data-next aria-label="Siguiente función">›</button>
+        <div class="car-dots" data-dots></div>
       </div>
-
-      <div class="car-dots" data-dots></div>
     </section>
 
     <!-- DESGASTE -->
     <section class="wear">
       <div class="wrap">
         <div class="wear-head" data-reveal>
-          <div class="eyebrow eyebrow-amber">La función que no vas a encontrar en ningún Excel</div>
           <h2>El índice de desgaste: en qué asignatura <span class="accent-amber">sufriste más</span> — medido, no imaginado</h2>
           <p class="lede">
-            Las horas por crédito ya te dicen qué asignatura exige más esfuerzo sobre el papel. El desgaste es
-            otra cosa: es tu experiencia personal — el tramo de estudio más duro que tú, en concreto, llegaste a
-            pasar en cada asignatura. Clever lo calcula a partir de tus minutos reales, en cuatro factores
-            objetivos, para que veas en cuál sufriste de verdad más — no cuál "tiene fama" de ser peor.
+            Las horas por crédito miden el esfuerzo en el papel. El desgaste mide tu experiencia real: en qué
+            asignatura sufriste más, calculado con tus propios datos — no con la fama.
           </p>
           <div class="wear-factors-inline">
             <span class="wear-chip">Intensidad</span>
