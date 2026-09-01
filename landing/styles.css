@@ -209,7 +209,7 @@ h3 {
 
 .lede {
   font-size: 18px;
-  color: var(--text-dim);
+  color: var(--text);
   max-width: 640px;
   margin: 0 0 8px;
 }
@@ -476,6 +476,24 @@ h3 {
 }
 .compare-callout strong { color: var(--amber); }
 
+/* ---------- widgets: antes / después ---------- */
+
+.beforeafter { display: flex; align-items: center; gap: 10px; }
+.ba-col {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 14px;
+  text-align: center;
+}
+.ba-col small { display: block; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 12px; }
+.ba-col strong { display: block; font-size: 19px; font-weight: 800; margin-bottom: 4px; }
+.ba-before { opacity: 0.55; }
+.ba-after strong { color: var(--cyan); font-family: var(--mono); }
+.ba-col span { font-size: 11px; color: var(--text-dim); }
+.ba-arrow { color: var(--text-dim); font-size: 18px; flex-shrink: 0; }
+
 /* ---------- widgets: panel de estadísticas ---------- */
 
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -581,7 +599,7 @@ h3 {
 }
 
 .car-slide-desc {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 14.5px;
   max-width: 380px;
   margin: 18px 0 0;
