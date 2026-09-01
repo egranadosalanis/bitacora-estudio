@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Clever — mide tu esfuerzo real de estudio</title>
-  <meta name="description" content="Clever registra tus minutos de estudio reales y los convierte en datos: horas por crédito, rachas y un índice de desgaste cuantificado por asignatura. Para cualquier institución que use los créditos ECTS como recompensa." />
+  <title>Clever — la única referencia que importa</title>
+  <meta name="description" content="Clever registra tus minutos de estudio por asignatura y los convierte en la referencia que te falta: horas por crédito, tu propio historial y un índice de desgaste personal." />
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,7 +23,7 @@
             <span></span><span></span><span></span>
           </button>
           <nav class="nav-menu" data-menu>
-            <a href="motivacion.html">Motivación</a>
+            <a href="motivacion.html">Por qué hice Clever</a>
             <a href="instalar.html">Cómo instalar la app</a>
           </nav>
         </div>
@@ -32,7 +32,7 @@
   </header>
 
   <main>
-    <!-- PORTADA: eslogan grande sobre un gráfico de trayectoria de fondo -->
+    <!-- PORTADA -->
     <section class="cover">
       <div class="cover-bg" aria-hidden="true">
         <svg viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid slice">
@@ -69,18 +69,17 @@
       </div>
     </section>
 
-    <!-- HERO -->
+    <!-- 1. HERO -->
     <section class="hero">
       <div class="wrap hero-inner">
         <div class="hero-copy" data-reveal>
-          <h1>No sabes cuánto <span class="accent-cyan">esfuerzo real</span> le has dedicado a cada asignatura.<br>Clever sí.</h1>
+          <h1>Sabes cuánto has estudiado.<br>No sabes si es <span class="accent-cyan">suficiente</span>.</h1>
           <p class="lede">
-            Registra tus minutos de estudio y conviértelos en datos: horas por crédito, rachas, sesión máxima.
-            El mapa real de tu esfuerzo, curso a curso.
+            Clever registra tus minutos por asignatura y los convierte en la única referencia que importa: la tuya.
           </p>
           <div class="hero-cta">
             <a class="btn btn-primary btn-lg" href="https://bitacora-estudio.vercel.app">Empieza gratis</a>
-            <span class="hero-cta-hint">Sin tarjeta. Registra tu primer día en menos de un minuto.</span>
+            <span class="hero-cta-hint">Sin tarjeta. Tu primer registro en menos de un minuto.</span>
           </div>
         </div>
 
@@ -113,106 +112,97 @@
       </div>
     </section>
 
-    <!-- QUÉ ES CLEVER: slider con la historia -->
-    <section class="story" id="story">
+    <!-- 2. EL PROBLEMA -->
+    <section class="section-problem">
       <div class="wrap">
         <div class="section-head" data-reveal>
-          <h2>¿Qué es <span class="accent-blue">Clever</span>?</h2>
+          <div class="eyebrow">El problema</div>
+          <h2>Estudias a ciegas.</h2>
+          <p class="lede">
+            Sabes que le has echado horas. No sabes cuántas. No sabes si a esa asignatura le has dedicado la
+            mitad que a la de al lado. Y cuando suspendes, no sabes si fue por falta de tiempo o por otra cosa
+            — así que el cuatrimestre siguiente repites exactamente lo mismo.
+          </p>
         </div>
-      </div>
 
-      <div class="carousel-wrap" data-carousel-wrap>
-        <div class="carousel" data-carousel data-reveal>
-          <button class="car-arrow car-arrow-prev" type="button" data-prev aria-label="Diapositiva anterior">‹</button>
-
-          <div class="car-track" data-track>
-            <article class="car-slide" data-slide>
-              <span class="car-slide-label">El problema</span>
-              <div class="car-slide-shot">
-                <div class="ui-window-bar"><span></span><span></span><span></span></div>
-                <div class="ui-body">
-                  <div class="ui-title ui-title-sm">Sin registro real</div>
-                  <div class="beforeafter">
-                    <div class="ba-col ba-before">
-                      <small>Sin Clever</small>
-                      <strong>¿Cuánto llevo?</strong>
-                      <span>Ni idea</span>
-                    </div>
-                    <div class="ba-arrow">→</div>
-                    <div class="ba-col ba-after">
-                      <small>Con Clever</small>
-                      <strong>163 h</strong>
-                      <span>registradas este curso</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <p class="car-slide-desc">Sin datos, no sabes si vas bien hasta que ya es tarde.</p>
-            </article>
-
-            <article class="car-slide" data-slide>
-              <span class="car-slide-label">La referencia</span>
-              <div class="car-slide-shot">
-                <div class="ui-window-bar"><span></span><span></span><span></span></div>
-                <div class="ui-body">
-                  <div class="ui-title ui-title-sm">Misma carga de créditos</div>
-                  <div class="compare-row">
-                    <div class="compare-label"><span class="rank-dot" style="background:#4FD8EA"></span>Física I <span class="rank-badge">Aprobada</span></div>
-                    <div class="bar-track"><div class="bar-fill" style="width:100%;background:#4FD8EA"></div></div>
-                    <b>120 h</b>
-                  </div>
-                  <div class="compare-row">
-                    <div class="compare-label"><span class="rank-dot" style="background:#F5A623"></span>Física II <span class="rank-badge">En curso</span></div>
-                    <div class="bar-track"><div class="bar-fill" style="width:58%;background:#F5A623"></div></div>
-                    <b>70 h</b>
-                  </div>
-                  <div class="compare-callout">Te faltan <strong>~50 h</strong></div>
-                </div>
-              </div>
-              <p class="car-slide-desc">Compárala con una asignatura similar ya aprobada y sabe cuánto te queda.</p>
-            </article>
-
-            <article class="car-slide" data-slide>
-              <span class="car-slide-label">La confianza</span>
-              <div class="car-slide-shot">
-                <div class="ui-window-bar"><span></span><span></span><span></span></div>
-                <div class="ui-body">
-                  <div class="ui-title ui-title-sm">Tu control, de un vistazo</div>
-                  <div class="stat-grid">
-                    <div class="stat-item"><small>Total registrado</small><strong>359 h 34 min</strong></div>
-                    <div class="stat-item"><small>Racha actual</small><strong>13 días</strong></div>
-                    <div class="stat-item"><small>Racha máxima</small><strong>21 días</strong></div>
-                    <div class="stat-item"><small>Sesión máxima</small><strong>3 h 40 min</strong></div>
-                  </div>
-                </div>
-              </div>
-              <p class="car-slide-desc">Llega al examen con datos, no con una sensación.</p>
-            </article>
+        <div class="contrast-block" data-reveal>
+          <div class="contrast-row contrast-before">
+            <span class="contrast-tag">Antes</span>
+            <span class="contrast-q">"¿Cuánto llevo de Cálculo?"</span>
+            <span class="contrast-a">Ni idea</span>
           </div>
-
-          <button class="car-arrow car-arrow-next" type="button" data-next aria-label="Siguiente diapositiva">›</button>
+          <div class="contrast-row contrast-after">
+            <span class="contrast-tag">Con Clever</span>
+            <span class="contrast-q">"¿Cuánto llevo de Cálculo?"</span>
+            <span class="contrast-a">41 h 20 min</span>
+          </div>
         </div>
-
-        <div class="car-dots" data-dots></div>
       </div>
     </section>
 
-    <!-- CARRUSEL DE FUNCIONES -->
+    <!-- 3. LA IDEA -->
+    <section class="section-idea">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <div class="eyebrow">La idea</div>
+          <h2>Tus horas divididas entre tus créditos. Eso es todo.</h2>
+          <p class="lede">
+            Una asignatura de 6 créditos y una de 12 no cuestan lo mismo. Clever mide lo que le dedicas a cada
+            una en relación a lo que pesa, y lo convierte en un número comparable: <strong>horas por crédito</strong>.
+            A partir de ahí, todo se puede comparar — entre asignaturas, cuatrimestres y cursos.
+          </p>
+        </div>
+
+        <div class="concept-bars" data-reveal>
+          <div class="concept-bar-row">
+            <span class="concept-label">Cálculo <small>6 créditos</small></span>
+            <div class="concept-track"><div class="concept-fill" style="width:34%;background:#4FD8EA"></div></div>
+            <b>4.1 h/cr</b>
+          </div>
+          <div class="concept-bar-row">
+            <span class="concept-label">Estadística <small>6 créditos</small></span>
+            <div class="concept-track"><div class="concept-fill" style="width:52%;background:#A78BFA"></div></div>
+            <b>6.2 h/cr</b>
+          </div>
+          <div class="concept-bar-row">
+            <span class="concept-label">Programación <small>12 créditos</small></span>
+            <div class="concept-track"><div class="concept-fill" style="width:78%;background:#F5A623"></div></div>
+            <b>9.4 h/cr</b>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. CÓMO FUNCIONA -->
     <section class="features" id="features">
       <div class="wrap">
         <div class="section-head" data-reveal>
-          <div class="eyebrow">Así se ve en la app</div>
-          <h2>Lo esencial, en tres pantallas</h2>
+          <div class="eyebrow">Cómo funciona</div>
+          <h2>Tres pasos. Nada más.</h2>
         </div>
       </div>
 
       <div class="carousel-wrap" data-carousel-wrap>
         <div class="carousel" data-carousel data-reveal>
-          <button class="car-arrow car-arrow-prev" type="button" data-prev aria-label="Función anterior">‹</button>
+          <button class="car-arrow car-arrow-prev" type="button" data-prev aria-label="Paso anterior">‹</button>
 
           <div class="car-track" data-track>
             <article class="car-slide" data-slide>
-              <span class="car-slide-label">Registra tu marca diaria por asignatura</span>
+              <span class="car-slide-label">1 · Das de alta tus asignaturas</span>
+              <div class="car-slide-shot">
+                <div class="ui-window-bar"><span></span><span></span><span></span></div>
+                <div class="ui-body">
+                  <div class="ui-title">Nueva asignatura</div>
+                  <div class="form-row"><label>Nombre</label><div class="reg-input reg-input-text">Termodinámica</div></div>
+                  <div class="form-row"><label>Créditos</label><div class="reg-input">6</div></div>
+                  <button class="btn btn-primary reg-save" type="button" tabindex="-1">Añadir asignatura</button>
+                </div>
+              </div>
+              <p class="car-slide-desc">Nombre y créditos. Una vez por cuatrimestre.</p>
+            </article>
+
+            <article class="car-slide" data-slide>
+              <span class="car-slide-label">2 · Registras lo que estudias</span>
               <div class="car-slide-shot">
                 <div class="ui-window-bar"><span></span><span></span><span></span></div>
                 <div class="ui-body ui-body-center">
@@ -222,60 +212,77 @@
                   <button class="btn btn-ghost-dark timer-stop" type="button" tabindex="-1">Detener</button>
                 </div>
               </div>
-              <p class="car-slide-desc">A mano o con contador automático. Cada día, en segundos.</p>
+              <p class="car-slide-desc">A mano o con el contador. Diez segundos al día.</p>
             </article>
 
             <article class="car-slide" data-slide>
-              <span class="car-slide-label">Compárate contigo mismo</span>
+              <span class="car-slide-label">3 · Clever hace el resto</span>
               <div class="car-slide-shot">
                 <div class="ui-window-bar"><span></span><span></span><span></span></div>
                 <div class="ui-body">
-                  <div class="ui-title ui-title-sm">Horas acumuladas en el curso</div>
-                  <svg class="mini-chart" viewBox="0 0 300 90" preserveAspectRatio="none">
-                    <polyline points="0,80 30,74 60,68 90,70 120,55 150,50 180,34 210,30 240,16 270,10 300,4" fill="none" stroke="#4FD8EA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <div class="bars">
-                    <div class="bar-row"><span>Programación</span><div class="bar-track"><div class="bar-fill" style="width:88%;background:#F5A623"></div></div><b>9.4 h/cr</b></div>
-                    <div class="bar-row"><span>Estadística</span><div class="bar-track"><div class="bar-fill" style="width:62%;background:#A78BFA"></div></div><b>6.2 h/cr</b></div>
-                    <div class="bar-row"><span>Cálculo</span><div class="bar-track"><div class="bar-fill" style="width:40%;background:#4FD8EA"></div></div><b>4.1 h/cr</b></div>
+                  <div class="ui-title ui-title-sm">Calculado al momento</div>
+                  <div class="stat-grid">
+                    <div class="stat-item"><small>Total del curso</small><strong>163 h</strong></div>
+                    <div class="stat-item"><small>Horas por crédito</small><strong>6.2 h/cr</strong></div>
+                    <div class="stat-item"><small>Racha actual</small><strong>13 días</strong></div>
+                    <div class="stat-item"><small>Desgaste</small><strong>7.6 · Duro</strong></div>
                   </div>
                 </div>
               </div>
-              <p class="car-slide-desc">Ritmo diario, horas acumuladas y coste por crédito — curso a curso.</p>
-            </article>
-
-            <article class="car-slide" data-slide>
-              <span class="car-slide-label">Mira la experiencia de los demás</span>
-              <div class="car-slide-shot car-slide-shot-teaser">
-                <div class="ui-window-bar"><span></span><span></span><span></span></div>
-                <div class="ui-body">
-                  <div class="rank-row"><span class="rank-num">1</span><span class="rank-dot" style="background:#F5A623"></span><span class="rank-name">Tú</span><span class="rank-score hard">6.8</span></div>
-                  <div class="rank-row"><span class="rank-num">2</span><span class="rank-dot" style="background:#4FD8EA"></span><span class="rank-name">Media de tu grado</span><span class="rank-score moderate">—</span></div>
-                  <div class="rank-row"><span class="rank-num">3</span><span class="rank-dot" style="background:#A78BFA"></span><span class="rank-name">Percentil</span><span class="rank-score moderate">—</span></div>
-                </div>
-                <div class="teaser-veil">
-                  <span class="teaser-badge">Próximamente</span>
-                </div>
-              </div>
-              <p class="car-slide-desc">Próximamente: tu esfuerzo frente al de miles de estudiantes de tu grado.</p>
+              <p class="car-slide-desc">Totales, horas por crédito, rachas, desgaste — se calcula solo.</p>
             </article>
           </div>
 
-          <button class="car-arrow car-arrow-next" type="button" data-next aria-label="Siguiente función">›</button>
+          <button class="car-arrow car-arrow-next" type="button" data-next aria-label="Siguiente paso">›</button>
         </div>
 
         <div class="car-dots" data-dots></div>
       </div>
     </section>
 
-    <!-- DESGASTE -->
+    <!-- 5. TU PROPIO HISTORIAL COMO REFERENCIA -->
+    <section class="section-reference">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <div class="eyebrow">Tu referencia</div>
+          <h2>La única referencia fiable eres tú del año pasado.</h2>
+          <p class="lede">
+            Cuando apruebas una asignatura, Clever guarda cuánto te costó. La próxima vez que te enfrentes a
+            algo de peso parecido, ya no empiezas de cero: sabes cuántas horas te hicieron falta la última vez,
+            y cuántas te faltan ahora.
+          </p>
+        </div>
+
+        <div class="ui-window reference-shot" data-reveal>
+          <div class="ui-window-bar"><span></span><span></span><span></span></div>
+          <div class="ui-body">
+            <div class="ui-title ui-title-sm">Misma carga de créditos</div>
+            <div class="compare-row">
+              <div class="compare-label"><span class="rank-dot" style="background:#4FD8EA"></span>Física I <span class="rank-badge">Aprobada</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:100%;background:#4FD8EA"></div></div>
+              <b>120 h</b>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label"><span class="rank-dot" style="background:#F5A623"></span>Física II <span class="rank-badge">En curso</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:58%;background:#F5A623"></div></div>
+              <b>70 h</b>
+            </div>
+            <div class="compare-hero">Te faltan <strong>~50 h</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. EL DESGASTE -->
     <section class="wear">
       <div class="wrap">
         <div class="wear-head" data-reveal>
-          <h2>El índice de desgaste: en qué asignatura <span class="accent-amber">sufriste más</span> — medido, no imaginado</h2>
+          <div class="eyebrow eyebrow-amber">El desgaste</div>
+          <h2>No mide si la asignatura es difícil. <span class="accent-amber">Mide cuánto la sufriste tú.</span></h2>
           <p class="lede">
-            Las horas por crédito miden el esfuerzo en el papel. El desgaste mide tu experiencia real: en qué
-            asignatura sufriste más, calculado con tus propios datos — no con la fama.
+            Dos personas pueden echarle las mismas horas a la misma asignatura y vivirla de forma completamente
+            distinta. Clever cruza intensidad, duración, concentración de las sesiones y rachas para dar una
+            puntuación relativa a tu propio historial — no a la fama que tenga la asignatura.
           </p>
           <div class="wear-factors-inline">
             <span class="wear-chip">Intensidad</span>
@@ -320,12 +327,67 @@
       </div>
     </section>
 
-    <!-- CTA FINAL -->
+    <!-- 7. DIAGNÓSTICO -->
+    <section class="section-diagnosis">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <div class="eyebrow">Diagnóstico</div>
+          <h2>"He estudiado mucho" no es un diagnóstico. 70 horas sí.</h2>
+          <p class="lede">
+            Cuando algo sale mal, Clever te dice si el problema fue el tiempo. Si a una asignatura de 6 créditos
+            le echaste 70 horas y a otra igual de exigente le echaste 120 y la aprobaste, ya sabes qué pasó —
+            y sabes cuánto necesitas la próxima vez.
+          </p>
+        </div>
+
+        <div class="report-block" data-reveal>
+          <div class="report-line">
+            <span>Métodos Matemáticos</span>
+            <span class="report-meta">6 cr · 70 h · Suspensa</span>
+          </div>
+          <div class="report-line report-line-dim">
+            <span>Tu media en asignaturas de 6 cr aprobadas</span>
+            <span class="report-meta">112 h</span>
+          </div>
+          <div class="report-deficit">Déficit: <strong>42 h</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. HACIA DÓNDE VA -->
+    <section class="section-future">
+      <div class="wrap">
+        <div class="section-head" data-reveal>
+          <div class="eyebrow">Hacia dónde va</div>
+          <h2>Ahora te comparas contigo. Pronto, con todos los demás.</h2>
+          <p class="lede">
+            Cuanta más gente registre sus horas, mejor se responde la pregunta que nadie sabe contestar:
+            ¿cuánto cuesta de verdad esta asignatura? No según la fama — según los datos de quienes ya la
+            han pasado.
+          </p>
+        </div>
+
+        <div class="ui-window future-shot future-shot-teaser" data-reveal>
+          <div class="ui-window-bar"><span></span><span></span><span></span></div>
+          <div class="ui-body">
+            <div class="rank-row"><span class="rank-num">1</span><span class="rank-dot" style="background:#F5A623"></span><span class="rank-name">Tú</span><span class="rank-score hard">6.8</span></div>
+            <div class="rank-row"><span class="rank-num">2</span><span class="rank-dot" style="background:#4FD8EA"></span><span class="rank-name">Media de tu grado</span><span class="rank-score moderate">—</span></div>
+            <div class="rank-row"><span class="rank-num">3</span><span class="rank-dot" style="background:#A78BFA"></span><span class="rank-name">Percentil</span><span class="rank-score moderate">—</span></div>
+          </div>
+          <div class="teaser-veil">
+            <span class="teaser-badge">Próximamente</span>
+          </div>
+        </div>
+
+        <p class="section-closing-note" data-reveal>Funciona en cualquier sistema educativo que mida por créditos — grado, máster o FP.</p>
+      </div>
+    </section>
+
+    <!-- 9. CIERRE -->
     <section class="final-cta">
       <div class="wrap final-cta-inner" data-reveal>
-        <div class="eyebrow">Para cualquier institución que use los créditos ECTS como recompensa</div>
-        <h2>Empieza a medir tu esfuerzo real</h2>
-        <p class="lede">Gratis, sin tarjeta ni compromiso.</p>
+        <h2>Empieza a medir tu esfuerzo real.</h2>
+        <p class="lede">Gratis, sin tarjeta. Tus datos son tuyos y puedes exportarlos cuando quieras.</p>
         <a class="btn btn-primary btn-lg" href="https://bitacora-estudio.vercel.app">Empieza gratis</a>
       </div>
     </section>
@@ -334,7 +396,7 @@
   <footer class="site-footer">
     <div class="wrap footer-inner">
       <div class="brand brand-sm"><span class="brand-dot"></span>Clever</div>
-      <span class="footer-note">Hecho para estudiantes que quieren datos, no impresiones.</span>
+      <a class="footer-link" href="motivacion.html">Por qué existe Clever →</a>
     </div>
   </footer>
 
