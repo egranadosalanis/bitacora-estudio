@@ -24,65 +24,83 @@
     <!-- HERO -->
     <section class="hero">
       <div class="wrap hero-inner">
-        <div class="hero-copy">
+        <div class="hero-copy" data-reveal>
           <div class="eyebrow">Para universidad, máster o FP — cualquier institución que puntúe por créditos</div>
-          <h1>No sabes cuánto esfuerzo real le has dedicado a cada asignatura.<br><span class="accent-cyan">Clever sí.</span></h1>
+          <h1>No sabes cuánto <span class="accent-cyan">esfuerzo real</span> le has dedicado a cada asignatura.<br>Clever sí.</h1>
           <p class="lede">
             Registra tus minutos de estudio día a día y deja de guiarte por impresiones. Clever los convierte
             en datos: horas por crédito, racha de días seguidos, sesión máxima — el mapa real de dónde se ha
             ido tu esfuerzo este curso.
           </p>
+          <p class="tagline">Make it simple, make it <span class="tagline-clever">Clever</span>.</p>
           <div class="hero-cta">
             <a class="btn btn-primary btn-lg" href="https://bitacora-estudio.vercel.app">Empieza gratis</a>
             <span class="hero-cta-hint">Sin tarjeta. Registra tu primer día en menos de un minuto.</span>
           </div>
         </div>
-        <div class="hero-shot">
-          <div class="shot-frame">
+        <div class="hero-shot" data-reveal>
+          <div class="shot-frame shot-frame-browser">
+            <div class="shot-frame-bar"><span></span><span></span><span></span></div>
             <img src="assets/screenshot-panel.png" alt="Panel de Clever mostrando racha actual, racha máxima, sesión máxima y horas por crédito de cada asignatura" loading="eager" />
           </div>
         </div>
       </div>
     </section>
 
-    <!-- TRES BLOQUES -->
-    <section class="features">
+    <!-- CARRUSEL DE FUNCIONES -->
+    <section class="features" id="features">
       <div class="wrap">
-        <div class="features-grid">
-          <article class="feature-card">
-            <div class="feature-shot">
+        <div class="section-head" data-reveal>
+          <div class="eyebrow">Cómo funciona</div>
+          <h2>Tres formas de ver tu esfuerzo, <span class="accent-cyan">de verdad</span></h2>
+        </div>
+      </div>
+
+      <div class="carousel" data-carousel data-reveal>
+        <button class="car-arrow car-arrow-prev" type="button" data-prev aria-label="Función anterior">‹</button>
+
+        <div class="car-track" data-track>
+          <article class="car-slide" data-slide>
+            <span class="car-slide-label">Registra sin esfuerzo</span>
+            <div class="car-slide-shot">
+              <div class="shot-frame-bar"><span></span><span></span><span></span></div>
               <img src="assets/screenshot-bitacora.png" alt="Registro diario de minutos de estudio por asignatura, en modo manual" loading="lazy" />
             </div>
-            <h3>Registra sin esfuerzo</h3>
-            <p>A mano o con un contador integrado que corre mientras estudias. Cada día, en segundos — nada de hojas de cálculo a rellenar por la noche.</p>
+            <p class="car-slide-desc">A mano o con un contador integrado que corre mientras estudias. Cada día, en segundos — nada de hojas de cálculo a rellenar por la noche.</p>
           </article>
 
-          <article class="feature-card">
-            <div class="feature-shot">
+          <article class="car-slide" data-slide>
+            <span class="car-slide-label">Compárate contigo mismo</span>
+            <div class="car-slide-shot">
+              <div class="shot-frame-bar"><span></span><span></span><span></span></div>
               <img src="assets/screenshot-trayectoria.png" alt="Gráficos de trayectoria: minutos diarios por asignatura y horas acumuladas en el curso" loading="lazy" />
             </div>
-            <h3>Compárate contigo mismo</h3>
-            <p>Ve tu evolución real: ritmo diario, horas acumuladas y cuánto te cuesta cada asignatura por crédito, curso tras curso.</p>
+            <p class="car-slide-desc">Ve tu evolución real: ritmo diario, horas acumuladas y cuánto te cuesta cada asignatura por crédito, curso tras curso.</p>
           </article>
 
-          <article class="feature-card feature-card-teaser">
-            <div class="feature-shot feature-shot-teaser">
+          <article class="car-slide" data-slide>
+            <span class="car-slide-label">Descubre lo que otros no cuentan</span>
+            <div class="car-slide-shot car-slide-shot-teaser">
+              <div class="shot-frame-bar"><span></span><span></span><span></span></div>
               <img src="assets/screenshot-ranking.png" alt="Adelanto de la comparación poblacional de esfuerzo por asignatura" loading="lazy" />
               <div class="teaser-veil">
                 <span class="teaser-badge">Próximamente</span>
               </div>
             </div>
-            <h3>Descubre lo que otros no cuentan</h3>
-            <p>Muy pronto: compara tu esfuerzo con el de miles de estudiantes de tu mismo grado, para saber si lo que sientes es solo tuyo — o le pasa a todo el mundo.</p>
+            <p class="car-slide-desc">Muy pronto: compara tu esfuerzo con el de miles de estudiantes de tu mismo grado — para saber si lo que sientes es solo tuyo, o le pasa a todo el mundo.</p>
           </article>
         </div>
+
+        <button class="car-arrow car-arrow-next" type="button" data-next aria-label="Siguiente función">›</button>
       </div>
+
+      <div class="car-dots" data-dots></div>
     </section>
 
     <!-- DESGASTE -->
     <section class="wear">
       <div class="wrap">
-        <div class="wear-head">
+        <div class="wear-head" data-reveal>
           <div class="eyebrow eyebrow-amber">La función que no vas a encontrar en ningún Excel</div>
           <h2>El índice de desgaste: qué asignaturas te exigen más, <span class="accent-amber">medido — no imaginado</span></h2>
           <p class="lede">
@@ -100,10 +118,12 @@
         </div>
 
         <div class="wear-visuals">
-          <div class="shot-frame shot-frame-wide">
+          <div class="shot-frame shot-frame-wide" data-reveal>
+            <div class="shot-frame-bar"><span></span><span></span><span></span></div>
             <img src="assets/screenshot-ranking.png" alt="Clasificación de desgaste: todas las asignaturas ordenadas de la más a la menos dura, con su índice numérico" loading="lazy" />
           </div>
-          <div class="shot-frame shot-frame-detail">
+          <div class="shot-frame shot-frame-detail" data-reveal>
+            <div class="shot-frame-bar"><span></span><span></span><span></span></div>
             <img src="assets/screenshot-desgaste.png" alt="Detalle del índice de desgaste de una asignatura, con el desglose en intensidad, duración, compresión y racha interna" loading="lazy" />
           </div>
         </div>
@@ -112,7 +132,7 @@
 
     <!-- CTA FINAL -->
     <section class="final-cta">
-      <div class="wrap final-cta-inner">
+      <div class="wrap final-cta-inner" data-reveal>
         <h2>Empieza a medir tu esfuerzo real</h2>
         <p class="lede">Gratis. Funciona para cualquier institución que puntúe por créditos: universidad, máster o FP.</p>
         <a class="btn btn-primary btn-lg" href="https://bitacora-estudio.vercel.app">Empieza gratis</a>
@@ -127,5 +147,6 @@
     </div>
   </footer>
 
+  <script src="script.js"></script>
 </body>
 </html>
