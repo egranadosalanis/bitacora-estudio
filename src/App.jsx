@@ -84,6 +84,22 @@ function Modal({ title, onClose, children, wide }) {
   );
 }
 
+/** Se muestra en vez del contenido de una vista reservada a planes de
+ * pago, cuando el usuario está en el plan free. Los datos de esa vista
+ * siguen existiendo y guardándose con normalidad — esto solo oculta la
+ * pantalla. */
+function PremiumLocked({ feature }) {
+  return (
+    <div className="panel">
+      <div className="panel-title">Función premium</div>
+      <div className="empty-hint">
+        {feature} está disponible en los planes de pago. Tus datos se siguen registrando con normalidad —
+        en cuanto actualices tu plan podrás verla con todo tu historial.
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  TAB: BITACORA (registro diario + historial completo)               */
 /* ------------------------------------------------------------------ */
@@ -1357,6 +1373,10 @@ export default function App({ session, profile, onSignOut } = {}) {
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
   const userId = session.user.id;
+  // Plan free: registro y cálculos del curso actual igual que todos, pero
+  // sin histórico multi-año ni comparación (Clasificación) — los datos
+  // siguen guardándose sin restricción, solo se oculta en la interfaz.
+  const isPremium = profile.plan !== "free";
 
   useEffect(() => {
     (async () => {
@@ -1582,7 +1602,11 @@ export default function App({ session, profile, onSignOut } = {}) {
         {tab === "panel" && <PanelTab stats={stats} />}
         {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={cursoEntries} stats={stats} curso={curso} />}
         {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
-        {tab === "clasificacion" && <ClasificacionTab subjects={data.subjects} entries={data.entries} />}
+        {tab === "clasificacion" && (
+          isPremium
+            ? <ClasificacionTab subjects={data.subjects} entries={data.entries} />
+            : <PremiumLocked feature="la Clasificación histórica" />
+        )}
         {tab === "asignaturas" && (
           <AsignaturasTab
             subjects={data.subjects}
