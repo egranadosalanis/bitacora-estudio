@@ -1602,6 +1602,11 @@ export const CSS = `
   }
   .auth-error { color: var(--red); font-size: 13px; margin: 8px 0; }
   .auth-info { color: var(--cyan); font-size: 13px; margin: 8px 0; }
+  .auth-link {
+    display: block; background: none; border: none; color: var(--text-dim); font-size: 12px;
+    text-decoration: underline; cursor: pointer; margin-top: 12px; padding: 0;
+  }
+  .auth-link:hover { color: var(--cyan); }
   .cloud-error {
     font-size: 10.5px; color: var(--red); background: rgba(255,92,92,0.1); border: 1px solid rgba(255,92,92,0.3);
     border-radius: 20px; padding: 4px 10px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
