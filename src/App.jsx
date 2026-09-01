@@ -5,14 +5,15 @@ import {
 } from "recharts";
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
-  computeStats, getSubjectEntries, getAllEntriesFlat,
+  buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 import {
   loadUserData, saveDayEntries, deleteDayEntries, insertSubject, deleteSubject, updateSubject,
-  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso,
+  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso, migrateFromGoogleSheets,
 } from "./supabaseData.js";
+import { supabase } from "./supabaseClient.js";
 
 /* ------------------------------------------------------------------ */
 /*  COMPONENTES DE UI GENERICOS                                        */
@@ -1251,10 +1252,58 @@ async function cloudSave(dataObj) {
 /*  APP PRINCIPAL                                                      */
 /* ------------------------------------------------------------------ */
 
-/** Una cuenta recién creada no tiene ningún curso todavía (antes,
- * buildDefaultData() sembraba uno automáticamente en el blob de Google
- * Sheets; con Supabase cada cuenta arranca vacía). Sin esto, la app se
- * queda cargando para siempre porque no hay ningún curso que seleccionar. */
+// El email real del propietario, cuyo historial vive todavía en Google
+// Sheets — solo para esa cuenta, la primera vez que entra sin ningún curso
+// en Supabase, se dispara la migración automática (ver AutoMigrate más
+// abajo). Cualquier otra cuenta nueva (un usuario real futuro) no tiene
+// nada que migrar y simplemente ve el formulario para crear su primer
+// curso, igual que cualquier alta nueva.
+const OWNER_EMAIL = "egranadosalanis@gmail.com";
+
+/** Trae, una sola vez y de forma automática (sin botón ni intervención),
+ * el historial del propietario desde Google Sheets a sus tablas de
+ * Supabase — mismo espíritu que applyHistoricalImport() en domain.js
+ * (import histórico incrustado y aplicado solo), pero para esta migración
+ * de backend. Nunca toca ni borra el Google Sheet original. */
+function AutoMigrateFromSheets({ userId }) {
+  const [status, setStatus] = useState("Leyendo tu historial de Google Sheets…");
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await cloudLoad();
+        const legacyData = applyHistoricalImport(migrateData(raw ? JSON.parse(raw) : buildDefaultData()));
+        if (cancelled) return;
+        const result = await migrateFromGoogleSheets(userId, legacyData, (msg) => !cancelled && setStatus(msg));
+        if (cancelled) return;
+        setStatus(`Migrado: ${result.cursos} curso(s), ${result.subjects} asignatura(s), ${result.registros} registro(s). Actualizando plan…`);
+        await supabase.from("profiles").update({ plan: "premium_historico" }).eq("id", userId);
+        if (cancelled) return;
+        window.location.reload();
+      } catch (e) {
+        if (!cancelled) setError(String((e && e.message) || e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  return (
+    <div className="app-shell app-loading">
+      <style>{CSS}</style>
+      <div className="panel auth-card">
+        <div className="panel-title">Preparando tu cuenta</div>
+        {error ? (
+          <div className="auth-error">No se pudo migrar el historial: {error}</div>
+        ) : (
+          <div className="mono" style={{ color: "#8291AC" }}>{status}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
 
@@ -1463,6 +1512,9 @@ export default function App({ session, profile, onSignOut } = {}) {
   }
 
   if (data && data.cursos.length === 0) {
+    if (session.user.email === OWNER_EMAIL) {
+      return <AutoMigrateFromSheets userId={userId} />;
+    }
     return <WelcomeCreateCurso onCreate={handleAddCurso} onSignOut={onSignOut} email={session.user.email} />;
   }
 

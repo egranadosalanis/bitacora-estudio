@@ -167,3 +167,80 @@ export async function deleteCurso(userId, cursoId) {
   const { error } = await supabase.from("cursos").delete().eq("user_id", userId).eq("id", cursoId);
   if (error) throw error;
 }
+
+/* ---------- migración desde Google Sheets (uso único) ---------- */
+
+/** Sube a Supabase, bajo `userId`, un bloque de datos ya en la forma
+ * { cursos, subjects, entries } (la misma que devuelve migrateData() +
+ * applyHistoricalImport() de domain.js) — se usa una sola vez por cuenta,
+ * para traer el historial que hasta ahora vivía en Google Sheets. Nunca
+ * toca ni borra el origen. */
+export async function migrateFromGoogleSheets(userId, legacyData, onProgress) {
+  const report = (msg) => onProgress && onProgress(msg);
+
+  const cursoIdMap = {};
+  report(`Creando ${legacyData.cursos.length} curso(s)...`);
+  for (const c of legacyData.cursos) {
+    const { data, error } = await supabase
+      .from("cursos")
+      .insert({ user_id: userId, name: c.name, start_date: c.startDate, end_date: c.endDate, estado: c.estado })
+      .select()
+      .single();
+    if (error) throw error;
+    cursoIdMap[c.id] = data.id;
+  }
+
+  const subjectIdMap = {};
+  report(`Creando ${legacyData.subjects.length} asignatura(s)...`);
+  for (const s of legacyData.subjects) {
+    const { data, error } = await supabase
+      .from("asignaturas")
+      .insert({
+        user_id: userId,
+        nombre: s.name,
+        creditos: s.credits,
+        target: s.target,
+        color: s.color,
+        estado: s.estado,
+        origin_curso_id: s.originCursoId ? (cursoIdMap[s.originCursoId] ?? null) : null,
+        frozen_nota: s.frozen?.nota ?? null,
+        frozen_cursos_necesarios: s.frozen?.cursosNecesarios ?? null,
+        frozen_fecha_aprobacion: s.frozen?.fechaAprobacion ?? null,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    subjectIdMap[s.id] = data.id;
+  }
+
+  // Segunda pasada: "Combinar con" (mergedInto) referencia a otra
+  // asignatura que ya tiene que existir como fila, así que se enlaza
+  // después de haberlas creado todas.
+  const withMerge = legacyData.subjects.filter((s) => s.mergedInto);
+  if (withMerge.length > 0) report("Enlazando asignaturas combinadas...");
+  for (const s of withMerge) {
+    const target = subjectIdMap[s.mergedInto];
+    if (!target) continue;
+    const { error } = await supabase
+      .from("asignaturas")
+      .update({ asignatura_equivalente_id: target })
+      .eq("id", subjectIdMap[s.id]);
+    if (error) throw error;
+  }
+
+  const rows = [];
+  Object.entries(legacyData.entries).forEach(([fecha, bySubject]) => {
+    Object.entries(bySubject).forEach(([subId, minutos]) => {
+      if (!minutos || !subjectIdMap[subId]) return;
+      rows.push({ user_id: userId, asignatura_id: subjectIdMap[subId], fecha, minutos: Math.round(minutos) });
+    });
+  });
+  report(`Subiendo ${rows.length} registros de estudio...`);
+  const BATCH = 500;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const { error } = await supabase.from("registros_estudio").insert(rows.slice(i, i + BATCH));
+    if (error) throw error;
+  }
+
+  return { cursos: legacyData.cursos.length, subjects: legacyData.subjects.length, registros: rows.length };
+}
