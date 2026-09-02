@@ -1376,6 +1376,13 @@ export default function App({ session, profile, onSignOut } = {}) {
   const [passkeyMsg, setPasskeyMsg] = useState(null);
   const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
   const userId = session.user.id;
+  const passkeyStorageKey = `clever_passkey_registered:${userId}`;
+  // La API de Supabase no expone "¿este dispositivo ya tiene una passkey?",
+  // así que lo recordamos localmente — es información inherentemente por
+  // dispositivo (la clave privada vive en el propio móvil/portátil).
+  const [passkeyRegistered, setPasskeyRegistered] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem(passkeyStorageKey) === "1"
+  );
 
   async function registerPasskey() {
     setPasskeyBusy(true);
@@ -1383,6 +1390,8 @@ export default function App({ session, profile, onSignOut } = {}) {
     try {
       const { error } = await supabase.auth.registerPasskey();
       if (error) throw error;
+      window.localStorage.setItem(passkeyStorageKey, "1");
+      setPasskeyRegistered(true);
       setPasskeyMsg("Huella activada en este dispositivo.");
     } catch (e) {
       setPasskeyMsg(`Error: ${(e && e.message) || e}`);
@@ -1584,7 +1593,7 @@ export default function App({ session, profile, onSignOut } = {}) {
           {session && (
             <div className="account-box">
               <span className="account-email">{session.user.email}</span>
-              {supportsPasskey && (
+              {supportsPasskey && !passkeyRegistered && (
                 <button
                   className="btn-ghost btn-small btn-account"
                   onClick={registerPasskey}
@@ -1671,6 +1680,7 @@ export default function App({ session, profile, onSignOut } = {}) {
 /* ------------------------------------------------------------------ */
 
 export const CSS = `
+  html, body { background: #0A0F1C; margin: 0; }
   :root {
     --bg: #0A0F1C;
     --panel: #121A2B;
@@ -1690,6 +1700,7 @@ export const CSS = `
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     padding: 20px 16px 60px;
+    overflow-x: hidden;
   }
   .app-loading { display: flex; align-items: center; justify-content: center; }
   .mono { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
@@ -1702,8 +1713,8 @@ export const CSS = `
     text-transform: uppercase; color: var(--cyan); margin-bottom: 4px;
   }
   .app-title { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
-  .header-right { display: flex; align-items: center; gap: 10px; }
-  .account-box { display: flex; align-items: center; gap: 8px; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .account-box { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .account-email { font-size: 12px; color: var(--text-dim); }
   .auth-card { max-width: 360px; width: 100%; }
   .password-field { position: relative; flex: 1; }
