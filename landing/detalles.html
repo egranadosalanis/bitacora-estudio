@@ -30,12 +30,14 @@
     }
     .detail-shot-wrap a { display: block; }
     .detail-shot {
-      display: block; width: 100%; min-width: 1000px;
+      display: block; width: 100%;
     }
     @media (max-width: 1040px) {
-      /* En pantallas más estrechas que la captura (1000px de mínimo), se
-         desplaza en horizontal en vez de encogerse hasta ser ilegible — y
-         se puede tocar/hacer clic para abrirla a tamaño completo aparte. */
+      /* Por debajo de este ancho, la columna de texto (880px máx.) ya
+         encogería la captura por debajo de un tamaño legible — se le pone
+         un mínimo y se desplaza en horizontal en su lugar. En pantallas más
+         anchas no hace falta: la imagen ya cabe entera y legible. */
+      .detail-shot { min-width: 1000px; }
       .detail-shot-wrap::after {
         content: "◄ desliza · toca la imagen para ampliarla ►";
         display: block; text-align: center; font-family: var(--mono); font-size: 10.5px;
