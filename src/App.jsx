@@ -1394,7 +1394,16 @@ export default function App({ session, profile, onSignOut } = {}) {
       setPasskeyRegistered(true);
       setPasskeyMsg("Huella activada en este dispositivo.");
     } catch (e) {
-      setPasskeyMsg(`Error: ${(e && e.message) || e}`);
+      const msg = (e && e.message) || String(e);
+      if (/previously registered/i.test(msg)) {
+        // Este dispositivo ya tenía una passkey de antes de que guardáramos
+        // el estado localmente — no es un fallo real, solo falta recordarlo.
+        window.localStorage.setItem(passkeyStorageKey, "1");
+        setPasskeyRegistered(true);
+        setPasskeyMsg("Ya tenías la huella activada en este dispositivo.");
+      } else {
+        setPasskeyMsg(`Error: ${msg}`);
+      }
     } finally {
       setPasskeyBusy(false);
     }
