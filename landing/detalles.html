@@ -24,19 +24,20 @@
     .detail-card ul { color: var(--text-dim); font-size: 15px; line-height: 1.7; padding-left: 22px; margin: 10px 0; }
     .detail-card li strong { color: var(--text); }
     .detail-shot-wrap {
-      overflow-x: auto; border-radius: 12px; border: 1px solid var(--border);
+      display: block; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border);
       margin: 20px 0 22px; box-shadow: 0 20px 50px -20px rgba(0,0,0,0.6);
       -webkit-overflow-scrolling: touch;
     }
+    .detail-shot-wrap a { display: block; }
     .detail-shot {
-      display: block; width: 100%; min-width: 640px;
+      display: block; width: 100%; min-width: 1000px;
     }
-    @media (max-width: 680px) {
-      /* En móvil, la captura encogida a lo ancho de la pantalla deja el
-         texto ilegible — se fija un ancho mínimo y se desplaza en horizontal
-         en su lugar, como una ventana con scroll. */
+    @media (max-width: 1040px) {
+      /* En pantallas más estrechas que la captura (1000px de mínimo), se
+         desplaza en horizontal en vez de encogerse hasta ser ilegible — y
+         se puede tocar/hacer clic para abrirla a tamaño completo aparte. */
       .detail-shot-wrap::after {
-        content: "◄ desliza para ver completa ►";
+        content: "◄ desliza · toca la imagen para ampliarla ►";
         display: block; text-align: center; font-family: var(--mono); font-size: 10.5px;
         color: var(--text-dim); background: var(--panel); padding: 6px 0; border-top: 1px solid var(--border);
       }
@@ -107,7 +108,9 @@
             mientras estudias para que se registre solo.
           </p>
           <div class="detail-shot-wrap">
-            <img class="detail-shot" src="img/detalles/bitacora.png" alt="Pestaña Bitácora de Clever, con el registro diario y el listado de últimos registros" width="1400" height="900" loading="lazy" />
+            <a href="img/detalles/bitacora.png" target="_blank" rel="noopener">
+              <img class="detail-shot" src="img/detalles/bitacora.png" alt="Pestaña Bitácora de Clever, con el registro diario y el listado de últimos registros" width="1400" height="900" loading="lazy" />
+            </a>
           </div>
           <p>
             A la derecha tienes el listado de <strong>últimos registros</strong>, filtrable por asignatura o en
@@ -124,7 +127,9 @@
             estudiando, tu sesión más larga y cuándo fue tu último registro.
           </p>
           <div class="detail-shot-wrap">
-            <img class="detail-shot" src="img/detalles/panel.png" alt="Pestaña Panel de Clever, con los indicadores del curso y las horas por crédito de cada asignatura" width="1400" height="900" loading="lazy" />
+            <a href="img/detalles/panel.png" target="_blank" rel="noopener">
+              <img class="detail-shot" src="img/detalles/panel.png" alt="Pestaña Panel de Clever, con los indicadores del curso y las horas por crédito de cada asignatura" width="1400" height="900" loading="lazy" />
+            </a>
           </div>
           <p>
             Debajo, la sección <strong>"Instrumentos de esfuerzo — horas por crédito"</strong> es la más útil para
@@ -143,7 +148,9 @@
             90 días o todo el curso.
           </p>
           <div class="detail-shot-wrap">
-            <img class="detail-shot" src="img/detalles/trayectoria.png" alt="Pestaña Trayectoria de Clever, con la gráfica de minutos diarios, horas acumuladas y distribución del esfuerzo" width="1400" height="900" loading="lazy" />
+            <a href="img/detalles/trayectoria.png" target="_blank" rel="noopener">
+              <img class="detail-shot" src="img/detalles/trayectoria.png" alt="Pestaña Trayectoria de Clever, con la gráfica de minutos diarios, horas acumuladas y distribución del esfuerzo" width="1400" height="900" loading="lazy" />
+            </a>
           </div>
           <ul>
             <li><strong>Minutos diarios por asignatura</strong>: un área apilada que muestra qué estudiaste cada día — sirve para detectar de un vistazo los picos previos a un examen y los bajones de actividad.</li>
@@ -162,7 +169,9 @@
             todos los usuarios, así que el número no cambia según lo que hagas en el resto de tus asignaturas.
           </p>
           <div class="detail-shot-wrap">
-            <img class="detail-shot" src="img/detalles/desgaste.png" alt="Pestaña Desgaste de Clever, con el desglose de intensidad, duración, compresión y racha interna de una asignatura" width="1400" height="900" loading="lazy" />
+            <a href="img/detalles/desgaste.png" target="_blank" rel="noopener">
+              <img class="detail-shot" src="img/detalles/desgaste.png" alt="Pestaña Desgaste de Clever, con el desglose de intensidad, duración, compresión y racha interna de una asignatura" width="1400" height="900" loading="lazy" />
+            </a>
           </div>
           <p>Los cuatro factores y su peso en el resultado final:</p>
           <div class="tope-grid">
@@ -213,7 +222,9 @@
             menos horas necesitaste, mejor te salió la relación esfuerzo/crédito.
           </p>
           <div class="detail-shot-wrap">
-            <img class="detail-shot" src="img/detalles/clasificacion.png" alt="Pestaña Clasificación de Clever, con la tabla histórica de asignaturas aprobadas ordenadas por horas por crédito" width="1400" height="900" loading="lazy" />
+            <a href="img/detalles/clasificacion.png" target="_blank" rel="noopener">
+              <img class="detail-shot" src="img/detalles/clasificacion.png" alt="Pestaña Clasificación de Clever, con la tabla histórica de asignaturas aprobadas ordenadas por horas por crédito" width="1400" height="900" loading="lazy" />
+            </a>
           </div>
           <p>
             Cada fila muestra también las horas totales invertidas, cuántos cursos necesitaste para aprobarla y
@@ -231,7 +242,9 @@
             aparece marcada en el Panel.
           </p>
           <div class="detail-shot-wrap">
-            <img class="detail-shot" src="img/detalles/asignaturas.png" alt="Pestaña Asignaturas de Clever, con la gestión de cursos académicos y asignaturas" width="1400" height="900" loading="lazy" />
+            <a href="img/detalles/asignaturas.png" target="_blank" rel="noopener">
+              <img class="detail-shot" src="img/detalles/asignaturas.png" alt="Pestaña Asignaturas de Clever, con la gestión de cursos académicos y asignaturas" width="1400" height="900" loading="lazy" />
+            </a>
           </div>
           <p>
             Si una asignatura equivale a otra que cursaste con otro nombre (por ejemplo, una convalidación o un
