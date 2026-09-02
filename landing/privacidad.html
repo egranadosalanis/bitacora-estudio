@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clever — política de privacidad</title>
+  <meta name="description" content="Qué datos recoge Clever, para qué se usan y cómo puedes eliminarlos." />
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .legal-block { max-width: 720px; margin: 0 auto; }
+    .legal-block h2 { font-size: 19px; margin: 36px 0 10px; }
+    .legal-block p, .legal-block li { color: var(--text-dim); font-size: 15px; line-height: 1.7; }
+    .legal-block ul { padding-left: 22px; margin: 8px 0; }
+    .legal-block a { color: var(--cyan); }
+    .legal-block strong { color: var(--text); }
+    .legal-updated { color: var(--text-dim); font-size: 13px; margin-top: -4px; }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" style="text-decoration:none;"><span class="brand-dot"></span>Clever</a>
+      <div class="header-right">
+        <a class="btn btn-ghost-header" href="https://appclever.vercel.app">Entrar</a>
+        <div class="nav-menu-wrap">
+          <button class="nav-menu-toggle" type="button" data-menu-toggle aria-haspopup="true" aria-expanded="false" aria-label="Abrir menú">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-menu" data-menu>
+            <a href="index.html">Inicio</a>
+            <a href="motivacion.html">Motivación</a>
+            <a href="instalar.html">Cómo instalar la app</a>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" style="padding-bottom: 20px;">
+      <div class="wrap" style="max-width: 720px;">
+        <div class="eyebrow" data-reveal>Legal</div>
+        <h1 data-reveal>Política de privacidad</h1>
+        <p class="legal-updated" data-reveal>Última actualización: septiembre de 2026.</p>
+      </div>
+    </section>
+
+    <section style="padding-bottom: 90px;">
+      <div class="wrap legal-block" data-reveal>
+
+        <p>
+          Clever es una aplicación para registrar y consultar tu tiempo de estudio. Esta página explica qué datos
+          recoge, para qué se usan y qué opciones tienes sobre ellos.
+        </p>
+
+        <h2>Quién trata los datos</h2>
+        <p>
+          Clever es un proyecto personal. Si tienes cualquier duda sobre tus datos, puedes escribir a
+          <strong>egranadosalanis@gmail.com</strong>.
+        </p>
+
+        <h2>Qué datos se recogen</h2>
+        <ul>
+          <li><strong>Cuenta</strong>: tu email, y tu contraseña si te registras con email y contraseña (guardada de forma cifrada, nunca en texto plano).</li>
+          <li><strong>Inicio de sesión con Google</strong>: si eliges entrar con Google, recibimos tu email, nombre y foto de perfil de Google, únicamente para crear e identificar tu cuenta. No accedemos a nada más de tu cuenta de Google.</li>
+          <li><strong>Huella / passkey</strong>: si activas el desbloqueo por huella o Face ID, tu dato biométrico nunca sale de tu dispositivo — Clever solo recibe una clave criptográfica pública, no la huella en sí.</li>
+          <li><strong>Datos de estudio</strong>: las asignaturas, horas y sesiones que registras tú mismo dentro de la app.</li>
+        </ul>
+
+        <h2>Para qué se usan</h2>
+        <p>
+          Únicamente para que la aplicación funcione: identificarte, guardar tu registro de estudio y mostrarte
+          tus propias estadísticas. No se usan con fines publicitarios ni se venden ni se comparten con terceros.
+        </p>
+
+        <h2>Dónde se almacenan</h2>
+        <p>
+          Los datos se guardan en <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a>,
+          el proveedor de base de datos y autenticación que usa Clever. Supabase actúa como encargado del
+          tratamiento y aplica sus propias medidas de seguridad.
+        </p>
+
+        <h2>Cuánto tiempo se conservan</h2>
+        <p>
+          Mientras mantengas tu cuenta activa. Si quieres eliminar tu cuenta y todos tus datos, escríbenos al
+          email de arriba y los borramos.
+        </p>
+
+        <h2>Tus derechos</h2>
+        <p>
+          Puedes pedirnos en cualquier momento acceder a tus datos, corregirlos o eliminarlos por completo,
+          escribiendo a <strong>egranadosalanis@gmail.com</strong>.
+        </p>
+
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="brand brand-sm"><span class="brand-dot"></span>Clever</div>
+      <span class="footer-note">Hecho para estudiantes que quieren datos, no impresiones.</span>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
