@@ -239,6 +239,68 @@ function SetNewPassword() {
   );
 }
 
+function CompleteProfileForm({ onSubmit }) {
+  const [universidad, setUniversidad] = useState("");
+  const [carrera, setCarrera] = useState("");
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await onSubmit({ universidad: universidad.trim(), carrera: carrera.trim() });
+    } catch (err) {
+      setError(err.message || String(err));
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="app-shell app-loading">
+      <style>{CSS}</style>
+      <div className="panel auth-card">
+        <div className="panel-title">Antes de empezar</div>
+        <p className="panel-subtitle">
+          Cuéntanos dónde estudias — nos sirve para poder compararte más adelante con otros
+          estudiantes de tu misma universidad y carrera.
+        </p>
+        <form onSubmit={submit}>
+          <div className="field-row">
+            <label className="field-label">Universidad</label>
+            <input
+              className="input-field"
+              type="text"
+              required
+              value={universidad}
+              onChange={(e) => setUniversidad(e.target.value)}
+              placeholder="Ej. Universidad Politécnica de Madrid"
+            />
+          </div>
+          <div className="field-row">
+            <label className="field-label">Carrera</label>
+            <input
+              className="input-field"
+              type="text"
+              required
+              value={carrera}
+              onChange={(e) => setCarrera(e.target.value)}
+              placeholder="Ej. Ingeniería Aeroespacial"
+            />
+          </div>
+          {error && <div className="auth-error">{error}</div>}
+          <div className="btn-row">
+            <button className="btn-primary" type="submit" disabled={loading}>
+              {loading ? "…" : "Continuar"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function LoadingScreen({ text }) {
   return (
     <div className="app-shell app-loading">
@@ -283,11 +345,23 @@ export default function AuthGate() {
       });
   }, [session]);
 
+  async function completeProfile({ universidad, carrera }) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ universidad, carrera })
+      .eq("id", session.user.id)
+      .select()
+      .single();
+    if (error) throw error;
+    setProfile(data);
+  }
+
   if (session === undefined) return <LoadingScreen text="Cargando…" />;
   if (passwordRecovery) return <SetNewPassword />;
   if (!session) return <AuthForm />;
   if (profileError) return <LoadingScreen text={`Error cargando el perfil: ${profileError}`} />;
   if (!profile) return <LoadingScreen text="Cargando perfil…" />;
+  if (!profile.universidad || !profile.carrera) return <CompleteProfileForm onSubmit={completeProfile} />;
 
   return <App session={session} profile={profile} onSignOut={() => supabase.auth.signOut()} />;
 }

@@ -14,6 +14,8 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   plan text not null default 'free' check (plan in ('free', 'premium_historico', 'premium_comparacion')),
+  universidad text,
+  carrera text,
   created_at timestamptz not null default now()
 );
 
