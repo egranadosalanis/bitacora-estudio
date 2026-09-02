@@ -123,3 +123,37 @@
   );
   els.forEach((el) => io.observe(el));
 })();
+
+// Selector de tema claro/oscuro. Compartido entre todas las páginas de la
+// web vía localStorage (misma clave que usa la app, aunque son storages
+// de orígenes distintos, así que no se sincronizan entre sí).
+(function () {
+  const KEY = "clever_theme";
+  const toggles = document.querySelectorAll("[data-theme-toggle]");
+  if (!toggles.length) return;
+
+  function current() {
+    return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  }
+  function syncButtons() {
+    const isLight = current() === "light";
+    toggles.forEach((btn) => {
+      btn.textContent = isLight ? "🌙" : "☀️";
+      btn.setAttribute("aria-label", isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro");
+    });
+  }
+  toggles.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const next = current() === "light" ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", next);
+      try {
+        localStorage.setItem(KEY, next);
+      } catch (e) {
+        // Modo privado / almacenamiento bloqueado: el tema no se recuerda
+        // entre visitas, pero el cambio sigue funcionando en esta página.
+      }
+      syncButtons();
+    });
+  });
+  syncButtons();
+})();

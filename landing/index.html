@@ -2,6 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("clever_theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Clever — la única referencia que importa</title>
   <meta name="description" content="Clever registra tus minutos de estudio por asignatura y los convierte en la referencia que te falta: horas por crédito, tu propio historial y un índice de desgaste personal." />
@@ -29,6 +37,7 @@
     <div class="wrap header-inner">
       <div class="brand"><span class="brand-dot"></span>Clever</div>
       <div class="header-right">
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Cambiar a modo claro">☀️</button>
         <a class="btn btn-ghost-header" href="https://appclever.vercel.app">Entrar</a>
         <div class="nav-menu-wrap">
           <button class="nav-menu-toggle" type="button" data-menu-toggle aria-haspopup="true" aria-expanded="false" aria-label="Abrir menú">
@@ -135,8 +144,8 @@
           <div class="eyebrow">El problema</div>
           <h2>Estudias a ciegas.</h2>
           <p class="lede">
-            Sabes que le has echado horas. No sabes cuántas. No sabes si a esa asignatura le has dedicado la
-            mitad que a la de al lado. Y cuando suspendes, no sabes si fue por falta de tiempo o por otra cosa
+            Sabes que le has echado horas. No sabes cuántas. No sabes si a una asignatura le dedicas la mitad
+            de tiempo que a otra. Y cuando suspendes, no sabes si fue por falta de tiempo o por otra cosa
             — así que el cuatrimestre siguiente repites exactamente lo mismo.
           </p>
         </div>

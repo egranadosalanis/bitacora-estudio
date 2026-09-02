@@ -2,6 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("clever_theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Clever — más detalles</title>
   <meta name="description" content="Cómo funciona cada pestaña de Clever, con capturas reales de la app y cómo interpretar los datos." />
@@ -61,6 +69,7 @@
     <div class="wrap header-inner">
       <a class="brand" href="index.html" style="text-decoration:none;"><span class="brand-dot"></span>Clever</a>
       <div class="header-right">
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Cambiar a modo claro">☀️</button>
         <a class="btn btn-ghost-header" href="https://appclever.vercel.app">Entrar</a>
         <div class="nav-menu-wrap">
           <button class="nav-menu-toggle" type="button" data-menu-toggle aria-haspopup="true" aria-expanded="false" aria-label="Abrir menú">
