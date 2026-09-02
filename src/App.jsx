@@ -1372,6 +1372,18 @@ export default function App({ session, profile, onSignOut } = {}) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
+  const [theme, setTheme] = useState(
+    () => (typeof window !== "undefined" && window.localStorage.getItem("clever_theme")) || "dark"
+  );
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      window.localStorage.setItem("clever_theme", theme);
+    } catch {
+      // Modo privado / almacenamiento bloqueado: el tema simplemente no
+      // se recuerda entre sesiones, pero sigue funcionando en esta.
+    }
+  }, [theme]);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [passkeyMsg, setPasskeyMsg] = useState(null);
   const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
@@ -1599,6 +1611,13 @@ export default function App({ session, profile, onSignOut } = {}) {
             {data.cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           {cloudError && <span className="cloud-error" title={cloudError}>⚠ nube: {cloudError}</span>}
+          <button
+            className="btn-ghost btn-small btn-account"
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          >
+            {theme === "dark" ? "☀️ Claro" : "🌙 Oscuro"}
+          </button>
           {session && (
             <div className="account-box">
               <span className="account-email">{session.user.email}</span>
@@ -1689,9 +1708,10 @@ export default function App({ session, profile, onSignOut } = {}) {
 /* ------------------------------------------------------------------ */
 
 export const CSS = `
-  html, body { background: #0A0F1C; margin: 0; }
+  html, body { background: var(--bg); margin: 0; }
   :root {
     --bg: #0A0F1C;
+    --bg-glow: #101B30;
     --panel: #121A2B;
     --panel-2: #1A2438;
     --border: #26324A;
@@ -1703,8 +1723,20 @@ export const CSS = `
     --red: #FF5C5C;
     --purple: #A78BFA;
   }
+  /* Modo claro: solo cambian fondo/texto/bordes — los colores de acento
+     (cian, ámbar, verde, rojo, morado) se mantienen iguales en ambos modos,
+     así que gráficas y etiquetas de estado no cambian de significado. */
+  [data-theme="light"] {
+    --bg: #FFFFFF;
+    --bg-glow: #EAF2FF;
+    --panel: #F5F7FA;
+    --panel-2: #EBEEF3;
+    --border: #DBE1EA;
+    --text: #12161F;
+    --text-dim: #5B6472;
+  }
   .app-shell {
-    background: radial-gradient(1200px 600px at 50% -10%, #101B30 0%, var(--bg) 60%);
+    background: radial-gradient(1200px 600px at 50% -10%, var(--bg-glow) 0%, var(--bg) 60%);
     min-height: 100vh;
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
