@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import App, { CSS } from "./App.jsx";
 
+const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
+
 function AuthForm() {
   const [mode, setMode] = useState("login"); // 'login' | 'signup' | 'recover'
   const [email, setEmail] = useState("");
@@ -10,6 +12,36 @@ function AuthForm() {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  async function signInWithGoogle() {
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      const { error: err } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin },
+      });
+      if (err) throw err;
+    } catch (err) {
+      setError(err.message || String(err));
+      setLoading(false);
+    }
+  }
+
+  async function signInWithPasskey() {
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      const { error: err } = await supabase.auth.signInWithPasskey();
+      if (err) throw err;
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -105,13 +137,26 @@ function AuthForm() {
             )}
           </div>
           {mode === "login" && (
-            <button
-              type="button"
-              className="auth-link"
-              onClick={() => { setMode("recover"); setError(null); setInfo(null); }}
-            >
-              ¿Olvidaste tu contraseña?
-            </button>
+            <>
+              <button
+                type="button"
+                className="auth-link"
+                onClick={() => { setMode("recover"); setError(null); setInfo(null); }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+              <div className="auth-divider">o</div>
+              <div className="btn-row">
+                <button type="button" className="btn-ghost" disabled={loading} onClick={signInWithGoogle}>
+                  Continuar con Google
+                </button>
+                {supportsPasskey && (
+                  <button type="button" className="btn-ghost" disabled={loading} onClick={signInWithPasskey}>
+                    Entrar con huella
+                  </button>
+                )}
+              </div>
+            </>
           )}
           {mode === "recover" && (
             <button

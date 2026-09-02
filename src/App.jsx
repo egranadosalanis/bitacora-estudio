@@ -1372,7 +1372,24 @@ export default function App({ session, profile, onSignOut } = {}) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeyMsg, setPasskeyMsg] = useState(null);
+  const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
   const userId = session.user.id;
+
+  async function registerPasskey() {
+    setPasskeyBusy(true);
+    setPasskeyMsg(null);
+    try {
+      const { error } = await supabase.auth.registerPasskey();
+      if (error) throw error;
+      setPasskeyMsg("Huella activada en este dispositivo.");
+    } catch (e) {
+      setPasskeyMsg(`Error: ${(e && e.message) || e}`);
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
   // Plan free: registro y cálculos del curso actual igual que todos, pero
   // sin histórico multi-año ni comparación (Clasificación) — los datos
   // siguen guardándose sin restricción, solo se oculta en la interfaz.
@@ -1567,8 +1584,27 @@ export default function App({ session, profile, onSignOut } = {}) {
           {session && (
             <div className="account-box">
               <span className="account-email">{session.user.email}</span>
+              {supportsPasskey && (
+                <button
+                  className="btn-ghost btn-small btn-account"
+                  onClick={registerPasskey}
+                  disabled={passkeyBusy}
+                  title={passkeyMsg || "Activa el desbloqueo por huella/Face ID en este dispositivo"}
+                >
+                  {passkeyBusy ? "…" : "Activar huella"}
+                </button>
+              )}
               <button className="btn-ghost btn-small" onClick={onSignOut}>Cerrar sesión</button>
             </div>
+          )}
+          {passkeyMsg && (
+            <span
+              className="cloud-error"
+              style={!passkeyMsg.startsWith("Error") ? { color: "var(--green)", borderColor: "rgba(61,220,132,0.3)", background: "rgba(61,220,132,0.1)" } : undefined}
+              title={passkeyMsg}
+            >
+              {passkeyMsg}
+            </span>
           )}
         </div>
       </header>
@@ -1683,6 +1719,11 @@ export const CSS = `
     text-decoration: underline; cursor: pointer; margin-top: 12px; padding: 0;
   }
   .auth-link:hover { color: var(--cyan); }
+  .auth-divider {
+    display: flex; align-items: center; gap: 10px; margin: 16px 0 4px; color: var(--text-dim);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+  }
+  .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
   .cloud-error {
     font-size: 10.5px; color: var(--red); background: rgba(255,92,92,0.1); border: 1px solid rgba(255,92,92,0.3);
     border-radius: 20px; padding: 4px 10px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1757,6 +1798,7 @@ export const CSS = `
     padding: 10px 16px; font-size: 13px; cursor: pointer;
   }
   .btn-ghost:hover { color: var(--red); border-color: rgba(255,92,92,0.4); }
+  .btn-ghost.btn-account:hover { color: var(--cyan); border-color: rgba(79,216,234,0.4); }
   .btn-small { padding: 6px 10px; font-size: 12px; }
 
   .empty-hint { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
