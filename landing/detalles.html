@@ -23,9 +23,23 @@
     .detail-card p { color: var(--text-dim); font-size: 15px; line-height: 1.7; }
     .detail-card ul { color: var(--text-dim); font-size: 15px; line-height: 1.7; padding-left: 22px; margin: 10px 0; }
     .detail-card li strong { color: var(--text); }
-    .detail-shot {
-      display: block; width: 100%; border-radius: 12px; border: 1px solid var(--border);
+    .detail-shot-wrap {
+      overflow-x: auto; border-radius: 12px; border: 1px solid var(--border);
       margin: 20px 0 22px; box-shadow: 0 20px 50px -20px rgba(0,0,0,0.6);
+      -webkit-overflow-scrolling: touch;
+    }
+    .detail-shot {
+      display: block; width: 100%; min-width: 640px;
+    }
+    @media (max-width: 680px) {
+      /* En móvil, la captura encogida a lo ancho de la pantalla deja el
+         texto ilegible — se fija un ancho mínimo y se desplaza en horizontal
+         en su lugar, como una ventana con scroll. */
+      .detail-shot-wrap::after {
+        content: "◄ desliza para ver completa ►";
+        display: block; text-align: center; font-family: var(--mono); font-size: 10.5px;
+        color: var(--text-dim); background: var(--panel); padding: 6px 0; border-top: 1px solid var(--border);
+      }
     }
     .tope-grid {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0;
@@ -92,7 +106,9 @@
             Eliges el día, y anotas los minutos de cada asignatura en modo manual, o usas el cronómetro integrado
             mientras estudias para que se registre solo.
           </p>
-          <img class="detail-shot" src="img/detalles/bitacora.png" alt="Pestaña Bitácora de Clever, con el registro diario y el listado de últimos registros" width="1400" height="900" loading="lazy" />
+          <div class="detail-shot-wrap">
+            <img class="detail-shot" src="img/detalles/bitacora.png" alt="Pestaña Bitácora de Clever, con el registro diario y el listado de últimos registros" width="1400" height="900" loading="lazy" />
+          </div>
           <p>
             A la derecha tienes el listado de <strong>últimos registros</strong>, filtrable por asignatura o en
             modo histórico con todas — útil para revisar rápido qué has estudiado sin salir de la pantalla de
@@ -107,7 +123,9 @@
             El resumen del curso activo: total de horas registradas, racha actual y máxima de días seguidos
             estudiando, tu sesión más larga y cuándo fue tu último registro.
           </p>
-          <img class="detail-shot" src="img/detalles/panel.png" alt="Pestaña Panel de Clever, con los indicadores del curso y las horas por crédito de cada asignatura" width="1400" height="900" loading="lazy" />
+          <div class="detail-shot-wrap">
+            <img class="detail-shot" src="img/detalles/panel.png" alt="Pestaña Panel de Clever, con los indicadores del curso y las horas por crédito de cada asignatura" width="1400" height="900" loading="lazy" />
+          </div>
           <p>
             Debajo, la sección <strong>"Instrumentos de esfuerzo — horas por crédito"</strong> es la más útil para
             interpretar: cada barra es tus horas invertidas dividido entre los créditos de la asignatura, con una
@@ -124,7 +142,9 @@
             La evolución de tu estudio a lo largo del tiempo, en tres gráficas. Puedes acotar la vista a 30 días,
             90 días o todo el curso.
           </p>
-          <img class="detail-shot" src="img/detalles/trayectoria.png" alt="Pestaña Trayectoria de Clever, con la gráfica de minutos diarios, horas acumuladas y distribución del esfuerzo" width="1400" height="900" loading="lazy" />
+          <div class="detail-shot-wrap">
+            <img class="detail-shot" src="img/detalles/trayectoria.png" alt="Pestaña Trayectoria de Clever, con la gráfica de minutos diarios, horas acumuladas y distribución del esfuerzo" width="1400" height="900" loading="lazy" />
+          </div>
           <ul>
             <li><strong>Minutos diarios por asignatura</strong>: un área apilada que muestra qué estudiaste cada día — sirve para detectar de un vistazo los picos previos a un examen y los bajones de actividad.</li>
             <li><strong>Horas acumuladas en el curso</strong>: una curva siempre creciente; cuanto más pronunciada su pendiente en un tramo, más intensidad tuviste esos días. Se puede ver en acumulado o como derivada (el ritmo diario en sí).</li>
@@ -141,7 +161,9 @@
             cuatro factores, cada uno normalizado contra un tope fijo que es igual para todas las asignaturas de
             todos los usuarios, así que el número no cambia según lo que hagas en el resto de tus asignaturas.
           </p>
-          <img class="detail-shot" src="img/detalles/desgaste.png" alt="Pestaña Desgaste de Clever, con el desglose de intensidad, duración, compresión y racha interna de una asignatura" width="1400" height="900" loading="lazy" />
+          <div class="detail-shot-wrap">
+            <img class="detail-shot" src="img/detalles/desgaste.png" alt="Pestaña Desgaste de Clever, con el desglose de intensidad, duración, compresión y racha interna de una asignatura" width="1400" height="900" loading="lazy" />
+          </div>
           <p>Los cuatro factores y su peso en el resultado final:</p>
           <div class="tope-grid">
             <div class="tope-item">
@@ -190,7 +212,9 @@
             de comparar cuánto te costó cada una, en cifras absolutas y sin normalizar. Cuantos más créditos y
             menos horas necesitaste, mejor te salió la relación esfuerzo/crédito.
           </p>
-          <img class="detail-shot" src="img/detalles/clasificacion.png" alt="Pestaña Clasificación de Clever, con la tabla histórica de asignaturas aprobadas ordenadas por horas por crédito" width="1400" height="900" loading="lazy" />
+          <div class="detail-shot-wrap">
+            <img class="detail-shot" src="img/detalles/clasificacion.png" alt="Pestaña Clasificación de Clever, con la tabla histórica de asignaturas aprobadas ordenadas por horas por crédito" width="1400" height="900" loading="lazy" />
+          </div>
           <p>
             Cada fila muestra también las horas totales invertidas, cuántos cursos necesitaste para aprobarla y
             la nota final — toda la ficha de una asignatura pasada, en una sola tabla.
@@ -206,7 +230,9 @@
             estado (en curso, suspendida o aprobada) y tu referencia de horas/crédito personal, la misma que
             aparece marcada en el Panel.
           </p>
-          <img class="detail-shot" src="img/detalles/asignaturas.png" alt="Pestaña Asignaturas de Clever, con la gestión de cursos académicos y asignaturas" width="1400" height="900" loading="lazy" />
+          <div class="detail-shot-wrap">
+            <img class="detail-shot" src="img/detalles/asignaturas.png" alt="Pestaña Asignaturas de Clever, con la gestión de cursos académicos y asignaturas" width="1400" height="900" loading="lazy" />
+          </div>
           <p>
             Si una asignatura equivale a otra que cursaste con otro nombre (por ejemplo, una convalidación o un
             Erasmus), puedes combinarlas con <strong>"Combinar con"</strong>: sus horas se suman a la asignatura
