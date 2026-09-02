@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clever — más detalles</title>
+  <meta name="description" content="Cómo funciona cada pestaña de Clever, con capturas reales de la app y cómo interpretar los datos." />
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .detail-block { max-width: 880px; margin: 0 auto; }
+    .detail-card { margin-bottom: 64px; }
+    .detail-card h2 {
+      font-size: 24px; margin: 0 0 6px;
+    }
+    .detail-eyebrow {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--cyan); margin-bottom: 6px;
+    }
+    .detail-card p { color: var(--text-dim); font-size: 15px; line-height: 1.7; }
+    .detail-card ul { color: var(--text-dim); font-size: 15px; line-height: 1.7; padding-left: 22px; margin: 10px 0; }
+    .detail-card li strong { color: var(--text); }
+    .detail-shot {
+      display: block; width: 100%; border-radius: 12px; border: 1px solid var(--border);
+      margin: 20px 0 22px; box-shadow: 0 20px 50px -20px rgba(0,0,0,0.6);
+    }
+    .tope-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0;
+    }
+    @media (max-width: 720px) { .tope-grid { grid-template-columns: 1fr 1fr; } }
+    .tope-item {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+    }
+    .tope-item .tope-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-family: var(--mono); }
+    .tope-item .tope-value { font-size: 20px; font-weight: 700; color: var(--cyan); margin-top: 4px; font-family: var(--mono); }
+    .tope-item .tope-weight { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+    .scale-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+    .scale-pill {
+      font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+    .scale-llevadero { color: var(--green); border-color: rgba(61,220,132,0.4); background: rgba(61,220,132,0.08); }
+    .scale-moderado { color: var(--amber); border-color: rgba(245,166,35,0.4); background: rgba(245,166,35,0.08); }
+    .scale-duro { color: var(--amber); border-color: rgba(245,166,35,0.4); background: rgba(245,166,35,0.08); }
+    .scale-extremo { color: var(--red); border-color: rgba(255,92,92,0.4); background: rgba(255,92,92,0.08); }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" style="text-decoration:none;"><span class="brand-dot"></span>Clever</a>
+      <div class="header-right">
+        <a class="btn btn-ghost-header" href="https://appclever.vercel.app">Entrar</a>
+        <div class="nav-menu-wrap">
+          <button class="nav-menu-toggle" type="button" data-menu-toggle aria-haspopup="true" aria-expanded="false" aria-label="Abrir menú">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-menu" data-menu>
+            <a href="index.html">Inicio</a>
+            <a href="motivacion.html">Motivación</a>
+            <a href="instalar.html">Cómo instalar la app</a>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" style="padding-bottom: 20px;">
+      <div class="wrap" style="max-width: 880px;">
+        <div class="eyebrow" data-reveal>Guía completa</div>
+        <h1 data-reveal>Cada pestaña de Clever, explicada</h1>
+        <p class="lede" data-reveal style="max-width:none;">
+          Capturas reales de la app y qué significa cada dato que ves en pantalla. Los nombres de asignatura de
+          estas capturas son de ejemplo — lo importante es cómo se leen los números.
+        </p>
+      </div>
+    </section>
+
+    <section style="padding-bottom: 40px;">
+      <div class="wrap detail-block">
+
+        <div class="detail-card" data-reveal>
+          <div class="detail-eyebrow">Pestaña 1</div>
+          <h2>Bitácora</h2>
+          <p>
+            Es la única pantalla donde introduces datos — todo lo demás en la app se calcula a partir de aquí.
+            Eliges el día, y anotas los minutos de cada asignatura en modo manual, o usas el cronómetro integrado
+            mientras estudias para que se registre solo.
+          </p>
+          <img class="detail-shot" src="img/detalles/bitacora.png" alt="Pestaña Bitácora de Clever, con el registro diario y el listado de últimos registros" width="1400" height="900" loading="lazy" />
+          <p>
+            A la derecha tienes el listado de <strong>últimos registros</strong>, filtrable por asignatura o en
+            modo histórico con todas — útil para revisar rápido qué has estudiado sin salir de la pantalla de
+            registro.
+          </p>
+        </div>
+
+        <div class="detail-card" data-reveal>
+          <div class="detail-eyebrow">Pestaña 2</div>
+          <h2>Panel</h2>
+          <p>
+            El resumen del curso activo: total de horas registradas, racha actual y máxima de días seguidos
+            estudiando, tu sesión más larga y cuándo fue tu último registro.
+          </p>
+          <img class="detail-shot" src="img/detalles/panel.png" alt="Pestaña Panel de Clever, con los indicadores del curso y las horas por crédito de cada asignatura" width="1400" height="900" loading="lazy" />
+          <p>
+            Debajo, la sección <strong>"Instrumentos de esfuerzo — horas por crédito"</strong> es la más útil para
+            interpretar: cada barra es tus horas invertidas dividido entre los créditos de la asignatura, con una
+            marca vertical que indica tu propia referencia (la editas tú mismo desde Asignaturas). Si la barra
+            pasa la marca, vas por encima de lo que sueles necesitar en esa asignatura; si se queda corta, todavía
+            estás por debajo.
+          </p>
+        </div>
+
+        <div class="detail-card" data-reveal>
+          <div class="detail-eyebrow">Pestaña 3</div>
+          <h2>Trayectoria</h2>
+          <p>
+            La evolución de tu estudio a lo largo del tiempo, en tres gráficas. Puedes acotar la vista a 30 días,
+            90 días o todo el curso.
+          </p>
+          <img class="detail-shot" src="img/detalles/trayectoria.png" alt="Pestaña Trayectoria de Clever, con la gráfica de minutos diarios, horas acumuladas y distribución del esfuerzo" width="1400" height="900" loading="lazy" />
+          <ul>
+            <li><strong>Minutos diarios por asignatura</strong>: un área apilada que muestra qué estudiaste cada día — sirve para detectar de un vistazo los picos previos a un examen y los bajones de actividad.</li>
+            <li><strong>Horas acumuladas en el curso</strong>: una curva siempre creciente; cuanto más pronunciada su pendiente en un tramo, más intensidad tuviste esos días. Se puede ver en acumulado o como derivada (el ritmo diario en sí).</li>
+            <li><strong>Distribución del esfuerzo</strong>: qué porcentaje del total de horas del curso se ha llevado cada asignatura hasta ahora.</li>
+          </ul>
+        </div>
+
+        <div class="detail-card" data-reveal>
+          <div class="detail-eyebrow">Pestaña 4</div>
+          <h2>Desgaste</h2>
+          <p>
+            El índice de desgaste mide el <strong>tramo de estudio más exigente</strong> que has tenido en cada
+            asignatura — no el total de horas, sino lo dura que fue tu peor racha con ella. Se calcula combinando
+            cuatro factores, cada uno normalizado contra un tope fijo que es igual para todas las asignaturas de
+            todos los usuarios, así que el número no cambia según lo que hagas en el resto de tus asignaturas.
+          </p>
+          <img class="detail-shot" src="img/detalles/desgaste.png" alt="Pestaña Desgaste de Clever, con el desglose de intensidad, duración, compresión y racha interna de una asignatura" width="1400" height="900" loading="lazy" />
+          <p>Los cuatro factores y su peso en el resultado final:</p>
+          <div class="tope-grid">
+            <div class="tope-item">
+              <div class="tope-label">Intensidad</div>
+              <div class="tope-value">300 min/día</div>
+              <div class="tope-weight">peso 30% · minutos de media al día en tu peor tramo</div>
+            </div>
+            <div class="tope-item">
+              <div class="tope-label">Duración</div>
+              <div class="tope-value">18 días</div>
+              <div class="tope-weight">peso 30% · cuántos días activos duró ese tramo</div>
+            </div>
+            <div class="tope-item">
+              <div class="tope-label">Compresión</div>
+              <div class="tope-value">90%</div>
+              <div class="tope-weight">peso 20% · % de días de ese tramo sin descanso</div>
+            </div>
+            <div class="tope-item">
+              <div class="tope-label">Racha interna</div>
+              <div class="tope-value">10 días</div>
+              <div class="tope-weight">peso 20% · máximo de días seguidos sin fallar ninguno</div>
+            </div>
+          </div>
+          <p>
+            Cada factor llega a 10/10 al alcanzar su tope (por ejemplo, 300 min/día de media ya puntúa el máximo
+            en intensidad, estudiar más ese tramo no sube más ese factor). La suma ponderada da un número de 0 a
+            10, que se traduce en una etiqueta:
+          </p>
+          <div class="scale-row">
+            <span class="scale-pill scale-llevadero">&lt; 2.5 · Llevadero</span>
+            <span class="scale-pill scale-moderado">2.5–5 · Moderado</span>
+            <span class="scale-pill scale-duro">5–7.5 · Duro</span>
+            <span class="scale-pill scale-extremo">≥ 7.5 · Extremo</span>
+          </div>
+          <p>
+            La vista <strong>"Clasificación de desgaste"</strong> dentro de esta misma pestaña ordena todas tus
+            asignaturas del curso de más a menos dura, usando este mismo índice.
+          </p>
+        </div>
+
+        <div class="detail-card" data-reveal>
+          <div class="detail-eyebrow">Pestaña 5</div>
+          <h2>Clasificación</h2>
+          <p>
+            El histórico de tus asignaturas ya aprobadas, ordenado por horas por crédito — la forma más objetiva
+            de comparar cuánto te costó cada una, en cifras absolutas y sin normalizar. Cuantos más créditos y
+            menos horas necesitaste, mejor te salió la relación esfuerzo/crédito.
+          </p>
+          <img class="detail-shot" src="img/detalles/clasificacion.png" alt="Pestaña Clasificación de Clever, con la tabla histórica de asignaturas aprobadas ordenadas por horas por crédito" width="1400" height="900" loading="lazy" />
+          <p>
+            Cada fila muestra también las horas totales invertidas, cuántos cursos necesitaste para aprobarla y
+            la nota final — toda la ficha de una asignatura pasada, en una sola tabla.
+          </p>
+        </div>
+
+        <div class="detail-card" data-reveal>
+          <div class="detail-eyebrow">Pestaña 6</div>
+          <h2>Asignaturas</h2>
+          <p>
+            La pantalla de administración: aquí gestionas tus <strong>cursos académicos</strong> (cada uno es
+            simplemente un rango de fechas) y tus <strong>asignaturas</strong> dentro de cada curso — créditos,
+            estado (en curso, suspendida o aprobada) y tu referencia de horas/crédito personal, la misma que
+            aparece marcada en el Panel.
+          </p>
+          <img class="detail-shot" src="img/detalles/asignaturas.png" alt="Pestaña Asignaturas de Clever, con la gestión de cursos académicos y asignaturas" width="1400" height="900" loading="lazy" />
+          <p>
+            Si una asignatura equivale a otra que cursaste con otro nombre (por ejemplo, una convalidación o un
+            Erasmus), puedes combinarlas con <strong>"Combinar con"</strong>: sus horas se suman a la asignatura
+            final sin duplicar filas en el resto de pestañas.
+          </p>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="brand brand-sm"><span class="brand-dot"></span>Clever</div>
+      <a class="footer-link" href="privacidad.html">Privacidad</a>
+      <a class="footer-link" href="terminos.html">Términos</a>
+      <span class="footer-note">© 2026 Clever</span>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
