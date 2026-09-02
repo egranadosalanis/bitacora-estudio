@@ -18,8 +18,11 @@
 }
 
 /* Modo claro: solo fondo/paneles/bordes/texto cambian — los colores de
-   acento (cian, ámbar, verde, morado, rojo, azul) se mantienen iguales en
-   ambos modos, igual que en la app. */
+   acento de las gráficas y estados (cian, ámbar, verde, morado, rojo) se
+   mantienen iguales en ambos modos, igual que en la app. La excepción es
+   --blue: no se usa en ninguna gráfica ni etiqueta de estado (solo en el
+   "Clever" de la portada), así que aquí se oscurece un poco — el tono
+   original quedaba deslavado sobre fondo claro. */
 [data-theme="light"] {
   --bg: #FFFFFF;
   --bg-2: #F3F6FA;
@@ -29,6 +32,7 @@
   --text: #12161F;
   --text-dim: #5B6472;
   --overlay-rgb: 255, 255, 255;
+  --blue: #2E5FE0;
 }
 
 * { box-sizing: border-box; }
