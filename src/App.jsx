@@ -371,14 +371,14 @@ function PanelTab({ stats }) {
   return (
     <div>
       <div className="stat-grid">
-        <StatCard label="Total registrado" value={hm(stats.globalTotal)} hint={`${stats.totalDaysLogged} días con estudio`} accent="#4FD8EA" />
+        <StatCard label="Total registrado" value={hm(stats.globalTotal)} hint={`${stats.totalDaysLogged} días con estudio`} accent="var(--cyan-text)" />
         <StatCard label="Racha actual" value={`${stats.current} d`} hint={stats.current === 0 ? "sin actividad reciente" : "días seguidos"} accent={stats.current > 0 ? "#3DDC84" : "#8291AC"} />
         <StatCard label="Racha máxima" value={`${stats.longest} d`} hint="mejor marca del curso" accent="#F5A623" />
         <StatCard
           label="Sesión máxima"
           value={maxSessionSub ? hm(stats.maxSession.minutes) : "—"}
           hint={maxSessionSub ? `${maxSessionSub.name} · ${formatShort(stats.maxSession.date)}` : "sin datos"}
-          accent="#A78BFA"
+          accent="var(--purple)"
         />
         <StatCard
           label="Último registro"
@@ -1105,9 +1105,9 @@ function ClasificacionDetail({ subject, subjects, entries }) {
   return (
     <div>
       <div className="stat-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-        <StatCard label="Horas / crédito" value={c.horasPorCredito.toFixed(2)} accent="#4FD8EA" />
+        <StatCard label="Horas / crédito" value={c.horasPorCredito.toFixed(2)} accent="var(--cyan-text)" />
         <StatCard label="Días totales" value={`${c.diasTotales} d`} accent="#F5A623" />
-        <StatCard label="Cursos necesarios" value={f.cursosNecesarios ?? "—"} accent="#A78BFA" />
+        <StatCard label="Cursos necesarios" value={f.cursosNecesarios ?? "—"} accent="var(--purple)" />
         <StatCard label="Nota" value={f.nota ?? "—"} accent="#3DDC84" />
       </div>
       {activeSources.length > 0 && (
@@ -1718,14 +1718,21 @@ export const CSS = `
     --text: #E7ECF5;
     --text-dim: #8291AC;
     --cyan: #4FD8EA;
+    --cyan-text: #4FD8EA;
     --amber: #F5A623;
     --green: #3DDC84;
     --red: #FF5C5C;
     --purple: #A78BFA;
   }
-  /* Modo claro: solo cambian fondo/texto/bordes — los colores de acento
-     (cian, ámbar, verde, rojo, morado) se mantienen iguales en ambos modos,
-     así que gráficas y etiquetas de estado no cambian de significado. */
+  /* Modo claro: fondo/texto/bordes cambian, pero --cyan, --amber, --green,
+     --red y --purple se mantienen iguales en ambos modos — son los mismos
+     colores que usan las gráficas (fijos en el propio SVG) y los botones/
+     pestañas con fondo de color, así que nada cambia de significado ni de
+     contraste ahí. La excepción es --cyan-text: se usa aparte para números
+     grandes en texto plano (Panel, Clasificación, cronómetro), donde el
+     cian original quedaba deslavado sobre fondo blanco; y --purple, que
+     solo se usa como texto (nunca de fondo), así que se puede oscurecer
+     entero sin ese problema. */
   [data-theme="light"] {
     --bg: #FFFFFF;
     --bg-glow: #EAF2FF;
@@ -1734,6 +1741,8 @@ export const CSS = `
     --border: #DBE1EA;
     --text: #12161F;
     --text-dim: #5B6472;
+    --cyan-text: #0E8FA6;
+    --purple: #6D4FEE;
   }
   .app-shell {
     background: radial-gradient(1200px 600px at 50% -10%, var(--bg-glow) 0%, var(--bg) 60%);
@@ -1833,7 +1842,7 @@ export const CSS = `
   .timer-box { margin: 14px 0; }
   .timer-display {
     font-size: 42px; font-weight: 800; text-align: center; letter-spacing: 0.03em;
-    padding: 18px 0 6px; color: var(--cyan);
+    padding: 18px 0 6px; color: var(--cyan-text);
   }
   .day-total-row {
     display: flex; justify-content: space-between; font-size: 13px; color: var(--text-dim);
@@ -1937,7 +1946,7 @@ export const CSS = `
   @media (max-width: 560px) { .wear-factors { grid-template-columns: 1fr; } }
   .wear-factor-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
   .wear-factor-label { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-  .wear-factor-raw { font-family: ui-monospace, monospace; font-size: 20px; font-weight: 700; color: var(--cyan); margin-bottom: 6px; }
+  .wear-factor-raw { font-family: ui-monospace, monospace; font-size: 20px; font-weight: 700; color: var(--cyan-text); margin-bottom: 6px; }
   .wear-factor-explain { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
 
   .merge-select { margin-top: 6px; font-size: 11.5px; color: var(--text-dim); padding: 5px 8px; }
