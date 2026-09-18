@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -1427,7 +1427,7 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
   );
 }
 
-export default function App({ session, profile, onSignOut } = {}) {
+export default function App({ session, profile, onSignOut, onDeleteAccount } = {}) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
@@ -1447,6 +1447,37 @@ export default function App({ session, profile, onSignOut } = {}) {
   const [passkeyMsg, setPasskeyMsg] = useState(null);
   const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
   const userId = session.user.id;
+
+  // Menú de cuenta (el "☰" de la cabecera): agrupa huella, exportar,
+  // tema, cerrar sesión y eliminar cuenta en un desplegable, para no
+  // llenar la cabecera de botones sueltos. Se cierra solo al tocar fuera.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [menuOpen]);
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountErr, setDeleteAccountErr] = useState(null);
+
+  async function handleDeleteAccount() {
+    if (deleteConfirmText.trim().toUpperCase() !== "ELIMINAR") return;
+    setDeletingAccount(true);
+    setDeleteAccountErr(null);
+    try {
+      await onDeleteAccount();
+    } catch (e) {
+      setDeleteAccountErr(String((e && e.message) || e));
+      setDeletingAccount(false);
+    }
+  }
   const passkeyStorageKey = `clever_passkey_registered:${userId}`;
   // La API de Supabase no expone "¿este dispositivo ya tiene una passkey?",
   // así que lo recordamos localmente — es información inherentemente por
@@ -1674,11 +1705,9 @@ export default function App({ session, profile, onSignOut } = {}) {
     <div className="app-shell">
       <style>{CSS}</style>
       <header className="app-header">
-        <div>
-          <div className="app-eyebrow">Panel de control · estudio</div>
-          <h1 className="app-title">Bitácora de vuelo</h1>
-        </div>
+        <h1 className="app-title">Bitácora de vuelo</h1>
         <div className="header-right">
+          {cloudError && <span className="cloud-error" title={cloudError}>⚠ nube: {cloudError}</span>}
           <select
             className="curso-select"
             value={curso.id}
@@ -1686,51 +1715,96 @@ export default function App({ session, profile, onSignOut } = {}) {
           >
             {data.cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          {cloudError && <span className="cloud-error" title={cloudError}>⚠ nube: {cloudError}</span>}
-          {exportError && <span className="cloud-error" title={exportError}>⚠ exportar: {exportError}</span>}
-          <button
-            className="btn-ghost btn-small btn-account"
-            onClick={handleExportExcel}
-            disabled={!isPremium || exportBusy}
-            title={isPremium ? `Descarga un Excel del curso ${curso?.name ?? "actual"}: registro diario, resumen con fórmulas y gráficas` : "Exportar a Excel está disponible en los planes de pago"}
-            style={!isPremium ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-          >
-            {exportBusy ? "Generando…" : "📊 Exportar a Excel"}
-          </button>
-          <button
-            className="btn-ghost btn-small btn-account"
-            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-            title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          >
-            {theme === "dark" ? "☀️ Claro" : "🌙 Oscuro"}
-          </button>
-          {session && (
-            <div className="account-box">
-              <span className="account-email">{session.user.email}</span>
-              {supportsPasskey && !passkeyRegistered && (
-                <button
-                  className="btn-ghost btn-small btn-account"
-                  onClick={registerPasskey}
-                  disabled={passkeyBusy}
-                  title={passkeyMsg || "Activa el desbloqueo por huella/Face ID en este dispositivo"}
-                >
-                  {passkeyBusy ? "…" : "Activar huella"}
-                </button>
-              )}
-              <button className="btn-ghost btn-small" onClick={onSignOut}>Cerrar sesión</button>
-            </div>
-          )}
-          {passkeyMsg && (
-            <span
-              className="cloud-error"
-              style={!passkeyMsg.startsWith("Error") ? { color: "var(--green)", borderColor: "rgba(61,220,132,0.3)", background: "rgba(61,220,132,0.1)" } : undefined}
-              title={passkeyMsg}
+          <div className="account-menu" ref={menuRef}>
+            <button
+              className="btn-ghost btn-small menu-trigger"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Menú de cuenta"
+              aria-expanded={menuOpen}
             >
-              {passkeyMsg}
-            </span>
-          )}
+              ☰
+            </button>
+            {menuOpen && (
+              <div className="account-dropdown">
+                <div className="account-dropdown-email">{session.user.email}</div>
+                {supportsPasskey && !passkeyRegistered && (
+                  <button
+                    className="account-dropdown-row"
+                    onClick={registerPasskey}
+                    disabled={passkeyBusy}
+                  >
+                    {passkeyBusy ? "Activando…" : "Activar huella"}
+                  </button>
+                )}
+                {passkeyMsg && (
+                  <div className={`account-dropdown-note ${passkeyMsg.startsWith("Error") ? "account-dropdown-note-error" : "account-dropdown-note-ok"}`}>
+                    {passkeyMsg}
+                  </div>
+                )}
+                <button
+                  className="account-dropdown-row"
+                  onClick={() => { setMenuOpen(false); handleExportExcel(); }}
+                  disabled={!isPremium || exportBusy}
+                  title={isPremium ? `Descarga un Excel del curso ${curso?.name ?? "actual"}: registro diario, resumen con fórmulas y gráficas` : "Exportar a Excel está disponible en los planes de pago"}
+                >
+                  📊 {exportBusy ? "Generando…" : "Exportar a Excel"}
+                </button>
+                {exportError && <div className="account-dropdown-note account-dropdown-note-error">⚠ {exportError}</div>}
+                <button
+                  className="account-dropdown-row"
+                  onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                >
+                  {theme === "dark" ? "☀️ Modo claro" : "🌙 Modo oscuro"}
+                </button>
+                <button className="account-dropdown-row" onClick={onSignOut}>Cerrar sesión</button>
+                <div className="account-dropdown-divider" />
+                <button
+                  className="account-dropdown-row account-dropdown-row-danger"
+                  onClick={() => { setMenuOpen(false); setDeleteConfirmOpen(true); }}
+                >
+                  Eliminar cuenta
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
+
+      {deleteConfirmOpen && (
+        <Modal
+          title="Eliminar cuenta"
+          onClose={() => { setDeleteConfirmOpen(false); setDeleteConfirmText(""); setDeleteAccountErr(null); }}
+        >
+          <p className="panel-subtitle">
+            Esto borra para siempre todos tus cursos, asignaturas y registros de estudio. No se puede deshacer.
+            Escribe <strong>ELIMINAR</strong> para confirmar.
+          </p>
+          <input
+            className="input-field"
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+            placeholder="ELIMINAR"
+            autoFocus
+          />
+          {deleteAccountErr && <div className="auth-error">{deleteAccountErr}</div>}
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <button
+              className="btn-primary btn-danger"
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount || deleteConfirmText.trim().toUpperCase() !== "ELIMINAR"}
+            >
+              {deletingAccount ? "Eliminando…" : "Eliminar cuenta y todos mis datos"}
+            </button>
+            <button
+              className="btn-ghost"
+              onClick={() => { setDeleteConfirmOpen(false); setDeleteConfirmText(""); setDeleteAccountErr(null); }}
+              disabled={deletingAccount}
+            >
+              Cancelar
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {DISABLE_CLOUD_SAVE && (
         <div className="preview-banner">
@@ -1842,16 +1916,32 @@ export const CSS = `
   .mono { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
   .app-header {
     max-width: 1080px; margin: 0 auto 18px; display: flex; justify-content: space-between;
-    align-items: flex-end; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--border); padding-bottom: 16px;
+    align-items: center; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--border); padding-bottom: 16px;
   }
-  .app-eyebrow {
-    font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 0.18em;
-    text-transform: uppercase; color: var(--cyan); margin-bottom: 4px;
-  }
-  .app-title { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .app-title { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
   .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-  .account-box { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .account-email { font-size: 12px; color: var(--text-dim); }
+  .account-menu { position: relative; }
+  .menu-trigger { font-size: 16px; line-height: 1; padding: 8px 12px; }
+  .account-dropdown {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; min-width: 240px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.35); padding: 8px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .account-dropdown-email {
+    font-size: 12px; color: var(--text-dim); padding: 8px 10px 10px; word-break: break-all;
+    border-bottom: 1px solid var(--border); margin-bottom: 4px;
+  }
+  .account-dropdown-row {
+    display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text);
+    font-size: 13.5px; padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  }
+  .account-dropdown-row:hover:not(:disabled) { background: var(--panel-2); }
+  .account-dropdown-row:disabled { opacity: 0.5; cursor: not-allowed; }
+  .account-dropdown-row-danger { color: var(--red); }
+  .account-dropdown-divider { height: 1px; background: var(--border); margin: 4px 2px; }
+  .account-dropdown-note { font-size: 11.5px; padding: 2px 10px 6px; }
+  .account-dropdown-note-ok { color: var(--green); }
+  .account-dropdown-note-error { color: var(--red); }
   .auth-card { max-width: 360px; width: 100%; }
   .password-field { position: relative; flex: 1; }
   .password-field .input-field { width: 100%; padding-right: 38px; }
@@ -1940,12 +2030,13 @@ export const CSS = `
     font-weight: 700; font-size: 13px; cursor: pointer;
   }
   .btn-primary:hover { filter: brightness(1.08); }
+  .btn-primary.btn-danger { background: var(--red); color: #fff; }
   .btn-ghost {
     background: transparent; border: 1px solid var(--border); color: var(--text-dim); border-radius: 8px;
     padding: 10px 16px; font-size: 13px; cursor: pointer;
   }
   .btn-ghost:hover { color: var(--red); border-color: rgba(255,92,92,0.4); }
-  .btn-ghost.btn-account:hover { color: var(--cyan); border-color: rgba(79,216,234,0.4); }
+  .btn-primary:disabled, .btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
   .btn-small { padding: 6px 10px; font-size: 12px; }
 
   .empty-hint { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
