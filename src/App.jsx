@@ -122,6 +122,36 @@ function formatElapsed(ms) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+const DRAFT_PREFIX = "bitacora:draft:";
+
+// El registro manual sin guardar y el contador viven en memoria (useState).
+// En móvil, al poner la app en segundo plano el sistema puede recargar la
+// página al volver, perdiendo esa memoria. Estas funciones guardan un
+// borrador en localStorage para poder recuperarlo tras esa recarga.
+function loadDraft(cursoId) {
+  try {
+    const raw = localStorage.getItem(DRAFT_PREFIX + cursoId);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(cursoId, draft) {
+  try {
+    localStorage.setItem(DRAFT_PREFIX + cursoId, JSON.stringify(draft));
+  } catch {
+    // Sin localStorage disponible (privado, cuota, etc.) el registro sigue
+    // funcionando en memoria, solo se pierde la recuperación tras recargar.
+  }
+}
+
+function clearDraft(cursoId) {
+  try {
+    localStorage.removeItem(DRAFT_PREFIX + cursoId);
+  } catch {}
+}
+
 function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
@@ -150,23 +180,43 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     setHistorySubjectId(HISTORY_ALL);
   }, [curso.id]);
 
+  // Carga los valores del día. Si hay un borrador sin guardar en localStorage
+  // para este mismo curso y fecha (p. ej. porque el móvil recargó la página
+  // al volver de segundo plano), se recupera — incluido el contador, si
+  // seguía en marcha, cuyo tiempo se recalcula contra timerStartedAt (un
+  // timestamp real) y no contra el intervalo perdido. Si cambias de fecha o
+  // de curso a media sesión sin que haya borrador de esa fecha, el contador
+  // se resetea, para que el tiempo medido nunca se cuele en el día equivocado.
   useEffect(() => {
+    const draft = loadDraft(curso.id);
+    const useDraft = !!draft && draft.date === date;
     const existing = entries[date] || {};
     const next = {};
-    loggableSubjects.forEach((s) => { next[s.id] = existing[s.id] ? String(existing[s.id]) : ""; });
+    loggableSubjects.forEach((s) => {
+      const draftValue = useDraft ? draft.values?.[s.id] : undefined;
+      next[s.id] = draftValue !== undefined ? draftValue : (existing[s.id] ? String(existing[s.id]) : "");
+    });
     setValues(next);
-  }, [date, loggableSubjects, entries]);
+    if (useDraft) {
+      setMode(draft.mode || "manual");
+      if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
+      setTimerRunning(!!draft.timerRunning);
+      setTimerStartedAt(draft.timerStartedAt ?? null);
+      setTimerAccumulatedMs(draft.timerAccumulatedMs || 0);
+    } else {
+      setTimerRunning(false);
+      setTimerStartedAt(null);
+      setTimerAccumulatedMs(0);
+    }
+  }, [date, loggableSubjects, entries, curso.id]);
+
+  // Persiste el borrador en cada cambio, para poder recuperarlo si el
+  // sistema recarga la página mientras la app está en segundo plano.
+  useEffect(() => {
+    saveDraft(curso.id, { date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs });
+  }, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs]);
 
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
-
-  // Si cambias de fecha (o de curso) a media sesión, el contador se para y
-  // se resetea — así el tiempo medido nunca se cuela sin querer en el día
-  // equivocado.
-  useEffect(() => {
-    setTimerRunning(false);
-    setTimerStartedAt(null);
-    setTimerAccumulatedMs(0);
-  }, [date]);
 
   useEffect(() => {
     if (!timerSubjectId || !loggableSubjects.some((s) => s.id === timerSubjectId)) {
@@ -309,12 +359,21 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
                     if (v > 0) clean[s.id] = v;
                   });
                   onSaveDay(date, loggableSubjects.map((s) => s.id), clean);
+                  clearDraft(curso.id);
                 }}
               >
                 Guardar registro
               </button>
               {hasEntryToday && (
-                <button className="btn-ghost" onClick={() => onDeleteDay(date, loggableSubjects.map((s) => s.id))}>Eliminar día</button>
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    onDeleteDay(date, loggableSubjects.map((s) => s.id));
+                    clearDraft(curso.id);
+                  }}
+                >
+                  Eliminar día
+                </button>
               )}
             </div>
           </>
