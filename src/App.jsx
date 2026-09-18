@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -10,7 +10,7 @@ import {
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 import {
-  loadUserData, saveDayEntries, deleteDayEntries, insertSubject, deleteSubject, updateSubject,
+  loadUserData, loadDayEntries, saveDayEntries, deleteDayEntries, insertSubject, deleteSubject, updateSubject,
   updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso, migrateFromGoogleSheets,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
@@ -152,7 +152,7 @@ function clearDraft(cursoId) {
   } catch {}
 }
 
-function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, curso }) {
+function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, onRefreshDay, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
   // Si el curso todavía no ha empezado, no hay "hoy" válido dentro de su rango:
@@ -172,6 +172,14 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   const [timerAccumulatedMs, setTimerAccumulatedMs] = useState(0);
   const [, setTimerTick] = useState(0);
 
+  // Mientras un guardado/borrado de este mismo componente está en vuelo,
+  // sync() no debe releer el día: guardar cambia `loggableSubjects` (porque
+  // actualiza `data` en App), lo que antes disparaba una relectura que podía
+  // llegar a Supabase ANTES de que el guardado terminase de escribir —
+  // pisando en la propia pantalla el número recién guardado con el valor
+  // viejo, y obligando a guardar dos veces para que se quedara.
+  const savingRef = useRef(false);
+
   // Al cambiar de curso, la fecha y la asignatura de historial seleccionadas
   // pueden quedar fuera de rango o dejar de existir en el nuevo curso — se
   // resetean para que los registros siempre se guarden en el curso activo.
@@ -180,41 +188,102 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     setHistorySubjectId(HISTORY_ALL);
   }, [curso.id]);
 
-  // Carga los valores del día. Si hay un borrador sin guardar en localStorage
-  // para este mismo curso y fecha (p. ej. porque el móvil recargó la página
-  // al volver de segundo plano), se recupera — incluido el contador, si
-  // seguía en marcha, cuyo tiempo se recalcula contra timerStartedAt (un
-  // timestamp real) y no contra el intervalo perdido. Si cambias de fecha o
-  // de curso a media sesión sin que haya borrador de esa fecha, el contador
-  // se resetea, para que el tiempo medido nunca se cuele en el día equivocado.
+  // Snapshot de lo que había guardado en el servidor la última vez que se
+  // sincronizó este día — se guarda junto al borrador para poder distinguir
+  // "el usuario editó este valor a mano" de "otro dispositivo lo cambió
+  // mientras tanto" (ver más abajo).
+  const [existingSnapshot, setExistingSnapshot] = useState({});
+
+  // Carga los valores del día. SIEMPRE relee ese día de Supabase primero
+  // (onRefreshDay) en vez de fiarse solo de lo que ya había en memoria: si
+  // guardaste un registro desde el móvil y el PC llevaba un rato con la
+  // pestaña abierta en la misma fecha, el PC seguía "viendo" el día de antes
+  // de ese guardado, y su total ya no era la suma real — un simple "Guardar
+  // registro" desde ahí habría sobrescrito (perdido) lo metido desde el
+  // móvil, porque el guardado reemplaza el día entero con lo que haya en
+  // memoria. Si además hay un borrador sin guardar en localStorage (p. ej.
+  // porque el móvil recargó la página al volver de segundo plano), se
+  // recupera pero solo como una DIFERENCIA sobre el snapshot con el que se
+  // creó ese borrador — así lo que sume ese dispositivo se suma de verdad al
+  // total fresco del servidor, en vez de sustituirlo por un total obsoleto.
+  // También se vuelve a sincronizar al recuperar el foco/visibilidad de la
+  // pestaña, para detectar cambios hechos desde otro sitio sin necesidad de
+  // recargar. El contador en marcha (si lo hay) se recalcula siempre contra
+  // timerStartedAt (un timestamp real), nunca contra el intervalo perdido.
+  const loggableIdsKey = loggableSubjects.map((s) => s.id).sort().join(",");
+
   useEffect(() => {
-    const draft = loadDraft(curso.id);
-    const useDraft = !!draft && draft.date === date;
-    const existing = entries[date] || {};
-    const next = {};
-    loggableSubjects.forEach((s) => {
-      const draftValue = useDraft ? draft.values?.[s.id] : undefined;
-      next[s.id] = draftValue !== undefined ? draftValue : (existing[s.id] ? String(existing[s.id]) : "");
-    });
-    setValues(next);
-    if (useDraft) {
-      setMode(draft.mode || "manual");
-      if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
-      setTimerRunning(!!draft.timerRunning);
-      setTimerStartedAt(draft.timerStartedAt ?? null);
-      setTimerAccumulatedMs(draft.timerAccumulatedMs || 0);
-    } else {
-      setTimerRunning(false);
-      setTimerStartedAt(null);
-      setTimerAccumulatedMs(0);
+    let cancelled = false;
+    let didInitialSync = false;
+
+    async function sync() {
+      // Mientras haya un guardado/borrado de este propio componente en
+      // vuelo, no releer: si la lectura llega antes de que termine de
+      // escribirse, pisaría en pantalla lo recién guardado con el valor
+      // viejo (el bug de "hay que guardar dos veces").
+      if (savingRef.current) return;
+      const isInitialSync = !didInitialSync;
+      didInitialSync = true;
+
+      const draft = loadDraft(curso.id);
+      const useDraft = !!draft && draft.date === date;
+      const fresh = (await onRefreshDay(date)) || {};
+      if (cancelled || savingRef.current) return;
+      const next = {};
+      loggableSubjects.forEach((s) => {
+        const freshValue = fresh[s.id] || 0;
+        if (useDraft && draft.values && s.id in draft.values) {
+          const draftValue = parseFloat(draft.values[s.id]) || 0;
+          const snapshotValue = parseFloat(draft.existingSnapshot?.[s.id]) || 0;
+          const merged = Math.max(0, freshValue + (draftValue - snapshotValue));
+          next[s.id] = merged > 0 ? String(merged) : "";
+        } else {
+          next[s.id] = freshValue ? String(freshValue) : "";
+        }
+      });
+      setValues(next);
+      setExistingSnapshot(fresh);
+      // El contador en marcha es propio de esta pestaña — solo se restaura
+      // desde el borrador en la sincronización inicial (al montar o cambiar
+      // de fecha/curso). En los refrescos posteriores (foco/visibilidad) no
+      // se toca: si ya está corriendo en esta pestaña, reaplicar el
+      // borrador sobre él no aporta nada y solo puede desincronizarlo.
+      if (!isInitialSync) return;
+      if (useDraft) {
+        setMode(draft.mode || "manual");
+        if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
+        setTimerRunning(!!draft.timerRunning);
+        setTimerStartedAt(draft.timerStartedAt ?? null);
+        setTimerAccumulatedMs(draft.timerAccumulatedMs || 0);
+      } else {
+        setTimerRunning(false);
+        setTimerStartedAt(null);
+        setTimerAccumulatedMs(0);
+      }
     }
-  }, [date, loggableSubjects, entries, curso.id]);
+
+    sync();
+    function onVisible() { if (document.visibilityState === "visible") sync(); }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", sync);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", sync);
+    };
+    // loggableIdsKey (no loggableSubjects) a propósito: guardar un registro
+    // cambia `data` en App y por tanto la referencia de loggableSubjects
+    // aunque el conjunto de asignaturas sea el mismo — si ese cambio de
+    // referencia disparase este efecto, competiría con el propio guardado
+    // (ver el comentario de savingRef más arriba).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, loggableIdsKey, curso.id, onRefreshDay]);
 
   // Persiste el borrador en cada cambio, para poder recuperarlo si el
   // sistema recarga la página mientras la app está en segundo plano.
   useEffect(() => {
-    saveDraft(curso.id, { date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs });
-  }, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs]);
+    saveDraft(curso.id, { date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs, existingSnapshot });
+  }, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs, existingSnapshot]);
 
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
 
@@ -352,14 +421,19 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
             <div className="btn-row">
               <button
                 className="btn-primary"
-                onClick={() => {
+                onClick={async () => {
                   const clean = {};
                   loggableSubjects.forEach((s) => {
                     const v = parseFloat(values[s.id]);
                     if (v > 0) clean[s.id] = v;
                   });
-                  onSaveDay(date, loggableSubjects.map((s) => s.id), clean);
                   clearDraft(curso.id);
+                  savingRef.current = true;
+                  try {
+                    await onSaveDay(date, loggableSubjects.map((s) => s.id), clean);
+                  } finally {
+                    savingRef.current = false;
+                  }
                 }}
               >
                 Guardar registro
@@ -367,9 +441,14 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
               {hasEntryToday && (
                 <button
                   className="btn-ghost"
-                  onClick={() => {
-                    onDeleteDay(date, loggableSubjects.map((s) => s.id));
+                  onClick={async () => {
                     clearDraft(curso.id);
+                    savingRef.current = true;
+                    try {
+                      await onDeleteDay(date, loggableSubjects.map((s) => s.id));
+                    } finally {
+                      savingRef.current = false;
+                    }
                   }}
                 >
                   Eliminar día
@@ -1429,6 +1508,8 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
 
 export default function App({ session, profile, onSignOut } = {}) {
   const [data, setData] = useState(null);
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
   const [theme, setTheme] = useState(
@@ -1556,7 +1637,7 @@ export default function App({ session, profile, onSignOut } = {}) {
       else entries[date] = nextDay;
       return { ...d, entries };
     });
-    withCloudWrite(() => saveDayEntries(userId, date, loggableIds, values));
+    return withCloudWrite(() => saveDayEntries(userId, date, loggableIds, values));
   }
 
   function handleDeleteDay(date, loggableIds) {
@@ -1568,8 +1649,40 @@ export default function App({ session, profile, onSignOut } = {}) {
       else entries[date] = nextDay;
       return { ...d, entries };
     });
-    withCloudWrite(() => deleteDayEntries(userId, date, loggableIds));
+    return withCloudWrite(() => deleteDayEntries(userId, date, loggableIds));
   }
+
+  // La Bitácora solo carga los datos una vez al entrar (loadUserData), así
+  // que si guardas un registro desde el móvil y luego abres/vuelves al PC
+  // sin recargar la página, el PC seguía "viendo" el día tal como estaba
+  // antes de ese guardado — y al guardar desde ahí se sobrescribía (borraba)
+  // lo que acababas de meter desde el móvil, porque "Guardar registro"
+  // reemplaza el día entero con lo que haya en memoria. Para evitarlo,
+  // BitacoraTab llama a esto para releer ese día concreto de Supabase justo
+  // antes de mostrarlo/editarlo, y aquí se fusiona en el estado global para
+  // que Historial también quede al día. Si falla (sin red, etc.) se sigue
+  // trabajando con lo que ya había en memoria.
+  const refreshDayEntries = useCallback(async (date) => {
+    if (DISABLE_CLOUD_SAVE) return dataRef.current.entries[date] || {};
+    try {
+      const fresh = await loadDayEntries(userId, date);
+      setData((d) => {
+        const current = d.entries[date] || {};
+        const sameContent =
+          Object.keys(fresh).length === Object.keys(current).length &&
+          Object.entries(fresh).every(([id, m]) => current[id] === m);
+        if (sameContent) return d;
+        const entries = { ...d.entries };
+        if (Object.keys(fresh).length === 0) delete entries[date];
+        else entries[date] = fresh;
+        return { ...d, entries };
+      });
+      return fresh;
+    } catch (e) {
+      setCloudError(String((e && e.message) || e));
+      return dataRef.current.entries[date] || {};
+    }
+  }, [userId]);
 
   // Añadir asignatura/curso necesita el id real que genera Supabase antes
   // de poder guardarlo en el estado local (los registros de estudio se
@@ -1755,6 +1868,7 @@ export default function App({ session, profile, onSignOut } = {}) {
             entries={cursoEntries}
             onSaveDay={handleSaveDay}
             onDeleteDay={handleDeleteDay}
+            onRefreshDay={refreshDayEntries}
             curso={curso}
           />
         )}
