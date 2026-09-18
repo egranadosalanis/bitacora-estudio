@@ -172,6 +172,14 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   const [timerAccumulatedMs, setTimerAccumulatedMs] = useState(0);
   const [, setTimerTick] = useState(0);
 
+  // Mientras un guardado/borrado de este mismo componente está en vuelo,
+  // sync() no debe releer el día: guardar cambia `loggableSubjects` (porque
+  // actualiza `data` en App), lo que antes disparaba una relectura que podía
+  // llegar a Supabase ANTES de que el guardado terminase de escribir —
+  // pisando en la propia pantalla el número recién guardado con el valor
+  // viejo, y obligando a guardar dos veces para que se quedara.
+  const savingRef = useRef(false);
+
   // Al cambiar de curso, la fecha y la asignatura de historial seleccionadas
   // pueden quedar fuera de rango o dejar de existir en el nuevo curso — se
   // resetean para que los registros siempre se guarden en el curso activo.
@@ -202,14 +210,25 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   // pestaña, para detectar cambios hechos desde otro sitio sin necesidad de
   // recargar. El contador en marcha (si lo hay) se recalcula siempre contra
   // timerStartedAt (un timestamp real), nunca contra el intervalo perdido.
+  const loggableIdsKey = loggableSubjects.map((s) => s.id).sort().join(",");
+
   useEffect(() => {
     let cancelled = false;
+    let didInitialSync = false;
 
     async function sync() {
+      // Mientras haya un guardado/borrado de este propio componente en
+      // vuelo, no releer: si la lectura llega antes de que termine de
+      // escribirse, pisaría en pantalla lo recién guardado con el valor
+      // viejo (el bug de "hay que guardar dos veces").
+      if (savingRef.current) return;
+      const isInitialSync = !didInitialSync;
+      didInitialSync = true;
+
       const draft = loadDraft(curso.id);
       const useDraft = !!draft && draft.date === date;
       const fresh = (await onRefreshDay(date)) || {};
-      if (cancelled) return;
+      if (cancelled || savingRef.current) return;
       const next = {};
       loggableSubjects.forEach((s) => {
         const freshValue = fresh[s.id] || 0;
@@ -224,6 +243,12 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
       });
       setValues(next);
       setExistingSnapshot(fresh);
+      // El contador en marcha es propio de esta pestaña — solo se restaura
+      // desde el borrador en la sincronización inicial (al montar o cambiar
+      // de fecha/curso). En los refrescos posteriores (foco/visibilidad) no
+      // se toca: si ya está corriendo en esta pestaña, reaplicar el
+      // borrador sobre él no aporta nada y solo puede desincronizarlo.
+      if (!isInitialSync) return;
       if (useDraft) {
         setMode(draft.mode || "manual");
         if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
@@ -246,7 +271,13 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", sync);
     };
-  }, [date, loggableSubjects, curso.id, onRefreshDay]);
+    // loggableIdsKey (no loggableSubjects) a propósito: guardar un registro
+    // cambia `data` en App y por tanto la referencia de loggableSubjects
+    // aunque el conjunto de asignaturas sea el mismo — si ese cambio de
+    // referencia disparase este efecto, competiría con el propio guardado
+    // (ver el comentario de savingRef más arriba).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, loggableIdsKey, curso.id, onRefreshDay]);
 
   // Persiste el borrador en cada cambio, para poder recuperarlo si el
   // sistema recarga la página mientras la app está en segundo plano.
@@ -390,14 +421,19 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
             <div className="btn-row">
               <button
                 className="btn-primary"
-                onClick={() => {
+                onClick={async () => {
                   const clean = {};
                   loggableSubjects.forEach((s) => {
                     const v = parseFloat(values[s.id]);
                     if (v > 0) clean[s.id] = v;
                   });
-                  onSaveDay(date, loggableSubjects.map((s) => s.id), clean);
                   clearDraft(curso.id);
+                  savingRef.current = true;
+                  try {
+                    await onSaveDay(date, loggableSubjects.map((s) => s.id), clean);
+                  } finally {
+                    savingRef.current = false;
+                  }
                 }}
               >
                 Guardar registro
@@ -405,9 +441,14 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
               {hasEntryToday && (
                 <button
                   className="btn-ghost"
-                  onClick={() => {
-                    onDeleteDay(date, loggableSubjects.map((s) => s.id));
+                  onClick={async () => {
                     clearDraft(curso.id);
+                    savingRef.current = true;
+                    try {
+                      await onDeleteDay(date, loggableSubjects.map((s) => s.id));
+                    } finally {
+                      savingRef.current = false;
+                    }
                   }}
                 >
                   Eliminar día
@@ -1596,7 +1637,7 @@ export default function App({ session, profile, onSignOut } = {}) {
       else entries[date] = nextDay;
       return { ...d, entries };
     });
-    withCloudWrite(() => saveDayEntries(userId, date, loggableIds, values));
+    return withCloudWrite(() => saveDayEntries(userId, date, loggableIds, values));
   }
 
   function handleDeleteDay(date, loggableIds) {
@@ -1608,7 +1649,7 @@ export default function App({ session, profile, onSignOut } = {}) {
       else entries[date] = nextDay;
       return { ...d, entries };
     });
-    withCloudWrite(() => deleteDayEntries(userId, date, loggableIds));
+    return withCloudWrite(() => deleteDayEntries(userId, date, loggableIds));
   }
 
   // La Bitácora solo carga los datos una vez al entrar (loadUserData), así
