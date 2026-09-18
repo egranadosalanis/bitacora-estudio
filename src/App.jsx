@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -10,7 +10,7 @@ import {
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 import {
-  loadUserData, saveDayEntries, deleteDayEntries, insertSubject, deleteSubject, updateSubject,
+  loadUserData, loadDayEntries, saveDayEntries, deleteDayEntries, insertSubject, deleteSubject, updateSubject,
   updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso, migrateFromGoogleSheets,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
@@ -152,7 +152,7 @@ function clearDraft(cursoId) {
   } catch {}
 }
 
-function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, curso }) {
+function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, onRefreshDay, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
   // Si el curso todavía no ha empezado, no hay "hoy" válido dentro de su rango:
@@ -180,41 +180,79 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     setHistorySubjectId(HISTORY_ALL);
   }, [curso.id]);
 
-  // Carga los valores del día. Si hay un borrador sin guardar en localStorage
-  // para este mismo curso y fecha (p. ej. porque el móvil recargó la página
-  // al volver de segundo plano), se recupera — incluido el contador, si
-  // seguía en marcha, cuyo tiempo se recalcula contra timerStartedAt (un
-  // timestamp real) y no contra el intervalo perdido. Si cambias de fecha o
-  // de curso a media sesión sin que haya borrador de esa fecha, el contador
-  // se resetea, para que el tiempo medido nunca se cuele en el día equivocado.
+  // Snapshot de lo que había guardado en el servidor la última vez que se
+  // sincronizó este día — se guarda junto al borrador para poder distinguir
+  // "el usuario editó este valor a mano" de "otro dispositivo lo cambió
+  // mientras tanto" (ver más abajo).
+  const [existingSnapshot, setExistingSnapshot] = useState({});
+
+  // Carga los valores del día. SIEMPRE relee ese día de Supabase primero
+  // (onRefreshDay) en vez de fiarse solo de lo que ya había en memoria: si
+  // guardaste un registro desde el móvil y el PC llevaba un rato con la
+  // pestaña abierta en la misma fecha, el PC seguía "viendo" el día de antes
+  // de ese guardado, y su total ya no era la suma real — un simple "Guardar
+  // registro" desde ahí habría sobrescrito (perdido) lo metido desde el
+  // móvil, porque el guardado reemplaza el día entero con lo que haya en
+  // memoria. Si además hay un borrador sin guardar en localStorage (p. ej.
+  // porque el móvil recargó la página al volver de segundo plano), se
+  // recupera pero solo como una DIFERENCIA sobre el snapshot con el que se
+  // creó ese borrador — así lo que sume ese dispositivo se suma de verdad al
+  // total fresco del servidor, en vez de sustituirlo por un total obsoleto.
+  // También se vuelve a sincronizar al recuperar el foco/visibilidad de la
+  // pestaña, para detectar cambios hechos desde otro sitio sin necesidad de
+  // recargar. El contador en marcha (si lo hay) se recalcula siempre contra
+  // timerStartedAt (un timestamp real), nunca contra el intervalo perdido.
   useEffect(() => {
-    const draft = loadDraft(curso.id);
-    const useDraft = !!draft && draft.date === date;
-    const existing = entries[date] || {};
-    const next = {};
-    loggableSubjects.forEach((s) => {
-      const draftValue = useDraft ? draft.values?.[s.id] : undefined;
-      next[s.id] = draftValue !== undefined ? draftValue : (existing[s.id] ? String(existing[s.id]) : "");
-    });
-    setValues(next);
-    if (useDraft) {
-      setMode(draft.mode || "manual");
-      if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
-      setTimerRunning(!!draft.timerRunning);
-      setTimerStartedAt(draft.timerStartedAt ?? null);
-      setTimerAccumulatedMs(draft.timerAccumulatedMs || 0);
-    } else {
-      setTimerRunning(false);
-      setTimerStartedAt(null);
-      setTimerAccumulatedMs(0);
+    let cancelled = false;
+
+    async function sync() {
+      const draft = loadDraft(curso.id);
+      const useDraft = !!draft && draft.date === date;
+      const fresh = (await onRefreshDay(date)) || {};
+      if (cancelled) return;
+      const next = {};
+      loggableSubjects.forEach((s) => {
+        const freshValue = fresh[s.id] || 0;
+        if (useDraft && draft.values && s.id in draft.values) {
+          const draftValue = parseFloat(draft.values[s.id]) || 0;
+          const snapshotValue = parseFloat(draft.existingSnapshot?.[s.id]) || 0;
+          const merged = Math.max(0, freshValue + (draftValue - snapshotValue));
+          next[s.id] = merged > 0 ? String(merged) : "";
+        } else {
+          next[s.id] = freshValue ? String(freshValue) : "";
+        }
+      });
+      setValues(next);
+      setExistingSnapshot(fresh);
+      if (useDraft) {
+        setMode(draft.mode || "manual");
+        if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
+        setTimerRunning(!!draft.timerRunning);
+        setTimerStartedAt(draft.timerStartedAt ?? null);
+        setTimerAccumulatedMs(draft.timerAccumulatedMs || 0);
+      } else {
+        setTimerRunning(false);
+        setTimerStartedAt(null);
+        setTimerAccumulatedMs(0);
+      }
     }
-  }, [date, loggableSubjects, entries, curso.id]);
+
+    sync();
+    function onVisible() { if (document.visibilityState === "visible") sync(); }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", sync);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", sync);
+    };
+  }, [date, loggableSubjects, curso.id, onRefreshDay]);
 
   // Persiste el borrador en cada cambio, para poder recuperarlo si el
   // sistema recarga la página mientras la app está en segundo plano.
   useEffect(() => {
-    saveDraft(curso.id, { date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs });
-  }, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs]);
+    saveDraft(curso.id, { date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs, existingSnapshot });
+  }, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs, existingSnapshot]);
 
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
 
@@ -1429,6 +1467,8 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
 
 export default function App({ session, profile, onSignOut } = {}) {
   const [data, setData] = useState(null);
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
   const [theme, setTheme] = useState(
@@ -1488,12 +1528,12 @@ export default function App({ session, profile, onSignOut } = {}) {
   const [exportError, setExportError] = useState(null);
 
   async function handleExportExcel() {
-    if (!isPremium || exportBusy || !data) return;
+    if (!isPremium || exportBusy || !data || !curso) return;
     setExportBusy(true);
     setExportError(null);
     try {
       const { exportSubjectsToExcel } = await import("./exportExcel.js");
-      await exportSubjectsToExcel(data);
+      await exportSubjectsToExcel(data, curso);
     } catch (e) {
       setExportError(String((e && e.message) || e));
     } finally {
@@ -1570,6 +1610,38 @@ export default function App({ session, profile, onSignOut } = {}) {
     });
     withCloudWrite(() => deleteDayEntries(userId, date, loggableIds));
   }
+
+  // La Bitácora solo carga los datos una vez al entrar (loadUserData), así
+  // que si guardas un registro desde el móvil y luego abres/vuelves al PC
+  // sin recargar la página, el PC seguía "viendo" el día tal como estaba
+  // antes de ese guardado — y al guardar desde ahí se sobrescribía (borraba)
+  // lo que acababas de meter desde el móvil, porque "Guardar registro"
+  // reemplaza el día entero con lo que haya en memoria. Para evitarlo,
+  // BitacoraTab llama a esto para releer ese día concreto de Supabase justo
+  // antes de mostrarlo/editarlo, y aquí se fusiona en el estado global para
+  // que Historial también quede al día. Si falla (sin red, etc.) se sigue
+  // trabajando con lo que ya había en memoria.
+  const refreshDayEntries = useCallback(async (date) => {
+    if (DISABLE_CLOUD_SAVE) return dataRef.current.entries[date] || {};
+    try {
+      const fresh = await loadDayEntries(userId, date);
+      setData((d) => {
+        const current = d.entries[date] || {};
+        const sameContent =
+          Object.keys(fresh).length === Object.keys(current).length &&
+          Object.entries(fresh).every(([id, m]) => current[id] === m);
+        if (sameContent) return d;
+        const entries = { ...d.entries };
+        if (Object.keys(fresh).length === 0) delete entries[date];
+        else entries[date] = fresh;
+        return { ...d, entries };
+      });
+      return fresh;
+    } catch (e) {
+      setCloudError(String((e && e.message) || e));
+      return dataRef.current.entries[date] || {};
+    }
+  }, [userId]);
 
   // Añadir asignatura/curso necesita el id real que genera Supabase antes
   // de poder guardarlo en el estado local (los registros de estudio se
@@ -1692,7 +1764,7 @@ export default function App({ session, profile, onSignOut } = {}) {
             className="btn-ghost btn-small btn-account"
             onClick={handleExportExcel}
             disabled={!isPremium || exportBusy}
-            title={isPremium ? "Descarga un Excel con el resumen, los registros diarios, la clasificación histórica y sus gráficas" : "Exportar a Excel está disponible en los planes de pago"}
+            title={isPremium ? `Descarga un Excel del curso ${curso?.name ?? "actual"}: registro diario, resumen con fórmulas y gráficas` : "Exportar a Excel está disponible en los planes de pago"}
             style={!isPremium ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
           >
             {exportBusy ? "Generando…" : "📊 Exportar a Excel"}
@@ -1755,6 +1827,7 @@ export default function App({ session, profile, onSignOut } = {}) {
             entries={cursoEntries}
             onSaveDay={handleSaveDay}
             onDeleteDay={handleDeleteDay}
+            onRefreshDay={refreshDayEntries}
             curso={curso}
           />
         )}
