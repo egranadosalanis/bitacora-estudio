@@ -244,3 +244,14 @@ export async function migrateFromGoogleSheets(userId, legacyData, onProgress) {
 
   return { cursos: legacyData.cursos.length, subjects: legacyData.subjects.length, registros: rows.length };
 }
+
+/* ---------- borrar cuenta ---------- */
+
+/** Borra la fila de `profiles` del usuario — el esquema tiene `on delete
+ * cascade` desde cursos/asignaturas/registros_estudio hacia profiles, así
+ * que esto se lleva por delante todos sus datos de un tirón. Requiere la
+ * política RLS "profiles_delete_own" (ver supabase/migrations). */
+export async function deleteAccountData(userId) {
+  const { error } = await supabase.from("profiles").delete().eq("id", userId);
+  if (error) throw error;
+}

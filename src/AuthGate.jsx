@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import { deleteAccountData } from "./supabaseData.js";
 import App, { CSS } from "./App.jsx";
 
 const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
@@ -332,17 +333,36 @@ export default function AuthGate() {
   useEffect(() => {
     if (!session) {
       setProfile(null);
+      setProfileError(null);
       return;
     }
-    supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (error) setProfileError(error.message);
-        else setProfile(data);
-      });
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
+      if (cancelled) return;
+      if (!error) {
+        setProfile(data);
+        return;
+      }
+      // PGRST116: la consulta no encontró ninguna fila — pasa si el perfil
+      // se borró a mano (p. ej. al "eliminar cuenta" desde fuera de la app,
+      // o manualmente en Supabase) pero la cuenta de autenticación sigue
+      // existiendo. En vez de quedarse atascado con un error, se crea un
+      // perfil nuevo y se sigue como si fuera una cuenta recién registrada.
+      if (error.code === "PGRST116") {
+        const { data: created, error: insertError } = await supabase
+          .from("profiles")
+          .insert({ id: session.user.id, email: session.user.email, plan: "free" })
+          .select()
+          .single();
+        if (cancelled) return;
+        if (insertError) setProfileError(insertError.message);
+        else setProfile(created);
+        return;
+      }
+      setProfileError(error.message);
+    })();
+    return () => { cancelled = true; };
   }, [session]);
 
   async function completeProfile({ universidad, carrera }) {
@@ -356,12 +376,44 @@ export default function AuthGate() {
     setProfile(data);
   }
 
+  // Borra el perfil del usuario — por cascada (on delete cascade en el
+  // esquema) se borran también todos sus cursos, asignaturas y registros
+  // de estudio. No borra la cuenta de autenticación en sí (eso requiere la
+  // service role key, que no puede usarse desde el cliente): la cuenta
+  // podría volver a iniciar sesión con el mismo email/contraseña, y
+  // arrancaría de cero como si fuera nueva, gracias al mismo mecanismo de
+  // arriba que crea un perfil cuando no encuentra ninguno.
+  async function deleteAccount() {
+    await deleteAccountData(session.user.id);
+    await supabase.auth.signOut();
+  }
+
   if (session === undefined) return <LoadingScreen text="Cargando…" />;
   if (passwordRecovery) return <SetNewPassword />;
   if (!session) return <AuthForm />;
-  if (profileError) return <LoadingScreen text={`Error cargando el perfil: ${profileError}`} />;
+  if (profileError) {
+    return (
+      <div className="app-shell app-loading">
+        <style>{CSS}</style>
+        <div className="panel auth-card">
+          <div className="panel-title">Error cargando el perfil</div>
+          <div className="auth-error">{profileError}</div>
+          <div className="btn-row">
+            <button className="btn-primary" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!profile) return <LoadingScreen text="Cargando perfil…" />;
   if (!profile.universidad || !profile.carrera) return <CompleteProfileForm onSubmit={completeProfile} />;
 
-  return <App session={session} profile={profile} onSignOut={() => supabase.auth.signOut()} />;
+  return (
+    <App
+      session={session}
+      profile={profile}
+      onSignOut={() => supabase.auth.signOut()}
+      onDeleteAccount={deleteAccount}
+    />
+  );
 }
