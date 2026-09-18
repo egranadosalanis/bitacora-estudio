@@ -1484,23 +1484,6 @@ export default function App({ session, profile, onSignOut } = {}) {
   // siguen guardándose sin restricción, solo se oculta en la interfaz.
   const isPremium = profile.plan !== "free";
 
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportError, setExportError] = useState(null);
-
-  async function handleExportExcel() {
-    if (!isPremium || exportBusy || !data) return;
-    setExportBusy(true);
-    setExportError(null);
-    try {
-      const { exportSubjectsToExcel } = await import("./exportExcel.js");
-      await exportSubjectsToExcel(data);
-    } catch (e) {
-      setExportError(String((e && e.message) || e));
-    } finally {
-      setExportBusy(false);
-    }
-  }
-
   useEffect(() => {
     (async () => {
       try {
@@ -1687,16 +1670,6 @@ export default function App({ session, profile, onSignOut } = {}) {
             {data.cursos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           {cloudError && <span className="cloud-error" title={cloudError}>⚠ nube: {cloudError}</span>}
-          {exportError && <span className="cloud-error" title={exportError}>⚠ exportar: {exportError}</span>}
-          <button
-            className="btn-ghost btn-small btn-account"
-            onClick={handleExportExcel}
-            disabled={!isPremium || exportBusy}
-            title={isPremium ? "Descarga un Excel con el resumen, los registros diarios, la clasificación histórica y sus gráficas" : "Exportar a Excel está disponible en los planes de pago"}
-            style={!isPremium ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-          >
-            {exportBusy ? "Generando…" : "📊 Exportar a Excel"}
-          </button>
           <button
             className="btn-ghost btn-small btn-account"
             onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
