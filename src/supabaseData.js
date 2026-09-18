@@ -57,6 +57,23 @@ export async function loadUserData(userId) {
 
 /* ---------- registros_estudio ---------- */
 
+/** Los minutos por asignatura ya guardados para un día concreto, leídos
+ * directamente de Supabase (no del estado en memoria) — se usa para
+ * refrescar la Bitácora justo antes de mostrar/editar un día, así un
+ * cambio guardado desde otro dispositivo (u otra pestaña) no se pisa por
+ * accidente con datos que quedaron obsoletos en memoria. */
+export async function loadDayEntries(userId, date) {
+  const { data, error } = await supabase
+    .from("registros_estudio")
+    .select("asignatura_id, minutos")
+    .eq("user_id", userId)
+    .eq("fecha", date);
+  if (error) throw error;
+  const byId = {};
+  data.forEach((r) => { byId[r.asignatura_id] = r.minutos; });
+  return byId;
+}
+
 export async function saveDayEntries(userId, date, loggableIds, values) {
   const keepIds = new Set(Object.keys(values));
   const toDeleteIds = loggableIds.filter((id) => !keepIds.has(id));
