@@ -1,5 +1,6 @@
 import { requireAdmin } from "./_lib/requireAdmin.js";
 import { getAdminClient } from "./_lib/adminClient.js";
+import { fetchAllRows } from "./_lib/fetchAll.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -16,23 +17,24 @@ export default async function handler(req, res) {
   const supabase = getAdminClient();
 
   try {
-    const [profileRes, cursosRes, asignaturasRes, registrosRes] = await Promise.all([
+    const [profileRes, cursosRes, asignaturasRes, registros] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", id).single(),
       supabase.from("cursos").select("*").eq("user_id", id).order("start_date", { ascending: false }),
       supabase.from("asignaturas").select("*").eq("user_id", id),
-      supabase
-        .from("registros_estudio")
-        .select("fecha, minutos, asignatura_id")
-        .eq("user_id", id)
-        .order("fecha", { ascending: true }),
+      fetchAllRows(() =>
+        supabase
+          .from("registros_estudio")
+          .select("fecha, minutos, asignatura_id")
+          .eq("user_id", id)
+          .order("fecha", { ascending: true })
+      ),
     ]);
     if (profileRes.error) throw profileRes.error;
     if (cursosRes.error) throw cursosRes.error;
     if (asignaturasRes.error) throw asignaturasRes.error;
-    if (registrosRes.error) throw registrosRes.error;
 
     const minutosPorAsignatura = new Map();
-    for (const r of registrosRes.data) {
+    for (const r of registros) {
       minutosPorAsignatura.set(r.asignatura_id, (minutosPorAsignatura.get(r.asignatura_id) || 0) + r.minutos);
     }
     const asignaturas = asignaturasRes.data
@@ -43,7 +45,7 @@ export default async function handler(req, res) {
       profile: profileRes.data,
       cursos: cursosRes.data,
       asignaturas,
-      registros: registrosRes.data,
+      registros,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });

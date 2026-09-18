@@ -1,5 +1,6 @@
 import { requireAdmin } from "./_lib/requireAdmin.js";
 import { getAdminClient } from "./_lib/adminClient.js";
+import { fetchAllRows } from "./_lib/fetchAll.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -13,19 +14,17 @@ export default async function handler(req, res) {
   const supabase = getAdminClient();
 
   try {
-    const [profilesRes, cursosRes, asignaturasRes, registrosRes] = await Promise.all([
+    const [profilesRes, cursosRes, asignaturasRes, registros] = await Promise.all([
       supabase.from("profiles").select("id, plan, universidad, carrera, created_at"),
       supabase.from("cursos").select("id", { count: "exact", head: true }),
       supabase.from("asignaturas").select("id", { count: "exact", head: true }),
-      supabase.from("registros_estudio").select("user_id, fecha, minutos"),
+      fetchAllRows(() => supabase.from("registros_estudio").select("user_id, fecha, minutos")),
     ]);
     if (profilesRes.error) throw profilesRes.error;
     if (cursosRes.error) throw cursosRes.error;
     if (asignaturasRes.error) throw asignaturasRes.error;
-    if (registrosRes.error) throw registrosRes.error;
 
     const profiles = profilesRes.data;
-    const registros = registrosRes.data;
 
     const planCounts = {};
     for (const p of profiles) planCounts[p.plan] = (planCounts[p.plan] || 0) + 1;

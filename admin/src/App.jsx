@@ -7,12 +7,25 @@ import UsersView from "./UsersView.jsx";
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = comprobando
   const [tab, setTab] = useState("overview");
+  const [theme, setTheme] = useState(
+    () => (typeof window !== "undefined" && window.localStorage.getItem("bitacora_admin_theme")) || "dark"
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      window.localStorage.setItem("bitacora_admin_theme", theme);
+    } catch {
+      // Modo privado / almacenamiento bloqueado: el tema no se recuerda
+      // entre sesiones, pero sigue funcionando en esta.
+    }
+  }, [theme]);
 
   if (session === undefined) return <div className="center-note">Cargando…</div>;
   if (!session) return <Login />;
@@ -25,6 +38,13 @@ export default function App() {
         </div>
         <div className="topbar-right">
           <span className="user-email">{session.user.email}</span>
+          <button
+            className="btn"
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          >
+            {theme === "dark" ? "☀️ Claro" : "🌙 Oscuro"}
+          </button>
           <button className="btn" onClick={() => supabase.auth.signOut()}>Salir</button>
         </div>
       </div>

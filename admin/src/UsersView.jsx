@@ -7,6 +7,7 @@ const COLUMNS = [
   { key: "email", label: "Email", align: "left" },
   { key: "plan", label: "Plan", align: "left" },
   { key: "universidad", label: "Universidad", align: "left" },
+  { key: "carrera", label: "Carrera", align: "left" },
   { key: "cursos", label: "Cursos", align: "right" },
   { key: "asignaturas", label: "Asignaturas", align: "right" },
   { key: "minutosTotal", label: "Minutos", align: "right" },
@@ -57,6 +58,10 @@ export default function UsersView() {
   if (error) return <div className="error-box">{error}</div>;
   if (!users) return <div className="center-note">Cargando…</div>;
 
+  if (selectedId) {
+    return <UserDetail userId={selectedId} onBack={() => setSelectedId(null)} />;
+  }
+
   return (
     <>
       <div className="search-row">
@@ -93,6 +98,7 @@ export default function UsersView() {
                   <span className="badge-plan">{PLAN_LABELS[u.plan] || u.plan}</span>
                 </td>
                 <td>{u.universidad || <span className="muted">—</span>}</td>
+                <td>{u.carrera || <span className="muted">—</span>}</td>
                 <td style={{ textAlign: "right" }}>{u.cursos}</td>
                 <td style={{ textAlign: "right" }}>{u.asignaturas}</td>
                 <td style={{ textAlign: "right" }}>{formatMinutes(u.minutosTotal)}</td>
@@ -104,8 +110,6 @@ export default function UsersView() {
         </table>
       </div>
       {filtered.length === 0 && <div className="center-note">Sin resultados.</div>}
-
-      {selectedId && <UserDetail userId={selectedId} onClose={() => setSelectedId(null)} />}
     </>
   );
 }

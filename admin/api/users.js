@@ -1,5 +1,6 @@
 import { requireAdmin } from "./_lib/requireAdmin.js";
 import { getAdminClient } from "./_lib/adminClient.js";
+import { fetchAllRows } from "./_lib/fetchAll.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -13,23 +14,22 @@ export default async function handler(req, res) {
   const supabase = getAdminClient();
 
   try {
-    const [profilesRes, cursosRes, asignaturasRes, registrosRes] = await Promise.all([
+    const [profilesRes, cursosRes, asignaturasRes, registros] = await Promise.all([
       supabase.from("profiles").select("id, email, plan, universidad, carrera, created_at"),
       supabase.from("cursos").select("id, user_id"),
       supabase.from("asignaturas").select("id, user_id"),
-      supabase.from("registros_estudio").select("user_id, fecha, minutos"),
+      fetchAllRows(() => supabase.from("registros_estudio").select("user_id, fecha, minutos")),
     ]);
     if (profilesRes.error) throw profilesRes.error;
     if (cursosRes.error) throw cursosRes.error;
     if (asignaturasRes.error) throw asignaturasRes.error;
-    if (registrosRes.error) throw registrosRes.error;
 
     const cursosByUser = countBy(cursosRes.data, "user_id");
     const asignaturasByUser = countBy(asignaturasRes.data, "user_id");
 
     const minutesByUser = new Map();
     const lastActivityByUser = new Map();
-    for (const r of registrosRes.data) {
+    for (const r of registros) {
       minutesByUser.set(r.user_id, (minutesByUser.get(r.user_id) || 0) + r.minutos);
       const prev = lastActivityByUser.get(r.user_id);
       if (!prev || r.fecha > prev) lastActivityByUser.set(r.user_id, r.fecha);

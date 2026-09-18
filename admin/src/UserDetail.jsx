@@ -54,7 +54,53 @@ function AsignaturasChart({ asignaturas }) {
   );
 }
 
-export default function UserDetail({ userId, onClose }) {
+function RegistrosList({ asignaturas, registros }) {
+  const [asignaturaId, setAsignaturaId] = useState(asignaturas[0]?.id ?? "");
+  const [visibleCount, setVisibleCount] = useState(20);
+
+  useEffect(() => { setVisibleCount(20); }, [asignaturaId]);
+
+  const rows = useMemo(
+    () => registros.filter((r) => r.asignatura_id === asignaturaId).sort((a, b) => (a.fecha < b.fecha ? 1 : -1)),
+    [registros, asignaturaId]
+  );
+  const total = useMemo(() => rows.reduce((s, r) => s + r.minutos, 0), [rows]);
+
+  if (asignaturas.length === 0) {
+    return <div className="muted" style={{ fontSize: 13 }}>Este usuario todavía no tiene asignaturas.</div>;
+  }
+
+  return (
+    <>
+      <div className="field" style={{ maxWidth: 320 }}>
+        <label>Asignatura</label>
+        <select value={asignaturaId} onChange={(e) => setAsignaturaId(e.target.value)}>
+          {asignaturas.map((a) => (
+            <option key={a.id} value={a.id}>{a.nombre}</option>
+          ))}
+        </select>
+      </div>
+      <div className="list-row" style={{ borderBottom: "1px solid var(--border)", fontWeight: 600 }}>
+        <span className="list-row-name">{rows.length} registro(s)</span>
+        <span className="list-row-value">{formatMinutes(total)}</span>
+      </div>
+      {rows.length === 0 && <div className="muted" style={{ fontSize: 13, padding: "10px 0" }}>Sin registros para esta asignatura.</div>}
+      {rows.slice(0, visibleCount).map((r, i) => (
+        <div className="list-row" key={`${r.fecha}-${i}`}>
+          <span className="list-row-name">{formatDate(r.fecha)}</span>
+          <span className="list-row-value">{formatMinutes(r.minutos)}</span>
+        </div>
+      ))}
+      {visibleCount < rows.length && (
+        <button className="btn" style={{ marginTop: 10 }} onClick={() => setVisibleCount((n) => n + 20)}>
+          Cargar más
+        </button>
+      )}
+    </>
+  );
+}
+
+export default function UserDetail({ userId, onBack }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -67,64 +113,75 @@ export default function UserDetail({ userId, onClose }) {
   const totalMinutos = useMemo(() => (data ? data.registros.reduce((s, r) => s + r.minutos, 0) : 0), [data]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="drawer" onClick={(e) => e.stopPropagation()}>
-        <div className="drawer-header">
-          <div>
-            <div className="drawer-title">{data ? data.profile.email : "Cargando…"}</div>
-            {data && (
-              <div className="drawer-sub">
-                {PLAN_LABELS[data.profile.plan] || data.profile.plan} · Alta {formatDate(data.profile.created_at)}
-              </div>
-            )}
-          </div>
-          <button className="close-btn" onClick={onClose} aria-label="Cerrar">×</button>
+    <>
+      <button className="btn back-btn" onClick={onBack}>← Volver a usuarios</button>
+
+      <div className="drawer-header">
+        <div>
+          <div className="drawer-title">{data ? data.profile.email : "Cargando…"}</div>
+          {data && (
+            <div className="drawer-sub">
+              {PLAN_LABELS[data.profile.plan] || data.profile.plan} · Alta {formatDate(data.profile.created_at)}
+            </div>
+          )}
         </div>
-
-        {error && <div className="error-box">{error}</div>}
-        {!data && !error && <div className="center-note">Cargando…</div>}
-
-        {data && (
-          <>
-            <div className="kpi-row">
-              <div className="stat-tile">
-                <div className="stat-label">Minutos totales</div>
-                <div className="stat-value">{formatMinutes(totalMinutos)}</div>
-              </div>
-              <div className="stat-tile">
-                <div className="stat-label">Cursos</div>
-                <div className="stat-value">{data.cursos.length}</div>
-              </div>
-              <div className="stat-tile">
-                <div className="stat-label">Asignaturas</div>
-                <div className="stat-value">{data.asignaturas.length}</div>
-              </div>
-            </div>
-
-            <div className="drawer-sub" style={{ marginBottom: 6 }}>
-              {data.profile.universidad || "Universidad no indicada"}
-              {data.profile.carrera ? ` · ${data.profile.carrera}` : ""}
-            </div>
-
-            <div className="section-title">Minutos de estudio</div>
-            <StudyTimeline registros={data.registros} />
-
-            <div className="section-title">Asignaturas por minutos</div>
-            <AsignaturasChart asignaturas={data.asignaturas} />
-
-            <div className="section-title">Cursos</div>
-            {data.cursos.length === 0 && <div className="muted" style={{ fontSize: 13 }}>Sin cursos.</div>}
-            {data.cursos.map((c) => (
-              <div className="list-row" key={c.id}>
-                <span className="list-row-name">{c.name}</span>
-                <span className="list-row-value">
-                  {ESTADO_LABELS[c.estado] || c.estado} · {formatDate(c.start_date)} – {formatDate(c.end_date)}
-                </span>
-              </div>
-            ))}
-          </>
-        )}
       </div>
-    </div>
+
+      {error && <div className="error-box">{error}</div>}
+      {!data && !error && <div className="center-note">Cargando…</div>}
+
+      {data && (
+        <>
+          <div className="kpi-row">
+            <div className="stat-tile">
+              <div className="stat-label">Minutos totales</div>
+              <div className="stat-value">{formatMinutes(totalMinutos)}</div>
+            </div>
+            <div className="stat-tile">
+              <div className="stat-label">Cursos</div>
+              <div className="stat-value">{data.cursos.length}</div>
+            </div>
+            <div className="stat-tile">
+              <div className="stat-label">Asignaturas</div>
+              <div className="stat-value">{data.asignaturas.length}</div>
+            </div>
+          </div>
+
+          <div className="drawer-sub" style={{ marginBottom: 6 }}>
+            {data.profile.universidad || "Universidad no indicada"}
+            {data.profile.carrera ? ` · ${data.profile.carrera}` : ""}
+          </div>
+
+          <div className="panel-grid">
+            <div className="panel">
+              <div className="section-title" style={{ marginTop: 0 }}>Registros por asignatura</div>
+              <RegistrosList asignaturas={data.asignaturas} registros={data.registros} />
+            </div>
+
+            <div>
+              <div className="panel" style={{ marginBottom: 16 }}>
+                <div className="section-title" style={{ marginTop: 0 }}>Minutos de estudio</div>
+                <StudyTimeline registros={data.registros} />
+              </div>
+              <div className="panel">
+                <div className="section-title" style={{ marginTop: 0 }}>Asignaturas por minutos</div>
+                <AsignaturasChart asignaturas={data.asignaturas} />
+              </div>
+            </div>
+          </div>
+
+          <div className="section-title">Cursos</div>
+          {data.cursos.length === 0 && <div className="muted" style={{ fontSize: 13 }}>Sin cursos.</div>}
+          {data.cursos.map((c) => (
+            <div className="list-row" key={c.id}>
+              <span className="list-row-name">{c.name}</span>
+              <span className="list-row-value">
+                {ESTADO_LABELS[c.estado] || c.estado} · {formatDate(c.start_date)} – {formatDate(c.end_date)}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
+    </>
   );
 }
