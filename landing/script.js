@@ -157,3 +157,91 @@
   });
   syncButtons();
 })();
+
+// Ventana "Novedades" (menú ☰ → Novedades, o enlazando a #novedades).
+// Recoge lo que trae la última actualización de la app. Para anunciar otra
+// basta con cambiar NEWS_HTML.
+(function () {
+  const SUPPORT_EMAIL = "cleverapp2026@gmail.com";
+  const GMAIL_URL = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(SUPPORT_EMAIL);
+  const NEWS_HTML = `
+    <h2 class="news-heading" id="news-heading">🚀 Novedades en Clever</h2>
+    <p class="news-date">Actualización · septiembre 2026</p>
+    <section class="news-item">
+      <div class="news-icon">⏱️</div>
+      <div>
+        <div class="news-title">El registro ahora suma, siempre desde 0</div>
+        <ul>
+          <li><strong>Registro de vuelo</strong> sirve para <em>añadir</em> minutos: escribe (o mide con el <strong>contador</strong>) lo que acabas de estudiar y pulsa Guardar. Se suma a lo que ya tenías ese día y el formulario vuelve a 0.</li>
+          <li>Cada vez que guardas se crea una <strong>sesión</strong>. En <strong>Registros de hoy</strong> ves el total de cada asignatura; tócala para desplegar sus sesiones y corregir o borrar cualquiera.</li>
+          <li><strong>Últimos registros</strong> sigue mostrando el total de cada asignatura por día.</li>
+          <li>Móvil y ordenador ya no se pisan: puedes guardar desde los dos y todo se suma.</li>
+          <li>Si la app se cierra a mitad de un registro, al volver no se pierde ni se duplica lo que tenías pendiente.</li>
+          <li>El <strong>máximo en una sesión</strong> del Panel ahora mide cada sesión por separado.</li>
+        </ul>
+      </div>
+    </section>
+    <section class="news-item">
+      <div class="news-icon">🐞</div>
+      <div>
+        <div class="news-title">¿Algo no funciona? Cuéntanoslo</div>
+        <p>
+          Dentro de la app, desde <strong>☰ → Reportar un problema</strong>, puedes enviarnos errores o sugerencias en un momento.
+          También puedes escribirnos directamente a
+          <a href="${GMAIL_URL}" target="_blank" rel="noopener noreferrer">${SUPPORT_EMAIL}</a>.
+        </p>
+      </div>
+    </section>
+    <div class="news-actions">
+      <button class="btn btn-primary" type="button" data-news-close>¡Entendido!</button>
+    </div>`;
+
+  const openers = document.querySelectorAll("[data-news-open]");
+  let dialog = null;
+
+  function build() {
+    dialog = document.createElement("dialog");
+    dialog.className = "news-dialog";
+    dialog.setAttribute("aria-labelledby", "news-heading");
+    dialog.innerHTML = `
+      <div class="ui-window">
+        <div class="ui-window-bar">
+          <span></span><span></span><span></span>
+          <b class="news-dialog-label">Novedades</b>
+          <button class="news-close" type="button" data-news-close aria-label="Cerrar">×</button>
+        </div>
+        <div class="ui-body">${NEWS_HTML}</div>
+      </div>`;
+    document.body.appendChild(dialog);
+    dialog.querySelectorAll("[data-news-close]").forEach((b) => b.addEventListener("click", close));
+    // Tocar fuera de la ventana (en el fondo oscurecido) también la cierra.
+    dialog.addEventListener("click", (e) => {
+      if (e.target === dialog) close();
+    });
+    dialog.addEventListener("close", () => {
+      if (location.hash === "#novedades") history.replaceState(null, "", location.pathname + location.search);
+    });
+  }
+
+  function open() {
+    if (!dialog) build();
+    const menu = document.querySelector("[data-menu]");
+    const toggle = document.querySelector("[data-menu-toggle]");
+    if (menu) menu.classList.remove("is-open");
+    if (toggle) toggle.setAttribute("aria-expanded", "false");
+    if (typeof dialog.showModal === "function") {
+      if (!dialog.open) dialog.showModal();
+    } else {
+      dialog.setAttribute("open", "");
+    }
+  }
+
+  function close() {
+    if (!dialog) return;
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+
+  openers.forEach((btn) => btn.addEventListener("click", open));
+  if (location.hash === "#novedades") open();
+})();
