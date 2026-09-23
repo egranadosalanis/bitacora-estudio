@@ -193,6 +193,14 @@ function saveDraft(cursoId, draft) {
   }
 }
 
+/** ¿Tiene el borrador algo que se perdería (minutos escritos, contador con
+ * tiempo o un guardado sin confirmar)? */
+function draftHasContent(draft) {
+  if (!draft) return false;
+  const typed = Object.values(draft.values || {}).some((v) => (parseMinutes(v).minutes || 0) > 0);
+  return typed || !!draft.timerRunning || draft.timerAccumulatedMs > 0 || !!draft.pendingSave;
+}
+
 function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onUpdateEntry, onDeleteEntry, onDeleteEntries, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
@@ -201,7 +209,14 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
   const maxDate = cappedToday >= curso.startDate ? cappedToday : curso.endDate;
   const minDate = curso.startDate;
 
-  const [date, setDate] = useState(() => clampDate(todayIso, minDate, maxDate));
+  // Arranca en hoy — salvo que haya un borrador pendiente de otro día dentro
+  // del curso (p. ej. el contador seguía en marcha pasada la medianoche y el
+  // móvil recargó la página): entonces se vuelve a ese día para no perderlo.
+  const [date, setDate] = useState(() => {
+    const draft = loadDraft(curso.id);
+    if (draftHasContent(draft) && draft.date >= minDate && draft.date <= maxDate) return draft.date;
+    return clampDate(todayIso, minDate, maxDate);
+  });
   // Minutos A AÑADIR por asignatura (no el total del día): siempre arrancan
   // vacíos y cada "Guardar" crea una entrada nueva por asignatura con > 0.
   const [values, setValues] = useState({});
@@ -217,10 +232,13 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
 
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false); // bloquea el doble toque antes de que React repinte
-  // Entradas (con sus ids) del último intento de guardado que falló: si se
-  // reintenta sin cambiar nada, se reenvían con los MISMOS ids, así que si
-  // el primer intento sí llegó al servidor no se duplican.
+  // Entradas (con sus ids) del guardado en curso o del último que falló. Se
+  // guarda también en el borrador: si se reintenta sin cambiar nada —aunque
+  // sea tras una recarga porque el sistema cerró la app a mitad de guardar—
+  // se reenvían con los MISMOS ids, así que si el primer intento sí llegó al
+  // servidor no se duplican.
   const pendingSaveRef = useRef(null);
+  const prevCursoIdRef = useRef(curso.id);
   const [formMsg, setFormMsg] = useState(null); // { type: 'ok' | 'error', text }
   const [listMsg, setListMsg] = useState(null);
   const [editing, setEditing] = useState(null); // { log, value, busy, error }
@@ -229,6 +247,8 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
   // pueden quedar fuera de rango o dejar de existir en el nuevo curso — se
   // resetean para que los registros siempre se guarden en el curso activo.
   useEffect(() => {
+    if (prevCursoIdRef.current === curso.id) return; // al montar no: ahí manda el borrador
+    prevCursoIdRef.current = curso.id;
     setDate(clampDate(isoToday(), minDate, maxDate));
     setHistorySubjectId(HISTORY_ALL);
   }, [curso.id]);
@@ -244,7 +264,12 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
     const draft = loadDraft(curso.id);
     const useDraft = !!draft && draft.date === date;
     setValues(useDraft ? draft.values || {} : {});
-    setFormMsg(null);
+    pendingSaveRef.current = useDraft ? draft.pendingSave || null : null;
+    setFormMsg(
+      useDraft && date !== isoToday() && draftHasContent(draft)
+        ? { type: "ok", text: `Recuperado lo que tenías sin guardar del ${formatLong(date)}: se guardará en ese día (cámbialo arriba si quieres otro).` }
+        : null
+    );
     if (useDraft) {
       setMode(draft.mode || "manual");
       if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
@@ -260,9 +285,12 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
 
   // Persiste el borrador en cada cambio, para poder recuperarlo si el
   // sistema recarga la página mientras la app está en segundo plano.
-  useEffect(() => {
-    saveDraft(curso.id, { date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs });
-  }, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs]);
+  function persistDraft() {
+    saveDraft(curso.id, {
+      date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs, pendingSave: pendingSaveRef.current,
+    });
+  }
+  useEffect(persistDraft, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs]);
 
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
 
@@ -318,8 +346,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
   const dayLogs = logs.filter((l) => l.date === date && loggableIds.has(l.subjectId));
   const dayLogsMinutes = dayLogs.reduce((a, l) => a + l.minutes, 0);
 
-  async function handleSave() {
-    if (savingRef.current) return;
+  function collectRows() {
     const rows = [];
     const errors = [];
     loggableSubjects.forEach((s) => {
@@ -327,6 +354,28 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
       if (r.error) errors.push(`${s.name}: ${r.error}`);
       else if (r.minutes > 0) rows.push({ subjectId: s.id, minutes: r.minutes });
     });
+    return { rows, errors, signature: JSON.stringify([date, rows]) };
+  }
+
+  // Si hay un guardado sin confirmar (la app se cerró o perdió la respuesta
+  // a mitad) y sus entradas ya aparecen en los datos del servidor, es que sí
+  // llegó: se limpia el formulario en vez de invitar a guardarlo otra vez.
+  // Solo si lo escrito sigue siendo exactamente lo de aquel guardado.
+  useEffect(() => {
+    const pending = pendingSaveRef.current;
+    if (!pending || savingRef.current) return;
+    const ids = new Set(logs.map((l) => l.id));
+    if (!pending.logs.every((l) => ids.has(l.id))) return;
+    if (collectRows().signature !== pending.signature) return;
+    pendingSaveRef.current = null;
+    setValues({});
+    const added = pending.logs.reduce((a, l) => a + l.minutes, 0);
+    setFormMsg({ type: "ok", text: `Tu último guardado sí se completó (${pending.logs.length} entrada(s), +${hm(added)}).` });
+  }, [logs, values]);
+
+  async function handleSave() {
+    if (savingRef.current) return;
+    const { rows, errors, signature } = collectRows();
     if (errors.length > 0) {
       setFormMsg({ type: "error", text: errors.join(" · ") });
       return;
@@ -335,11 +384,11 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
       setFormMsg({ type: "error", text: "No hay minutos que guardar: escribe los minutos a añadir en alguna asignatura." });
       return;
     }
-    const signature = JSON.stringify([date, rows]);
     if (pendingSaveRef.current?.signature !== signature) {
       pendingSaveRef.current = { signature, logs: rows.map((r) => ({ ...r, id: newUuid(), date })) };
     }
     const toSave = pendingSaveRef.current.logs;
+    persistDraft(); // apunta los ids ANTES de enviar, por si la app se cierra a mitad
     savingRef.current = true;
     setSaving(true);
     setFormMsg(null);
