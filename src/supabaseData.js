@@ -129,19 +129,6 @@ export async function deleteEntry(userId, entryId) {
   if (data.length === 0) throw new EntryNotFoundError();
 }
 
-/** Borra exactamente las entradas indicadas ("Eliminar día"): las mismas
- * que se enseñaron en la confirmación, ni una más aunque otro dispositivo
- * haya añadido alguna entretanto. */
-export async function deleteEntries(userId, entryIds) {
-  if (entryIds.length === 0) return;
-  const { error } = await supabase
-    .from("entradas_estudio")
-    .delete()
-    .eq("user_id", userId)
-    .in("id", entryIds);
-  if (error) throw error;
-}
-
 /* ---------- asignaturas ---------- */
 
 export async function insertSubject(userId, { name, credits, color, originCursoId }) {

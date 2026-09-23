@@ -5,12 +5,12 @@ import {
 } from "recharts";
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
-  buildDefaultData, migrateData, applyHistoricalImport, computeStats, buildEntriesFromLogs,
+  buildDefaultData, migrateData, applyHistoricalImport, computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 import {
-  loadUserData, insertEntries, updateEntryMinutes, deleteEntry, deleteEntries, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
+  loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
   updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso, migrateFromGoogleSheets,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
@@ -201,7 +201,7 @@ function draftHasContent(draft) {
   return typed || !!draft.timerRunning || draft.timerAccumulatedMs > 0 || !!draft.pendingSave;
 }
 
-function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onUpdateEntry, onDeleteEntry, onDeleteEntries, curso }) {
+function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEntries, onUpdateEntry, onDeleteEntry, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
   // Si el curso todavía no ha empezado, no hay "hoy" válido dentro de su rango:
@@ -240,8 +240,20 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
   const pendingSaveRef = useRef(null);
   const prevCursoIdRef = useRef(curso.id);
   const [formMsg, setFormMsg] = useState(null); // { type: 'ok' | 'error', text }
+  // Widget derecho: "Registros de hoy" (totales del día por asignatura, que
+  // se despliegan en sus sesiones) o "Últimos registros" (totales por día).
+  const [listView, setListView] = useState("hoy"); // 'hoy' | 'ultimos'
+  // Día que muestra "Registros de hoy": sigue a la fecha del formulario, pero
+  // tocar un día en "Últimos registros" lo cambia SOLO aquí, sin mover el
+  // formulario (así no se pierde lo escrito ni se reinicia el contador).
+  const [viewDate, setViewDate] = useState(date);
+  const [expandedSubjectId, setExpandedSubjectId] = useState(null);
+  const [sessionEdits, setSessionEdits] = useState({}); // { [entryId]: texto }
+  const [sessionErrors, setSessionErrors] = useState({}); // { [entryId]: mensaje }
+  const [sessionBusyId, setSessionBusyId] = useState(null);
   const [listMsg, setListMsg] = useState(null);
-  const [editing, setEditing] = useState(null); // { log, value, busy, error }
+
+  useEffect(() => { setViewDate(date); }, [date]);
 
   // Al cambiar de curso, la fecha y la asignatura de historial seleccionadas
   // pueden quedar fuera de rango o dejar de existir en el nuevo curso — se
@@ -334,17 +346,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
   }
 
   const subjectById = new Map(cursoSubjects.map((s) => [s.id, s]));
-  const savedBySubject = {};
-  logs.forEach((l) => {
-    if (l.date === date) savedBySubject[l.subjectId] = (savedBySubject[l.subjectId] || 0) + l.minutes;
-  });
-  const savedDayTotal = Object.values(savedBySubject).reduce((a, m) => a + m, 0);
   const pendingTotal = loggableSubjects.reduce((acc, s) => acc + (parseMinutes(values[s.id]).minutes || 0), 0);
-
-  // "Eliminar día" afecta a las asignaturas registrables (no aprobadas) de ese día.
-  const loggableIds = new Set(loggableSubjects.map((s) => s.id));
-  const dayLogs = logs.filter((l) => l.date === date && loggableIds.has(l.subjectId));
-  const dayLogsMinutes = dayLogs.reduce((a, l) => a + l.minutes, 0);
 
   function collectRows() {
     const rows = [];
@@ -409,63 +411,84 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
     }
   }
 
-  async function handleDeleteDay() {
-    const ok = window.confirm(
-      `Vas a borrar ${dayLogs.length} entrada(s) del ${formatLong(date)}, en total ${hm(dayLogsMinutes)} (${dayLogsMinutes} min). Esto no se puede deshacer. ¿Seguro?`
-    );
+  function setSessionError(id, msg) {
+    setSessionErrors((m) => ({ ...m, [id]: msg }));
+  }
+  function forgetSessionEdit(id) {
+    setSessionEdits(({ [id]: _drop, ...rest }) => rest);
+    setSessionErrors(({ [id]: _drop, ...rest }) => rest);
+  }
+
+  async function handleSessionSave(log) {
+    const r = parseMinutes(sessionEdits[log.id]);
+    if (r.error) return setSessionError(log.id, `Los minutos ${r.error}.`);
+    if (r.minutes === 0) return setSessionError(log.id, "Para quitar esta sesión, usa ✕.");
+    if (r.minutes === log.minutes) return forgetSessionEdit(log.id);
+    setSessionBusyId(log.id);
+    setSessionError(log.id, null);
+    setListMsg(null);
+    try {
+      await onUpdateEntry(log.id, r.minutes);
+      forgetSessionEdit(log.id);
+      setListMsg({ type: "ok", text: `Sesión actualizada: ${hm(log.minutes)} → ${hm(r.minutes)}.` });
+    } catch (e) {
+      handleSessionFailure(log.id, e);
+    } finally {
+      setSessionBusyId(null);
+    }
+  }
+
+  async function handleSessionDelete(log) {
+    const subject = subjectById.get(log.subjectId);
+    const ok = window.confirm(`¿Eliminar la sesión de ${hm(log.minutes)} de ${subject?.name ?? "esta asignatura"} (${formatMedium(log.date)})?`);
     if (!ok) return;
+    setSessionBusyId(log.id);
+    setListMsg(null);
     try {
-      await onDeleteEntries(dayLogs.map((l) => l.id));
-      setFormMsg({ type: "ok", text: `Día borrado: ${dayLogs.length} entrada(s), −${hm(dayLogsMinutes)}.` });
+      await onDeleteEntry(log.id);
+      forgetSessionEdit(log.id);
+      setListMsg({ type: "ok", text: `Sesión eliminada (−${hm(log.minutes)}).` });
     } catch (e) {
-      setFormMsg({ type: "error", text: `No se pudo borrar el día (${String((e && e.message) || e)}).` });
+      handleSessionFailure(log.id, e);
+    } finally {
+      setSessionBusyId(null);
     }
   }
 
-  async function handleEditSave() {
-    const r = parseMinutes(editing.value);
-    if (r.error) return setEditing((ed) => ({ ...ed, error: `Los minutos ${r.error}.` }));
-    if (r.minutes === 0) return setEditing((ed) => ({ ...ed, error: "Para dejarla en 0, usa \"Eliminar entrada\"." }));
-    if (r.minutes === editing.log.minutes) return setEditing(null);
-    setEditing((ed) => ({ ...ed, busy: true, error: null }));
-    try {
-      await onUpdateEntry(editing.log.id, r.minutes);
-      setEditing(null);
-      setListMsg({ type: "ok", text: "Entrada actualizada." });
-    } catch (e) {
-      handleEditFailure(e);
-    }
-  }
-
-  async function handleEditDelete() {
-    const subject = subjectById.get(editing.log.subjectId);
-    const ok = window.confirm(`¿Eliminar la entrada de ${hm(editing.log.minutes)} de ${subject?.name ?? "esta asignatura"} (${formatMedium(editing.log.date)})?`);
-    if (!ok) return;
-    setEditing((ed) => ({ ...ed, busy: true, error: null }));
-    try {
-      await onDeleteEntry(editing.log.id);
-      setEditing(null);
-      setListMsg({ type: "ok", text: `Entrada eliminada (−${hm(editing.log.minutes)}).` });
-    } catch (e) {
-      handleEditFailure(e);
-    }
-  }
-
-  function handleEditFailure(e) {
+  function handleSessionFailure(id, e) {
     if (e && e.name === "EntryNotFoundError") {
-      setEditing(null);
+      forgetSessionEdit(id);
       setListMsg({ type: "error", text: `${e.message} He actualizado la lista.` });
     } else {
-      setEditing((ed) => ({ ...ed, busy: false, error: `No se pudo guardar el cambio (${String((e && e.message) || e)}). Inténtalo de nuevo.` }));
+      setSessionError(id, `No se pudo guardar el cambio (${String((e && e.message) || e)}). Inténtalo de nuevo.`);
     }
   }
 
-  const history = logs
-    .filter((l) => subjectById.has(l.subjectId) && (historySubjectId === HISTORY_ALL || l.subjectId === historySubjectId))
-    .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-  const historyDayTotals = {};
-  history.forEach((l) => { historyDayTotals[l.date] = (historyDayTotals[l.date] || 0) + l.minutes; });
-  const visibleHistory = history.slice(0, visibleCount);
+  // "Registros de hoy": un total por asignatura del día viewDate, cada uno
+  // con las sesiones (entradas) que lo componen, de la más antigua a la última.
+  const viewDayGroups = cursoSubjects
+    .map((subject) => {
+      const sessions = logs
+        .filter((l) => l.date === viewDate && l.subjectId === subject.id)
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+      return { subject, sessions, total: sessions.reduce((acc, l) => acc + l.minutes, 0) };
+    })
+    .filter((g) => g.sessions.length > 0);
+  const viewDayTotal = viewDayGroups.reduce((acc, g) => acc + g.total, 0);
+  const viewDayLabel = viewDate === todayIso ? "Registros de hoy" : `Registros del ${formatShort(viewDate)}`;
+
+  // "Últimos registros": total por día y asignatura (como siempre).
+  const historySubject = historySubjectId !== HISTORY_ALL ? cursoSubjects.find((s) => s.id === historySubjectId) : null;
+  const history = historySubjectId === HISTORY_ALL
+    ? getAllEntriesFlat(cursoSubjects, entries, "desc")
+    : (historySubject ? getSubjectEntries(entries, historySubject.id, "desc") : []);
+
+  function openDayInView(day, subjectId) {
+    setViewDate(day);
+    setExpandedSubjectId(subjectId);
+    setListMsg(null);
+    setListView("hoy");
+  }
 
   return (
     <div className="grid-2">
@@ -529,20 +552,19 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
             {mode === "manual" && (
               <div className="subject-inputs">
                 <div className="gauge-sub" style={{ marginTop: 0, marginBottom: 8 }}>
-                  Escribe los minutos que quieres AÑADIR; se suman a lo ya guardado ese día.
+                  Escribe los minutos que quieres AÑADIR; al guardar se suman a los registros de ese día.
                 </div>
                 {loggableSubjects.map((s) => (
                   <div className="field-row" key={s.id}>
                     <label className="field-label">
                       <span className="dot" style={{ background: s.color }} />
                       {s.name}
-                      {savedBySubject[s.id] > 0 && <span className="saved-hint mono">ya {hm(savedBySubject[s.id])}</span>}
                     </label>
                     <div className="input-with-unit">
                       <input
                         type="number" min="0" max={MAX_MINUTES_PER_ENTRY} step="1" inputMode="numeric" placeholder="0"
                         value={values[s.id] || ""}
-                        onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
+                        onChange={(e) => { setValues((v) => ({ ...v, [s.id]: e.target.value })); setFormMsg(null); }}
                         className="input-field input-num"
                         disabled={saving}
                       />
@@ -553,24 +575,13 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
               </div>
             )}
             <div className="day-total-row">
-              <span>Total guardado del día</span>
-              <span className="mono">{hm(savedDayTotal)}</span>
+              <span>Total a añadir</span>
+              <span className="mono">{pendingTotal > 0 ? "+" : ""}{hm(pendingTotal)}</span>
             </div>
-            {pendingTotal > 0 && (
-              <div className="day-total-row" style={{ borderTop: "none", paddingTop: 4, marginTop: 0 }}>
-                <span>Por añadir (sin guardar)</span>
-                <span className="mono">+{hm(pendingTotal)}</span>
-              </div>
-            )}
             <div className="btn-row">
               <button className="btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? "Guardando…" : "Guardar registro"}
               </button>
-              {dayLogs.length > 0 && (
-                <button className="btn-ghost" onClick={handleDeleteDay} disabled={saving}>
-                  Eliminar día
-                </button>
-              )}
             </div>
             {formMsg && <div className={formMsg.type === "error" ? "auth-error" : "form-ok"}>{formMsg.text}</div>}
           </>
@@ -578,77 +589,126 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onU
       </div>
 
       <div className="panel">
-        <div className="panel-title-row">
-          <div className="panel-title" style={{ marginBottom: 0 }}>{historySubjectId === HISTORY_ALL ? "Últimos registros" : "Historial completo"}</div>
-          <select className="input-field subject-select" value={historySubjectId} onChange={(e) => setHistorySubjectId(e.target.value)}>
-            <option value={HISTORY_ALL}>Histórico (todas las asignaturas)</option>
-            {cursoSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+        <div className="seg-control" style={{ marginBottom: 14 }}>
+          <button className={`seg-btn ${listView === "hoy" ? "seg-btn-active" : ""}`} onClick={() => setListView("hoy")}>{viewDayLabel}</button>
+          <button className={`seg-btn ${listView === "ultimos" ? "seg-btn-active" : ""}`} onClick={() => setListView("ultimos")}>Últimos registros</button>
         </div>
         {listMsg && <div className={listMsg.type === "error" ? "auth-error" : "form-ok"}>{listMsg.text}</div>}
-        {history.length === 0 && <div className="empty-hint">Todavía no hay registros{historySubjectId === HISTORY_ALL ? " en este curso" : " para esta asignatura"}.</div>}
-        {history.length > 0 && (
+
+        {listView === "hoy" && (
           <>
-            <div className="log-list">
-              {visibleHistory.map((l, i) => {
-                const subject = subjectById.get(l.subjectId);
-                return (
-                  <React.Fragment key={l.id}>
-                    {(i === 0 || visibleHistory[i - 1].date !== l.date) && (
-                      <button className="log-day" onClick={() => setDate(clampDate(l.date, minDate, maxDate))} title="Ir a este día en el formulario">
-                        <span>{formatMedium(l.date)}</span>
-                        <span className="mono">Total {hm(historyDayTotals[l.date])}</span>
-                      </button>
-                    )}
-                    <button className="log-item" onClick={() => { setListMsg(null); setEditing({ log: l, value: String(l.minutes), busy: false, error: null }); }}>
-                      <span className="log-date">{formatShort(l.date)}</span>
-                      <span className="log-date" title={l.migrated ? "Registro anterior al cambio a entradas" : undefined}>{l.migrated ? "—" : formatTime(l.createdAt)}</span>
-                      <span className="log-detail">
-                        <span className="log-chip" style={{ borderColor: subject?.color }}>{subject?.name}</span>
-                      </span>
-                      <span className="log-total mono">{hm(l.minutes)}</span>
-                    </button>
-                  </React.Fragment>
-                );
-              })}
-            </div>
-            <div className="history-footer">
-              <span className="empty-hint" style={{ padding: "8px 0" }}>{history.length} entrada(s) en total</span>
-              {visibleCount < history.length && (
-                <button className="btn-ghost btn-small" onClick={() => setVisibleCount((n) => n + 20)}>Cargar más</button>
+            <div className="panel-title-row">
+              <div className="panel-title" style={{ marginBottom: 0 }}>{formatLong(viewDate)}</div>
+              {viewDate !== date && (
+                <button className="btn-ghost btn-small" onClick={() => setViewDate(date)}>Volver a {formatShort(date)}</button>
               )}
             </div>
+            {viewDayGroups.length === 0 && <div className="empty-hint">Todavía no hay registros este día.</div>}
+            {viewDayGroups.length > 0 && (
+              <>
+                <div className="log-list">
+                  {viewDayGroups.map(({ subject, sessions, total }) => {
+                    const open = expandedSubjectId === subject.id;
+                    return (
+                      <div key={subject.id} className="day-group">
+                        <button className="log-item" onClick={() => setExpandedSubjectId(open ? null : subject.id)} aria-expanded={open}>
+                          <span className="log-caret">{open ? "▾" : "▸"}</span>
+                          <span className="log-detail">
+                            <span className="log-chip" style={{ borderColor: subject.color }}>{subject.name}</span>
+                            <span className="gauge-sub" style={{ marginTop: 0 }}>{sessions.length} {sessions.length === 1 ? "sesión" : "sesiones"}</span>
+                          </span>
+                          <span className="log-total mono">{hm(total)}</span>
+                        </button>
+                        {open && (
+                          <div className="session-list">
+                            {sessions.map((l) => {
+                              const edit = sessionEdits[l.id];
+                              const changed = edit !== undefined && edit !== String(l.minutes);
+                              const busy = sessionBusyId === l.id;
+                              return (
+                                <div key={l.id}>
+                                  <div className="session-row">
+                                    <span className="log-date" title={l.migrated ? "Registro anterior al cambio a sesiones" : undefined}>
+                                      {l.migrated ? "previo" : formatTime(l.createdAt)}
+                                    </span>
+                                    <div className="input-with-unit">
+                                      <input
+                                        type="number" min="1" max={MAX_MINUTES_PER_ENTRY} step="1" inputMode="numeric"
+                                        value={edit ?? String(l.minutes)}
+                                        onChange={(e) => setSessionEdits((m) => ({ ...m, [l.id]: e.target.value }))}
+                                        className="input-field input-num"
+                                        disabled={busy}
+                                        aria-label={`Minutos de la sesión de ${subject.name}`}
+                                      />
+                                      <span className="unit-tag">min</span>
+                                    </div>
+                                    <button className="btn-primary btn-small" onClick={() => handleSessionSave(l)} disabled={!changed || busy}>
+                                      {busy ? "…" : "Guardar"}
+                                    </button>
+                                    <button className="btn-ghost btn-small" onClick={() => handleSessionDelete(l)} disabled={busy} title="Eliminar sesión" aria-label="Eliminar sesión">✕</button>
+                                  </div>
+                                  {sessionErrors[l.id] && <div className="auth-error">{sessionErrors[l.id]}</div>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="day-total-row">
+                  <span>Total del día</span>
+                  <span className="mono">{hm(viewDayTotal)}</span>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {listView === "ultimos" && (
+          <>
+            <div className="panel-title-row">
+              <div className="panel-title" style={{ marginBottom: 0 }}>{historySubjectId === HISTORY_ALL ? "Últimos registros" : "Historial completo"}</div>
+              <select className="input-field subject-select" value={historySubjectId} onChange={(e) => setHistorySubjectId(e.target.value)}>
+                <option value={HISTORY_ALL}>Histórico (todas las asignaturas)</option>
+                {cursoSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            {history.length === 0 && <div className="empty-hint">Todavía no hay registros{historySubjectId === HISTORY_ALL ? " en este curso" : " para esta asignatura"}.</div>}
+            {history.length > 0 && (
+              <>
+                <div className="log-list">
+                  {history.slice(0, visibleCount).map((e) => (
+                    <button
+                      key={historySubjectId === HISTORY_ALL ? `${e.date}-${e.subjectId}` : e.date}
+                      className="log-item"
+                      onClick={() => openDayInView(e.date, historySubjectId === HISTORY_ALL ? e.subjectId : historySubjectId)}
+                      title="Ver las sesiones de ese día"
+                    >
+                      <span className="log-date">{formatShort(e.date)}</span>
+                      <span className="log-detail">
+                        {historySubjectId === HISTORY_ALL ? (
+                          <span className="log-chip" style={{ borderColor: e.subjectColor }}>{e.subjectName}</span>
+                        ) : (
+                          <span className="log-chip" style={{ borderColor: historySubject?.color }}>{formatMedium(e.date)}</span>
+                        )}
+                      </span>
+                      <span className="log-total mono">{hm(e.minutes)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="history-footer">
+                  <span className="empty-hint" style={{ padding: "8px 0" }}>{history.length} registro(s) en total</span>
+                  {visibleCount < history.length && (
+                    <button className="btn-ghost btn-small" onClick={() => setVisibleCount((n) => n + 20)}>Cargar más</button>
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
-
-      {editing && (
-        <Modal title="Editar entrada" onClose={() => !editing.busy && setEditing(null)}>
-          <div className="gauge-sub" style={{ marginTop: 0, marginBottom: 12 }}>
-            {subjectById.get(editing.log.subjectId)?.name} · {formatLong(editing.log.date)}
-            {editing.log.migrated ? " · registro anterior al cambio" : ` · guardada a las ${formatTime(editing.log.createdAt)}`}
-          </div>
-          <div className="field-row">
-            <label className="field-label">Minutos</label>
-            <div className="input-with-unit">
-              <input
-                type="number" min="1" max={MAX_MINUTES_PER_ENTRY} step="1" inputMode="numeric"
-                value={editing.value}
-                onChange={(e) => setEditing((ed) => ({ ...ed, value: e.target.value }))}
-                className="input-field input-num"
-                disabled={editing.busy}
-              />
-              <span className="unit-tag">min</span>
-            </div>
-          </div>
-          {editing.error && <div className="auth-error">{editing.error}</div>}
-          <div className="btn-row">
-            <button className="btn-primary" onClick={handleEditSave} disabled={editing.busy}>Guardar cambios</button>
-            <button className="btn-primary btn-danger" onClick={handleEditDelete} disabled={editing.busy}>Eliminar entrada</button>
-            <button className="btn-ghost" onClick={() => setEditing(null)} disabled={editing.busy}>Cancelar</button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }
@@ -1897,11 +1957,6 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     return runEntryWrite(() => deleteEntry(userId, entryId), (logs) => logs.filter((l) => l.id !== entryId));
   }
 
-  function handleDeleteEntries(entryIds) {
-    const ids = new Set(entryIds);
-    return runEntryWrite(() => deleteEntries(userId, entryIds), (logs) => logs.filter((l) => !ids.has(l.id)));
-  }
-
   // Añadir asignatura/curso necesita el id real que genera Supabase antes
   // de poder guardarlo en el estado local (los registros de estudio se
   // referencian a ese id), así que aquí sí se espera a la respuesta del
@@ -2126,11 +2181,11 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           <BitacoraTab
             cursoSubjects={cursoSubjects}
             loggableSubjects={loggableSubjects}
+            entries={cursoEntries}
             logs={cursoLogs}
             onSaveEntries={handleSaveEntries}
             onUpdateEntry={handleUpdateEntry}
             onDeleteEntry={handleDeleteEntry}
-            onDeleteEntries={handleDeleteEntries}
             curso={curso}
           />
         )}
@@ -2343,11 +2398,12 @@ export const CSS = `
 
   .empty-hint { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
   .log-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
-  .log-day {
-    display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); background: transparent;
-    border: none; border-bottom: 1px dashed var(--border); padding: 8px 2px 4px; cursor: pointer; text-align: left; width: 100%;
-  }
-  .saved-hint { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+  .log-caret { font-size: 11px; color: var(--text-dim); width: 12px; flex-shrink: 0; }
+  .log-detail .gauge-sub { align-self: center; }
+  .session-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 4px 22px; }
+  .session-row { display: flex; align-items: center; gap: 8px; }
+  .session-row .log-date { width: 44px; }
+  .session-row .input-num { width: 76px; }
   .form-ok { color: var(--green); font-size: 13px; margin: 8px 0; }
   .log-item {
     display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border);
