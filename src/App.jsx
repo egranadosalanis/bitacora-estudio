@@ -5,12 +5,12 @@ import {
 } from "recharts";
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
-  buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
+  buildDefaultData, migrateData, applyHistoricalImport, computeStats, buildEntriesFromLogs,
   computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 import {
-  loadUserData, saveDayEntries, deleteDayEntries, insertSubject, deleteSubject, updateSubject,
+  loadUserData, insertEntries, updateEntryMinutes, deleteEntry, deleteEntries, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
   updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso, migrateFromGoogleSheets,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
@@ -122,7 +122,54 @@ function formatElapsed(ms) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-const DRAFT_PREFIX = "bitacora:draft:";
+// "draft2": desde que el formulario son "minutos a añadir" (entradas
+// individuales), los borradores antiguos —que guardaban el total del día—
+// ya no significan lo mismo y no deben recuperarse, o se sumarían dos veces.
+const DRAFT_PREFIX = "bitacora:draft2:";
+
+/** UUID v4 para cada entrada nueva (se genera en el dispositivo para que un
+ * reintento del mismo guardado no la duplique). */
+function newUuid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** Identificador anónimo y persistente de este dispositivo/navegador. */
+function getDeviceId() {
+  try {
+    let id = localStorage.getItem("bitacora:deviceId");
+    if (!id) {
+      id = newUuid();
+      localStorage.setItem("bitacora:deviceId", id);
+    }
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+const MAX_MINUTES_PER_ENTRY = 1440;
+
+/** Valida los minutos de un campo: devuelve { minutes } (0 si está vacío)
+ * o { error } si no es un entero entre 0 y MAX_MINUTES_PER_ENTRY. */
+function parseMinutes(raw) {
+  const str = String(raw ?? "").trim();
+  if (str === "") return { minutes: 0 };
+  const n = Number(str);
+  if (!Number.isInteger(n)) return { error: "tiene que ser un número entero de minutos" };
+  if (n < 0) return { error: "no puede ser negativo" };
+  if (n > MAX_MINUTES_PER_ENTRY) return { error: `no puede pasar de ${MAX_MINUTES_PER_ENTRY} min por entrada` };
+  return { minutes: n };
+}
+
+function formatTime(isoTs) {
+  const d = new Date(isoTs);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 // El registro manual sin guardar y el contador viven en memoria (useState).
 // En móvil, al poner la app en segundo plano el sistema puede recargar la
@@ -146,13 +193,7 @@ function saveDraft(cursoId, draft) {
   }
 }
 
-function clearDraft(cursoId) {
-  try {
-    localStorage.removeItem(DRAFT_PREFIX + cursoId);
-  } catch {}
-}
-
-function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, curso }) {
+function BitacoraTab({ cursoSubjects, loggableSubjects, logs, onSaveEntries, onUpdateEntry, onDeleteEntry, onDeleteEntries, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
   // Si el curso todavía no ha empezado, no hay "hoy" válido dentro de su rango:
@@ -161,6 +202,8 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   const minDate = curso.startDate;
 
   const [date, setDate] = useState(() => clampDate(todayIso, minDate, maxDate));
+  // Minutos A AÑADIR por asignatura (no el total del día): siempre arrancan
+  // vacíos y cada "Guardar" crea una entrada nueva por asignatura con > 0.
   const [values, setValues] = useState({});
   const [historySubjectId, setHistorySubjectId] = useState(HISTORY_ALL);
   const [visibleCount, setVisibleCount] = useState(20);
@@ -172,6 +215,16 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   const [timerAccumulatedMs, setTimerAccumulatedMs] = useState(0);
   const [, setTimerTick] = useState(0);
 
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false); // bloquea el doble toque antes de que React repinte
+  // Entradas (con sus ids) del último intento de guardado que falló: si se
+  // reintenta sin cambiar nada, se reenvían con los MISMOS ids, así que si
+  // el primer intento sí llegó al servidor no se duplican.
+  const pendingSaveRef = useRef(null);
+  const [formMsg, setFormMsg] = useState(null); // { type: 'ok' | 'error', text }
+  const [listMsg, setListMsg] = useState(null);
+  const [editing, setEditing] = useState(null); // { log, value, busy, error }
+
   // Al cambiar de curso, la fecha y la asignatura de historial seleccionadas
   // pueden quedar fuera de rango o dejar de existir en el nuevo curso — se
   // resetean para que los registros siempre se guarden en el curso activo.
@@ -180,23 +233,18 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     setHistorySubjectId(HISTORY_ALL);
   }, [curso.id]);
 
-  // Carga los valores del día. Si hay un borrador sin guardar en localStorage
-  // para este mismo curso y fecha (p. ej. porque el móvil recargó la página
-  // al volver de segundo plano), se recupera — incluido el contador, si
-  // seguía en marcha, cuyo tiempo se recalcula contra timerStartedAt (un
-  // timestamp real) y no contra el intervalo perdido. Si cambias de fecha o
-  // de curso a media sesión sin que haya borrador de esa fecha, el contador
-  // se resetea, para que el tiempo medido nunca se cuele en el día equivocado.
+  // Al cambiar de fecha o de curso, el formulario vuelve a 0 — salvo que haya
+  // un borrador sin guardar en localStorage para ese mismo curso y fecha (p.
+  // ej. porque el móvil recargó la página al volver de segundo plano), que se
+  // recupera, incluido el contador si seguía en marcha (su tiempo se
+  // recalcula contra timerStartedAt, un timestamp real). No depende de los
+  // datos del servidor: refrescarlos (al guardar o al volver a la pestaña)
+  // nunca borra lo que se está escribiendo.
   useEffect(() => {
     const draft = loadDraft(curso.id);
     const useDraft = !!draft && draft.date === date;
-    const existing = entries[date] || {};
-    const next = {};
-    loggableSubjects.forEach((s) => {
-      const draftValue = useDraft ? draft.values?.[s.id] : undefined;
-      next[s.id] = draftValue !== undefined ? draftValue : (existing[s.id] ? String(existing[s.id]) : "");
-    });
-    setValues(next);
+    setValues(useDraft ? draft.values || {} : {});
+    setFormMsg(null);
     if (useDraft) {
       setMode(draft.mode || "manual");
       if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
@@ -208,7 +256,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
       setTimerStartedAt(null);
       setTimerAccumulatedMs(0);
     }
-  }, [date, loggableSubjects, entries, curso.id]);
+  }, [date, curso.id]);
 
   // Persiste el borrador en cada cambio, para poder recuperarlo si el
   // sistema recarga la página mientras la app está en segundo plano.
@@ -245,7 +293,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     const totalMs = timerAccumulatedMs + (timerRunning && timerStartedAt ? Date.now() - timerStartedAt : 0);
     const addedMinutes = Math.round(totalMs / 60000);
     if (addedMinutes > 0 && timerSubjectId) {
-      setValues((v) => ({ ...v, [timerSubjectId]: String((parseFloat(v[timerSubjectId]) || 0) + addedMinutes) }));
+      setValues((v) => ({ ...v, [timerSubjectId]: String((parseInt(v[timerSubjectId], 10) || 0) + addedMinutes) }));
     }
     setTimerAccumulatedMs(0);
     setTimerStartedAt(null);
@@ -257,13 +305,118 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     setTimerRunning(false);
   }
 
-  const dayTotal = loggableSubjects.reduce((acc, s) => acc + (parseFloat(values[s.id]) || 0), 0);
-  const hasEntryToday = !!entries[date] && loggableSubjects.some((s) => entries[date][s.id] > 0);
+  const subjectById = new Map(cursoSubjects.map((s) => [s.id, s]));
+  const savedBySubject = {};
+  logs.forEach((l) => {
+    if (l.date === date) savedBySubject[l.subjectId] = (savedBySubject[l.subjectId] || 0) + l.minutes;
+  });
+  const savedDayTotal = Object.values(savedBySubject).reduce((a, m) => a + m, 0);
+  const pendingTotal = loggableSubjects.reduce((acc, s) => acc + (parseMinutes(values[s.id]).minutes || 0), 0);
 
-  const historySubject = historySubjectId !== HISTORY_ALL ? cursoSubjects.find((s) => s.id === historySubjectId) : null;
-  const history = historySubjectId === HISTORY_ALL
-    ? getAllEntriesFlat(cursoSubjects, entries, "desc")
-    : (historySubject ? getSubjectEntries(entries, historySubject.id, "desc") : []);
+  // "Eliminar día" afecta a las asignaturas registrables (no aprobadas) de ese día.
+  const loggableIds = new Set(loggableSubjects.map((s) => s.id));
+  const dayLogs = logs.filter((l) => l.date === date && loggableIds.has(l.subjectId));
+  const dayLogsMinutes = dayLogs.reduce((a, l) => a + l.minutes, 0);
+
+  async function handleSave() {
+    if (savingRef.current) return;
+    const rows = [];
+    const errors = [];
+    loggableSubjects.forEach((s) => {
+      const r = parseMinutes(values[s.id]);
+      if (r.error) errors.push(`${s.name}: ${r.error}`);
+      else if (r.minutes > 0) rows.push({ subjectId: s.id, minutes: r.minutes });
+    });
+    if (errors.length > 0) {
+      setFormMsg({ type: "error", text: errors.join(" · ") });
+      return;
+    }
+    if (rows.length === 0) {
+      setFormMsg({ type: "error", text: "No hay minutos que guardar: escribe los minutos a añadir en alguna asignatura." });
+      return;
+    }
+    const signature = JSON.stringify([date, rows]);
+    if (pendingSaveRef.current?.signature !== signature) {
+      pendingSaveRef.current = { signature, logs: rows.map((r) => ({ ...r, id: newUuid(), date })) };
+    }
+    const toSave = pendingSaveRef.current.logs;
+    savingRef.current = true;
+    setSaving(true);
+    setFormMsg(null);
+    try {
+      await onSaveEntries(toSave);
+      pendingSaveRef.current = null;
+      setValues({});
+      const added = toSave.reduce((a, l) => a + l.minutes, 0);
+      setFormMsg({ type: "ok", text: `Guardado: ${toSave.length} entrada(s), +${hm(added)}.` });
+    } catch (e) {
+      setFormMsg({
+        type: "error",
+        text: `No se pudo guardar (${String((e && e.message) || e)}). Tus minutos siguen en el formulario: pulsa "Guardar registro" para reintentar.`,
+      });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteDay() {
+    const ok = window.confirm(
+      `Vas a borrar ${dayLogs.length} entrada(s) del ${formatLong(date)}, en total ${hm(dayLogsMinutes)} (${dayLogsMinutes} min). Esto no se puede deshacer. ¿Seguro?`
+    );
+    if (!ok) return;
+    try {
+      await onDeleteEntries(dayLogs.map((l) => l.id));
+      setFormMsg({ type: "ok", text: `Día borrado: ${dayLogs.length} entrada(s), −${hm(dayLogsMinutes)}.` });
+    } catch (e) {
+      setFormMsg({ type: "error", text: `No se pudo borrar el día (${String((e && e.message) || e)}).` });
+    }
+  }
+
+  async function handleEditSave() {
+    const r = parseMinutes(editing.value);
+    if (r.error) return setEditing((ed) => ({ ...ed, error: `Los minutos ${r.error}.` }));
+    if (r.minutes === 0) return setEditing((ed) => ({ ...ed, error: "Para dejarla en 0, usa \"Eliminar entrada\"." }));
+    if (r.minutes === editing.log.minutes) return setEditing(null);
+    setEditing((ed) => ({ ...ed, busy: true, error: null }));
+    try {
+      await onUpdateEntry(editing.log.id, r.minutes);
+      setEditing(null);
+      setListMsg({ type: "ok", text: "Entrada actualizada." });
+    } catch (e) {
+      handleEditFailure(e);
+    }
+  }
+
+  async function handleEditDelete() {
+    const subject = subjectById.get(editing.log.subjectId);
+    const ok = window.confirm(`¿Eliminar la entrada de ${hm(editing.log.minutes)} de ${subject?.name ?? "esta asignatura"} (${formatMedium(editing.log.date)})?`);
+    if (!ok) return;
+    setEditing((ed) => ({ ...ed, busy: true, error: null }));
+    try {
+      await onDeleteEntry(editing.log.id);
+      setEditing(null);
+      setListMsg({ type: "ok", text: `Entrada eliminada (−${hm(editing.log.minutes)}).` });
+    } catch (e) {
+      handleEditFailure(e);
+    }
+  }
+
+  function handleEditFailure(e) {
+    if (e && e.name === "EntryNotFoundError") {
+      setEditing(null);
+      setListMsg({ type: "error", text: `${e.message} He actualizado la lista.` });
+    } else {
+      setEditing((ed) => ({ ...ed, busy: false, error: `No se pudo guardar el cambio (${String((e && e.message) || e)}). Inténtalo de nuevo.` }));
+    }
+  }
+
+  const history = logs
+    .filter((l) => subjectById.has(l.subjectId) && (historySubjectId === HISTORY_ALL || l.subjectId === historySubjectId))
+    .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  const historyDayTotals = {};
+  history.forEach((l) => { historyDayTotals[l.date] = (historyDayTotals[l.date] || 0) + l.minutes; });
+  const visibleHistory = history.slice(0, visibleCount);
 
   return (
     <div className="grid-2">
@@ -271,7 +424,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
         <div className="panel-title">Registro de vuelo — {formatLong(date)}</div>
         <div className="field-row">
           <label className="field-label">Fecha</label>
-          <input type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} className="input-field" />
+          <input type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} className="input-field" disabled={saving} />
         </div>
         {loggableSubjects.length === 0 ? (
           <div className="empty-hint">No hay asignaturas activas (todas están aprobadas o no has añadido ninguna todavía).</div>
@@ -285,7 +438,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
             {mode === "contador" && (
               <div className="timer-box">
                 <div className="gauge-sub" style={{ marginBottom: 8 }}>
-                  Lo que mida el contador se sumará al registro de {formatMedium(date)} — cambia la fecha arriba si es para otro día.
+                  Lo que mida el contador se añadirá al registro de {formatMedium(date)} al pulsar "Guardar registro" — cambia la fecha arriba si es para otro día.
                 </div>
                 <div className="field-row">
                   <label className="field-label">Asignatura</label>
@@ -316,9 +469,9 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
                     </button>
                   )}
                 </div>
-                {parseFloat(values[timerSubjectId]) > 0 && (
+                {parseMinutes(values[timerSubjectId]).minutes > 0 && (
                   <div className="gauge-sub">
-                    Ya hay {values[timerSubjectId]} min para esta asignatura ese día — el contador se sumará a eso.
+                    Hay {values[timerSubjectId]} min pendientes de guardar para esta asignatura — el contador se sumará a eso.
                   </div>
                 )}
               </div>
@@ -326,18 +479,23 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
 
             {mode === "manual" && (
               <div className="subject-inputs">
+                <div className="gauge-sub" style={{ marginTop: 0, marginBottom: 8 }}>
+                  Escribe los minutos que quieres AÑADIR; se suman a lo ya guardado ese día.
+                </div>
                 {loggableSubjects.map((s) => (
                   <div className="field-row" key={s.id}>
                     <label className="field-label">
                       <span className="dot" style={{ background: s.color }} />
                       {s.name}
+                      {savedBySubject[s.id] > 0 && <span className="saved-hint mono">ya {hm(savedBySubject[s.id])}</span>}
                     </label>
                     <div className="input-with-unit">
                       <input
-                        type="number" min="0" step="5" placeholder="0"
+                        type="number" min="0" max={MAX_MINUTES_PER_ENTRY} step="1" inputMode="numeric" placeholder="0"
                         value={values[s.id] || ""}
                         onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
                         className="input-field input-num"
+                        disabled={saving}
                       />
                       <span className="unit-tag">min</span>
                     </div>
@@ -346,36 +504,26 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
               </div>
             )}
             <div className="day-total-row">
-              <span>Total del día</span>
-              <span className="mono">{hm(dayTotal)}</span>
+              <span>Total guardado del día</span>
+              <span className="mono">{hm(savedDayTotal)}</span>
             </div>
+            {pendingTotal > 0 && (
+              <div className="day-total-row" style={{ borderTop: "none", paddingTop: 4, marginTop: 0 }}>
+                <span>Por añadir (sin guardar)</span>
+                <span className="mono">+{hm(pendingTotal)}</span>
+              </div>
+            )}
             <div className="btn-row">
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  const clean = {};
-                  loggableSubjects.forEach((s) => {
-                    const v = parseFloat(values[s.id]);
-                    if (v > 0) clean[s.id] = v;
-                  });
-                  onSaveDay(date, loggableSubjects.map((s) => s.id), clean);
-                  clearDraft(curso.id);
-                }}
-              >
-                Guardar registro
+              <button className="btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? "Guardando…" : "Guardar registro"}
               </button>
-              {hasEntryToday && (
-                <button
-                  className="btn-ghost"
-                  onClick={() => {
-                    onDeleteDay(date, loggableSubjects.map((s) => s.id));
-                    clearDraft(curso.id);
-                  }}
-                >
+              {dayLogs.length > 0 && (
+                <button className="btn-ghost" onClick={handleDeleteDay} disabled={saving}>
                   Eliminar día
                 </button>
               )}
             </div>
+            {formMsg && <div className={formMsg.type === "error" ? "auth-error" : "form-ok"}>{formMsg.text}</div>}
           </>
         )}
       </div>
@@ -388,26 +536,35 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
             {cursoSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
+        {listMsg && <div className={listMsg.type === "error" ? "auth-error" : "form-ok"}>{listMsg.text}</div>}
         {history.length === 0 && <div className="empty-hint">Todavía no hay registros{historySubjectId === HISTORY_ALL ? " en este curso" : " para esta asignatura"}.</div>}
         {history.length > 0 && (
           <>
             <div className="log-list">
-              {history.slice(0, visibleCount).map((e) => (
-                <button key={historySubjectId === HISTORY_ALL ? `${e.date}-${e.subjectId}` : e.date} className="log-item" onClick={() => setDate(e.date)}>
-                  <span className="log-date">{formatShort(e.date)}</span>
-                  <span className="log-detail">
-                    {historySubjectId === HISTORY_ALL ? (
-                      <span className="log-chip" style={{ borderColor: e.subjectColor }}>{e.subjectName}</span>
-                    ) : (
-                      <span className="log-chip" style={{ borderColor: historySubject?.color }}>{formatMedium(e.date)}</span>
+              {visibleHistory.map((l, i) => {
+                const subject = subjectById.get(l.subjectId);
+                return (
+                  <React.Fragment key={l.id}>
+                    {(i === 0 || visibleHistory[i - 1].date !== l.date) && (
+                      <button className="log-day" onClick={() => setDate(clampDate(l.date, minDate, maxDate))} title="Ir a este día en el formulario">
+                        <span>{formatMedium(l.date)}</span>
+                        <span className="mono">Total {hm(historyDayTotals[l.date])}</span>
+                      </button>
                     )}
-                  </span>
-                  <span className="log-total mono">{hm(e.minutes)}</span>
-                </button>
-              ))}
+                    <button className="log-item" onClick={() => { setListMsg(null); setEditing({ log: l, value: String(l.minutes), busy: false, error: null }); }}>
+                      <span className="log-date">{formatShort(l.date)}</span>
+                      <span className="log-date" title={l.migrated ? "Registro anterior al cambio a entradas" : undefined}>{l.migrated ? "—" : formatTime(l.createdAt)}</span>
+                      <span className="log-detail">
+                        <span className="log-chip" style={{ borderColor: subject?.color }}>{subject?.name}</span>
+                      </span>
+                      <span className="log-total mono">{hm(l.minutes)}</span>
+                    </button>
+                  </React.Fragment>
+                );
+              })}
             </div>
             <div className="history-footer">
-              <span className="empty-hint" style={{ padding: "8px 0" }}>{history.length} registro(s) en total</span>
+              <span className="empty-hint" style={{ padding: "8px 0" }}>{history.length} entrada(s) en total</span>
               {visibleCount < history.length && (
                 <button className="btn-ghost btn-small" onClick={() => setVisibleCount((n) => n + 20)}>Cargar más</button>
               )}
@@ -415,6 +572,34 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
           </>
         )}
       </div>
+
+      {editing && (
+        <Modal title="Editar entrada" onClose={() => !editing.busy && setEditing(null)}>
+          <div className="gauge-sub" style={{ marginTop: 0, marginBottom: 12 }}>
+            {subjectById.get(editing.log.subjectId)?.name} · {formatLong(editing.log.date)}
+            {editing.log.migrated ? " · registro anterior al cambio" : ` · guardada a las ${formatTime(editing.log.createdAt)}`}
+          </div>
+          <div className="field-row">
+            <label className="field-label">Minutos</label>
+            <div className="input-with-unit">
+              <input
+                type="number" min="1" max={MAX_MINUTES_PER_ENTRY} step="1" inputMode="numeric"
+                value={editing.value}
+                onChange={(e) => setEditing((ed) => ({ ...ed, value: e.target.value }))}
+                className="input-field input-num"
+                disabled={editing.busy}
+              />
+              <span className="unit-tag">min</span>
+            </div>
+          </div>
+          {editing.error && <div className="auth-error">{editing.error}</div>}
+          <div className="btn-row">
+            <button className="btn-primary" onClick={handleEditSave} disabled={editing.busy}>Guardar cambios</button>
+            <button className="btn-primary btn-danger" onClick={handleEditDelete} disabled={editing.busy}>Eliminar entrada</button>
+            <button className="btn-ghost" onClick={() => setEditing(null)} disabled={editing.busy}>Cancelar</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1532,15 +1717,47 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     }
   }
 
+  const deviceId = useMemo(() => getDeviceId(), []);
+  const loadSeqRef = useRef(0);
+  const lastLoadAtRef = useRef(0);
+
+  // Trae de Supabase el estado actual (lo guardado desde cualquier
+  // dispositivo). Si hay varias cargas en vuelo, solo se aplica la última
+  // que se empezó, para que una respuesta antigua no pise a una más nueva.
+  // Mantiene el curso que estuviera seleccionado. No toca el formulario de
+  // la Bitácora (lo escrito sin guardar vive allí, no en `data`).
+  async function refreshData() {
+    const seq = ++loadSeqRef.current;
+    lastLoadAtRef.current = Date.now();
+    try {
+      const fresh = await loadUserData(userId);
+      if (seq !== loadSeqRef.current) return;
+      setData((prev) =>
+        prev && fresh.cursos.some((c) => c.id === prev.activeCursoId) ? { ...fresh, activeCursoId: prev.activeCursoId } : fresh
+      );
+      setCloudError(null);
+    } catch (e) {
+      if (seq === loadSeqRef.current) setCloudError(String((e && e.message) || e));
+    }
+  }
+
   useEffect(() => {
-    (async () => {
-      try {
-        setData(await loadUserData(userId));
-        setCloudError(null);
-      } catch (e) {
-        setCloudError(String((e && e.message) || e));
-      }
-    })();
+    refreshData();
+    // Al volver a la pestaña/app (p. ej. tras guardar desde el móvil), se
+    // recargan los datos. "focus" cubre el caso de PC en que la ventana
+    // nunca llegó a ocultarse; el margen de 2 s evita cargar dos veces
+    // cuando saltan los dos eventos a la vez.
+    function onReturn() {
+      if (DISABLE_CLOUD_SAVE || document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAtRef.current < 2000) return;
+      refreshData();
+    }
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
   }, [userId]);
 
   // Cada acción del usuario (guardar un día, añadir una asignatura, etc.)
@@ -1575,31 +1792,65 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     () => cursoSubjectsForManagement.filter((s) => s.estado !== "aprobada"),
     [cursoSubjectsForManagement]
   );
-  const stats = useMemo(() => (data && curso ? computeStats(cursoSubjects, cursoEntries) : null), [data, curso, cursoSubjects, cursoEntries]);
+  const cursoLogs = useMemo(
+    () => (data && curso ? data.logs.filter((l) => l.date >= curso.startDate && l.date <= curso.endDate) : []),
+    [data, curso]
+  );
+  const stats = useMemo(
+    () => (data && curso ? computeStats(cursoSubjects, cursoEntries, cursoLogs) : null),
+    [data, curso, cursoSubjects, cursoEntries, cursoLogs]
+  );
 
-  function handleSaveDay(date, loggableIds, values) {
+  // Aplica un cambio a la lista de entradas y recalcula a partir de ella
+  // los totales por día/asignatura (entries) que usan las estadísticas.
+  function applyLogs(updater) {
     setData((d) => {
-      const nextDay = { ...(d.entries[date] || {}) };
-      loggableIds.forEach((id) => delete nextDay[id]);
-      Object.entries(values).forEach(([id, v]) => { nextDay[id] = v; });
-      const entries = { ...d.entries };
-      if (Object.keys(nextDay).length === 0) delete entries[date];
-      else entries[date] = nextDay;
-      return { ...d, entries };
+      const logs = updater(d.logs);
+      return { ...d, logs, entries: buildEntriesFromLogs(logs) };
     });
-    withCloudWrite(() => saveDayEntries(userId, date, loggableIds, values));
   }
 
-  function handleDeleteDay(date, loggableIds) {
-    setData((d) => {
-      const nextDay = { ...(d.entries[date] || {}) };
-      loggableIds.forEach((id) => delete nextDay[id]);
-      const entries = { ...d.entries };
-      if (Object.keys(nextDay).length === 0) delete entries[date];
-      else entries[date] = nextDay;
-      return { ...d, entries };
-    });
-    withCloudWrite(() => deleteDayEntries(userId, date, loggableIds));
+  // Las acciones de entradas esperan a que Supabase confirme ANTES de tocar
+  // la vista: si falla, lanzan el error y la Bitácora conserva lo escrito y
+  // lo muestra. Tras confirmar, se recarga todo para ver también lo que se
+  // haya guardado desde otros dispositivos.
+  async function handleSaveEntries(newLogs) {
+    if (!DISABLE_CLOUD_SAVE) await insertEntries(userId, newLogs, deviceId);
+    const createdAt = new Date().toISOString();
+    const ids = new Set(newLogs.map((l) => l.id));
+    applyLogs((logs) => [
+      ...logs.filter((l) => !ids.has(l.id)),
+      ...newLogs.map((l) => ({ ...l, createdAt, deviceId, migrated: false })),
+    ]);
+    if (!DISABLE_CLOUD_SAVE) refreshData();
+  }
+
+  async function runEntryWrite(write, updater) {
+    try {
+      if (!DISABLE_CLOUD_SAVE) await write();
+    } catch (e) {
+      // Otro dispositivo ya la había borrado: se recarga para mostrar la realidad.
+      if (e instanceof EntryNotFoundError) refreshData();
+      throw e;
+    }
+    applyLogs(updater);
+    if (!DISABLE_CLOUD_SAVE) refreshData();
+  }
+
+  function handleUpdateEntry(entryId, minutes) {
+    return runEntryWrite(
+      () => updateEntryMinutes(userId, entryId, minutes),
+      (logs) => logs.map((l) => (l.id === entryId ? { ...l, minutes } : l))
+    );
+  }
+
+  function handleDeleteEntry(entryId) {
+    return runEntryWrite(() => deleteEntry(userId, entryId), (logs) => logs.filter((l) => l.id !== entryId));
+  }
+
+  function handleDeleteEntries(entryIds) {
+    const ids = new Set(entryIds);
+    return runEntryWrite(() => deleteEntries(userId, entryIds), (logs) => logs.filter((l) => !ids.has(l.id)));
   }
 
   // Añadir asignatura/curso necesita el id real que genera Supabase antes
@@ -1826,9 +2077,11 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           <BitacoraTab
             cursoSubjects={cursoSubjects}
             loggableSubjects={loggableSubjects}
-            entries={cursoEntries}
-            onSaveDay={handleSaveDay}
-            onDeleteDay={handleDeleteDay}
+            logs={cursoLogs}
+            onSaveEntries={handleSaveEntries}
+            onUpdateEntry={handleUpdateEntry}
+            onDeleteEntry={handleDeleteEntry}
+            onDeleteEntries={handleDeleteEntries}
             curso={curso}
           />
         )}
@@ -2041,6 +2294,12 @@ export const CSS = `
 
   .empty-hint { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
   .log-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+  .log-day {
+    display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); background: transparent;
+    border: none; border-bottom: 1px dashed var(--border); padding: 8px 2px 4px; cursor: pointer; text-align: left; width: 100%;
+  }
+  .saved-hint { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+  .form-ok { color: var(--green); font-size: 13px; margin: 8px 0; }
   .log-item {
     display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border);
     border-radius: 10px; padding: 10px 12px; cursor: pointer; text-align: left; width: 100%;

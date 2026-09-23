@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { buildEntriesFromLogs } from "./domain.js";
 
 /* ------------------------------------------------------------------ */
 /*  Traduce entre las tablas de Supabase y la forma en memoria         */
@@ -34,59 +35,110 @@ function pickDefaultCursoId(cursos) {
   return sorted[0]?.id ?? null;
 }
 
+function rowToLog(r) {
+  return {
+    id: r.id,
+    date: r.fecha,
+    subjectId: r.asignatura_id,
+    minutes: r.minutos,
+    createdAt: r.created_at,
+    deviceId: r.device_id,
+    migrated: r.legacy_registro_id != null,
+  };
+}
+
+// PostgREST devuelve como máximo 1000 filas por consulta; con una entrada
+// por cada "Guardar" el historial supera eso enseguida, así que se pagina
+// con .range() (orden estable por id) hasta traerlas todas.
+const PAGE_SIZE = 1000;
+async function fetchAllEntradas(userId) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("entradas_estudio")
+      .select("*")
+      .eq("user_id", userId)
+      .order("id")
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) return rows;
+  }
+}
+
 export async function loadUserData(userId) {
-  const [cursosRes, asigRes, regRes] = await Promise.all([
+  const [cursosRes, asigRes, entradas] = await Promise.all([
     supabase.from("cursos").select("*").eq("user_id", userId),
     supabase.from("asignaturas").select("*").eq("user_id", userId),
-    supabase.from("registros_estudio").select("*").eq("user_id", userId),
+    fetchAllEntradas(userId),
   ]);
   if (cursosRes.error) throw cursosRes.error;
   if (asigRes.error) throw asigRes.error;
-  if (regRes.error) throw regRes.error;
 
   const cursos = cursosRes.data.map(rowToCurso);
   const subjects = asigRes.data.map(rowToSubject);
-  const entries = {};
-  regRes.data.forEach((r) => {
-    if (!entries[r.fecha]) entries[r.fecha] = {};
-    entries[r.fecha][r.asignatura_id] = r.minutos;
-  });
+  const logs = entradas.map(rowToLog);
 
-  return { schemaVersion: 3, activeCursoId: pickDefaultCursoId(cursos), cursos, subjects, entries };
+  return { schemaVersion: 3, activeCursoId: pickDefaultCursoId(cursos), cursos, subjects, logs, entries: buildEntriesFromLogs(logs) };
 }
 
-/* ---------- registros_estudio ---------- */
+/* ---------- entradas_estudio ---------- */
 
-export async function saveDayEntries(userId, date, loggableIds, values) {
-  const keepIds = new Set(Object.keys(values));
-  const toDeleteIds = loggableIds.filter((id) => !keepIds.has(id));
-  if (toDeleteIds.length > 0) {
-    const { error } = await supabase
-      .from("registros_estudio")
-      .delete()
-      .eq("user_id", userId)
-      .eq("fecha", date)
-      .in("asignatura_id", toDeleteIds);
-    if (error) throw error;
+/** Error que se lanza cuando la entrada a editar/borrar ya no existe (la
+ * borró otro dispositivo). */
+export class EntryNotFoundError extends Error {
+  constructor() {
+    super("Esa entrada ya no existe (probablemente se borró desde otro dispositivo).");
+    this.name = "EntryNotFoundError";
   }
-  const toUpsert = Object.entries(values).map(([asignatura_id, minutos]) => ({
-    user_id: userId, asignatura_id, fecha: date, minutos: Math.round(minutos),
+}
+
+/** Añade entradas nuevas — nunca reescribe las existentes. Cada entrada
+ * trae su id (UUID generado en el dispositivo): si un reintento manda otra
+ * vez la misma entrada (p. ej. la red falló después de que el servidor la
+ * aceptara), el id repetido se ignora y no se duplica. */
+export async function insertEntries(userId, logs, deviceId) {
+  const rows = logs.map((l) => ({
+    id: l.id, user_id: userId, asignatura_id: l.subjectId, fecha: l.date, minutos: l.minutes, device_id: deviceId,
   }));
-  if (toUpsert.length > 0) {
-    const { error } = await supabase
-      .from("registros_estudio")
-      .upsert(toUpsert, { onConflict: "asignatura_id,fecha" });
-    if (error) throw error;
-  }
+  const { error } = await supabase
+    .from("entradas_estudio")
+    .upsert(rows, { onConflict: "id", ignoreDuplicates: true });
+  if (error) throw error;
 }
 
-export async function deleteDayEntries(userId, date, loggableIds) {
-  const { error } = await supabase
-    .from("registros_estudio")
+export async function updateEntryMinutes(userId, entryId, minutes) {
+  const { data, error } = await supabase
+    .from("entradas_estudio")
+    .update({ minutos: minutes })
+    .eq("user_id", userId)
+    .eq("id", entryId)
+    .select("id");
+  if (error) throw error;
+  if (data.length === 0) throw new EntryNotFoundError();
+}
+
+export async function deleteEntry(userId, entryId) {
+  const { data, error } = await supabase
+    .from("entradas_estudio")
     .delete()
     .eq("user_id", userId)
-    .eq("fecha", date)
-    .in("asignatura_id", loggableIds);
+    .eq("id", entryId)
+    .select("id");
+  if (error) throw error;
+  if (data.length === 0) throw new EntryNotFoundError();
+}
+
+/** Borra exactamente las entradas indicadas ("Eliminar día"): las mismas
+ * que se enseñaron en la confirmación, ni una más aunque otro dispositivo
+ * haya añadido alguna entretanto. */
+export async function deleteEntries(userId, entryIds) {
+  if (entryIds.length === 0) return;
+  const { error } = await supabase
+    .from("entradas_estudio")
+    .delete()
+    .eq("user_id", userId)
+    .in("id", entryIds);
   if (error) throw error;
 }
 
@@ -238,7 +290,7 @@ export async function migrateFromGoogleSheets(userId, legacyData, onProgress) {
   report(`Subiendo ${rows.length} registros de estudio...`);
   const BATCH = 500;
   for (let i = 0; i < rows.length; i += BATCH) {
-    const { error } = await supabase.from("registros_estudio").insert(rows.slice(i, i + BATCH));
+    const { error } = await supabase.from("entradas_estudio").insert(rows.slice(i, i + BATCH));
     if (error) throw error;
   }
 
@@ -248,7 +300,7 @@ export async function migrateFromGoogleSheets(userId, legacyData, onProgress) {
 /* ---------- borrar cuenta ---------- */
 
 /** Borra la fila de `profiles` del usuario — el esquema tiene `on delete
- * cascade` desde cursos/asignaturas/registros_estudio hacia profiles, así
+ * cascade` desde cursos/asignaturas/registros_estudio/entradas_estudio hacia profiles, así
  * que esto se lleva por delante todos sus datos de un tirón. Requiere la
  * política RLS "profiles_delete_own" (ver supabase/migrations). */
 export async function deleteAccountData(userId) {

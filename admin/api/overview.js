@@ -18,7 +18,7 @@ export default async function handler(req, res) {
       supabase.from("profiles").select("id, plan, universidad, carrera, created_at"),
       supabase.from("cursos").select("id", { count: "exact", head: true }),
       supabase.from("asignaturas").select("id", { count: "exact", head: true }),
-      fetchAllRows(() => supabase.from("registros_estudio").select("user_id, fecha, minutos")),
+      fetchAllRows(() => supabase.from("entradas_estudio").select("user_id, fecha, minutos").order("id")),
     ]);
     if (profilesRes.error) throw profilesRes.error;
     if (cursosRes.error) throw cursosRes.error;
