@@ -2483,7 +2483,8 @@ export const CSS = `
   }
   .brand-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .brand-name {
-    font-size: 26px; font-weight: 800; margin: 0; letter-spacing: -0.03em; line-height: 1;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 26px; font-weight: 800; margin: 0; letter-spacing: -0.02em; line-height: 1;
     background: linear-gradient(90deg, var(--text) 0%, var(--cyan-text) 115%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
