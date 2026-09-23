@@ -150,13 +150,14 @@ a.brand:hover { color: var(--cyan); }
 }
 .nav-menu a:hover { background: var(--panel-2); color: var(--cyan); }
 
-.brand-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--cyan), var(--purple));
-  box-shadow: 0 0 14px rgba(79, 216, 234, 0.7);
+.brand-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(79, 216, 234, 0.25), 0 4px 14px rgba(20, 57, 110, 0.55);
 }
+.brand-sm .brand-logo { width: 24px; height: 24px; border-radius: 6px; }
 
 /* ---------- buttons ---------- */
 

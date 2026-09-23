@@ -1721,6 +1721,155 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  REPORTAR UN PROBLEMA y NOVEDADES                                    */
+/* ------------------------------------------------------------------ */
+
+const SUPPORT_EMAIL = "cleverapp2026@gmail.com";
+
+const TAB_LABELS = {
+  bitacora: "Bitácora", panel: "Panel", trayectoria: "Trayectoria", desgaste: "Desgaste",
+  clasificacion: "Clasificación", asignaturas: "Asignaturas",
+};
+
+/** Prepara un correo a SUPPORT_EMAIL con la descripción del usuario y,
+ * si lo acepta, datos técnicos que ayudan a reproducir el fallo. Lo abre
+ * en su app de correo (mailto:), así que no hace falta ningún servidor. */
+function BugReportModal({ onClose, userId, tab }) {
+  const [kind, setKind] = useState("Error");
+  const [text, setText] = useState("");
+  const [includeTech, setIncludeTech] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const tech = [
+    `Sección: ${TAB_LABELS[tab] || tab}`,
+    `Fecha: ${new Date().toLocaleString("es-ES")}`,
+    `Dirección: ${window.location.host}`,
+    `Pantalla: ${window.innerWidth}×${window.innerHeight}`,
+    `Navegador: ${navigator.userAgent}`,
+    `ID de cuenta: ${userId}`,
+  ].join("\n");
+  const subject = `[Clever] ${kind}: ${text.trim().split("\n")[0].slice(0, 60) || "sin título"}`;
+  const body = `${text.trim()}\n\n${includeTech ? `— Datos técnicos —\n${tech}\n` : ""}`;
+  const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  async function copyAll() {
+    try {
+      await navigator.clipboard.writeText(`Para: ${SUPPORT_EMAIL}\nAsunto: ${subject}\n\n${body}`);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <Modal title="🐞 Reportar un problema" onClose={onClose}>
+      <p className="panel-subtitle">
+        Cuéntanos qué ha pasado y qué esperabas que pasara. Se abrirá tu app de correo con el mensaje listo para
+        enviar a <strong>{SUPPORT_EMAIL}</strong>.
+      </p>
+      <div className="seg-control" style={{ marginBottom: 12 }}>
+        {["Error", "Sugerencia", "Otro"].map((k) => (
+          <button key={k} className={`seg-btn ${kind === k ? "seg-btn-active" : ""}`} onClick={() => setKind(k)}>{k}</button>
+        ))}
+      </div>
+      <textarea
+        className="input-field report-textarea"
+        rows={5}
+        placeholder={kind === "Error" ? "Ej.: en la Bitácora, al pulsar Guardar con el contador en marcha, los minutos no se sumaron…" : "Escribe aquí tu mensaje…"}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <label className="report-check">
+        <input type="checkbox" checked={includeTech} onChange={(e) => setIncludeTech(e.target.checked)} />
+        Incluir datos técnicos (sección, navegador, tamaño de pantalla e ID de cuenta) para localizar el fallo
+      </label>
+      <div className="btn-row">
+        <a
+          className={`btn-primary report-send ${text.trim() ? "" : "report-send-disabled"}`}
+          href={text.trim() ? mailto : undefined}
+          aria-disabled={!text.trim()}
+          onClick={(e) => { if (!text.trim()) e.preventDefault(); }}
+        >
+          Abrir en mi correo
+        </a>
+        <button className="btn-ghost" onClick={copyAll} disabled={!text.trim()}>{copied ? "✓ Copiado" : "Copiar mensaje"}</button>
+      </div>
+      <div className="gauge-sub">
+        ¿No se abre ningún correo (p. ej. en un ordenador sin app de correo)? Pulsa "Copiar mensaje" y pégalo en un
+        correo nuevo a {SUPPORT_EMAIL} desde Gmail, Outlook…
+      </div>
+    </Modal>
+  );
+}
+
+// Novedades de esta actualización: se muestran en las primeras
+// NEWS_MAX_SHOWS entradas a la app (por cuenta y dispositivo), salvo que
+// el usuario marque "No volver a mostrar". Para anunciar otra novedad en
+// el futuro basta con cambiar NEWS_VERSION y el contenido.
+const NEWS_VERSION = "2026-09-sesiones";
+const NEWS_MAX_SHOWS = 3;
+const newsCountedThisLoad = new Set(); // evita contar dos veces la misma carga
+
+function newsKey(userId) {
+  return `clever:novedades:${NEWS_VERSION}:${userId}`;
+}
+function readNewsState(userId) {
+  try {
+    return JSON.parse(localStorage.getItem(newsKey(userId))) || { shows: 0, dismissed: false };
+  } catch {
+    return { shows: 0, dismissed: false };
+  }
+}
+function writeNewsState(userId, state) {
+  try {
+    localStorage.setItem(newsKey(userId), JSON.stringify(state));
+  } catch {}
+}
+
+function NewsModal({ onClose, onReport, showDontShowAgain }) {
+  const [dontShow, setDontShow] = useState(false);
+  return (
+    <Modal title="🚀 Novedades en Clever" onClose={() => onClose(dontShow)} wide>
+      <div className="news">
+        <section className="news-item">
+          <div className="news-icon">⏱️</div>
+          <div>
+            <div className="news-title">El registro ahora suma, siempre desde 0</div>
+            <ul className="news-list">
+              <li><strong>Registro de vuelo</strong> sirve para <em>añadir</em> minutos: escribe (o mide con el contador) lo que acabas de estudiar y pulsa Guardar. Se suma a lo que ya tenías ese día y el formulario vuelve a 0.</li>
+              <li>Cada vez que guardas se crea una <strong>sesión</strong>. En <strong>Registros de hoy</strong> ves el total de cada asignatura; tócala para desplegar sus sesiones y corregir o borrar cualquiera.</li>
+              <li><strong>Últimos registros</strong> sigue mostrando el total de cada asignatura por día, como siempre.</li>
+              <li>Móvil y ordenador ya no se pisan: puedes guardar desde los dos y todo se suma. Al volver a la app se actualiza sola.</li>
+              <li>El <strong>máximo en una sesión</strong> del Panel ahora mide cada sesión por separado.</li>
+            </ul>
+          </div>
+        </section>
+        <section className="news-item">
+          <div className="news-icon">🐞</div>
+          <div>
+            <div className="news-title">¿Algo no funciona? Cuéntanoslo</div>
+            <p className="news-text">
+              Desde el menú <strong>☰ → Reportar un problema</strong> puedes enviarnos errores o sugerencias en un momento, o escribirnos
+              directamente a <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+            </p>
+            <button className="btn-ghost btn-small" onClick={onReport}>Reportar un problema</button>
+          </div>
+        </section>
+      </div>
+      <div className="news-footer">
+        {showDontShowAgain ? (
+          <label className="report-check" style={{ margin: 0 }}>
+            <input type="checkbox" checked={dontShow} onChange={(e) => setDontShow(e.target.checked)} />
+            No volver a mostrar
+          </label>
+        ) : <span />}
+        <button className="btn-primary" onClick={() => onClose(dontShow)}>¡Entendido!</button>
+      </div>
+    </Modal>
+  );
+}
+
 export default function App({ session, profile, onSignOut, onDeleteAccount } = {}) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
@@ -1746,6 +1895,24 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   // tema, cerrar sesión y eliminar cuenta en un desplegable, para no
   // llenar la cabecera de botones sueltos. Se cierra solo al tocar fuera.
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  // null = cerrado; "auto" = abierto solo al entrar; "manual" = desde el menú
+  const [newsOpen, setNewsOpen] = useState(null);
+
+  useEffect(() => {
+    const userIdForNews = session.user.id;
+    if (newsCountedThisLoad.has(userIdForNews)) return;
+    newsCountedThisLoad.add(userIdForNews);
+    const state = readNewsState(userIdForNews);
+    if (state.dismissed || state.shows >= NEWS_MAX_SHOWS) return;
+    writeNewsState(userIdForNews, { ...state, shows: state.shows + 1 });
+    setNewsOpen("auto");
+  }, [session.user.id]);
+
+  function closeNews(dontShowAgain) {
+    if (dontShowAgain) writeNewsState(session.user.id, { ...readNewsState(session.user.id), dismissed: true });
+    setNewsOpen(null);
+  }
   const menuRef = useRef(null);
   useEffect(() => {
     if (!menuOpen) return;
@@ -2060,7 +2227,17 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     <div className="app-shell">
       <style>{CSS}</style>
       <header className="app-header">
-        <h1 className="app-title">Bitácora de vuelo</h1>
+        <div className="brand">
+          <img className="brand-logo" src="/icon-192.png?v=2" alt="" width="44" height="44" />
+          <div className="brand-text">
+            <h1 className="brand-name">Clever</h1>
+            <div className="brand-sub">
+              <span className="brand-sub-line" />
+              Bitácora de vuelo
+              <span className="brand-sub-line brand-sub-line-fade" />
+            </div>
+          </div>
+        </div>
         <div className="header-right">
           {cloudError && <span className="cloud-error" title={cloudError}>⚠ nube: {cloudError}</span>}
           <select
@@ -2111,6 +2288,12 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
                 >
                   {theme === "dark" ? "☀️ Modo claro" : "🌙 Modo oscuro"}
                 </button>
+                <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setNewsOpen("manual"); }}>
+                  🚀 Novedades
+                </button>
+                <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setReportOpen(true); }}>
+                  🐞 Reportar un problema
+                </button>
                 <button className="account-dropdown-row" onClick={onSignOut}>Cerrar sesión</button>
                 <div className="account-dropdown-divider" />
                 <button
@@ -2124,6 +2307,15 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           </div>
         </div>
       </header>
+
+      {newsOpen && (
+        <NewsModal
+          onClose={closeNews}
+          onReport={() => { closeNews(false); setReportOpen(true); }}
+          showDontShowAgain={newsOpen === "auto"}
+        />
+      )}
+      {reportOpen && <BugReportModal onClose={() => setReportOpen(false)} userId={session.user.id} tab={tab} />}
 
       {deleteConfirmOpen && (
         <Modal
@@ -2275,7 +2467,45 @@ export const CSS = `
     max-width: 1080px; margin: 0 auto 18px; display: flex; justify-content: space-between;
     align-items: center; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--border); padding-bottom: 16px;
   }
-  .app-title { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .app-header { position: relative; border-bottom-color: transparent; }
+  /* Estela bajo la cabecera: sale del logo y se desvanece, como la del cohete. */
+  .app-header::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--cyan) 0%, rgba(79,216,234,0.35) 35%, var(--border) 70%, transparent 100%);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-logo {
+    width: 44px; height: 44px; border-radius: 11px; flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(79,216,234,0.25), 0 6px 18px rgba(20,57,110,0.55);
+  }
+  .brand-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .brand-name {
+    font-size: 26px; font-weight: 800; margin: 0; letter-spacing: -0.03em; line-height: 1;
+    background: linear-gradient(90deg, var(--text) 0%, var(--cyan-text) 115%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .brand-sub {
+    display: flex; align-items: center; gap: 8px; font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-dim); white-space: nowrap;
+  }
+  .brand-sub-line { display: inline-block; width: 14px; height: 1px; background: var(--cyan); opacity: 0.8; }
+  .brand-sub-line-fade { width: 28px; background: linear-gradient(90deg, var(--cyan), transparent); }
+  .report-textarea { width: 100%; resize: vertical; min-height: 110px; font: inherit; box-sizing: border-box; }
+  .report-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--text-dim); margin: 10px 0 2px; cursor: pointer; }
+  .report-send { text-decoration: none; display: inline-flex; align-items: center; }
+  .report-send-disabled { opacity: 0.5; cursor: not-allowed; }
+  .news { display: flex; flex-direction: column; gap: 18px; }
+  .news-item { display: flex; gap: 14px; }
+  .news-icon {
+    font-size: 20px; width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border);
+  }
+  .news-title { font-weight: 700; font-size: 14px; margin: 2px 0 6px; }
+  .news-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: var(--text-dim); display: flex; flex-direction: column; gap: 5px; }
+  .news-list strong, .news-text strong { color: var(--text); }
+  .news-text { font-size: 13px; line-height: 1.55; color: var(--text-dim); margin: 0 0 10px; }
+  .news-text a { color: var(--cyan-text); }
+  .news-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); }
   .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
   .account-menu { position: relative; }
   .menu-trigger { font-size: 16px; line-height: 1; padding: 8px 12px; }
