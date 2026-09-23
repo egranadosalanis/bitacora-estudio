@@ -1734,7 +1734,8 @@ const TAB_LABELS = {
 
 /** Prepara un correo a SUPPORT_EMAIL con la descripción del usuario y,
  * si lo acepta, datos técnicos que ayudan a reproducir el fallo. Lo abre
- * en su app de correo (mailto:), así que no hace falta ningún servidor. */
+ * siempre en Gmail (ventana de redactar de Gmail web, en otra pestaña), así
+ * que no hace falta ningún servidor ni una app de correo configurada. */
 function BugReportModal({ onClose, userId, tab }) {
   const [kind, setKind] = useState("Error");
   const [text, setText] = useState("");
@@ -1751,7 +1752,7 @@ function BugReportModal({ onClose, userId, tab }) {
   ].join("\n");
   const subject = `[Clever] ${kind}: ${text.trim().split("\n")[0].slice(0, 60) || "sin título"}`;
   const body = `${text.trim()}\n\n${includeTech ? `— Datos técnicos —\n${tech}\n` : ""}`;
-  const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(SUPPORT_EMAIL)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
   async function copyAll() {
     try {
@@ -1765,7 +1766,7 @@ function BugReportModal({ onClose, userId, tab }) {
   return (
     <Modal title="🐞 Reportar un problema" onClose={onClose}>
       <p className="panel-subtitle">
-        Cuéntanos qué ha pasado y qué esperabas que pasara. Se abrirá tu app de correo con el mensaje listo para
+        Cuéntanos qué ha pasado y qué esperabas que pasara. Se abrirá Gmail con el mensaje listo para
         enviar a <strong>{SUPPORT_EMAIL}</strong>.
       </p>
       <div className="seg-control" style={{ marginBottom: 12 }}>
@@ -1787,17 +1788,19 @@ function BugReportModal({ onClose, userId, tab }) {
       <div className="btn-row">
         <a
           className={`btn-primary report-send ${text.trim() ? "" : "report-send-disabled"}`}
-          href={text.trim() ? mailto : undefined}
+          href={text.trim() ? gmailUrl : undefined}
+          target="_blank"
+          rel="noopener noreferrer"
           aria-disabled={!text.trim()}
           onClick={(e) => { if (!text.trim()) e.preventDefault(); }}
         >
-          Abrir en mi correo
+          Abrir en Gmail
         </a>
         <button className="btn-ghost" onClick={copyAll} disabled={!text.trim()}>{copied ? "✓ Copiado" : "Copiar mensaje"}</button>
       </div>
       <div className="gauge-sub">
-        ¿No se abre ningún correo (p. ej. en un ordenador sin app de correo)? Pulsa "Copiar mensaje" y pégalo en un
-        correo nuevo a {SUPPORT_EMAIL} desde Gmail, Outlook…
+        ¿No usas Gmail? Pulsa "Copiar mensaje" y pégalo en un correo nuevo a {SUPPORT_EMAIL} desde tu correo
+        habitual (Outlook, iCloud…).
       </div>
     </Modal>
   );
@@ -1851,7 +1854,7 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
             <div className="news-title">¿Algo no funciona? Cuéntanoslo</div>
             <p className="news-text">
               Desde el menú <strong>☰ → Reportar un problema</strong> puedes enviarnos errores o sugerencias en un momento, o escribirnos
-              directamente a <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+              directamente a <a href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(SUPPORT_EMAIL)}`} target="_blank" rel="noopener noreferrer">{SUPPORT_EMAIL}</a>.
             </p>
             <button className="btn-ghost btn-small" onClick={onReport}>Reportar un problema</button>
           </div>
