@@ -17,21 +17,33 @@ export default async function handler(req, res) {
   const supabase = getAdminClient();
 
   try {
-    const [profileRes, cursosRes, asignaturasRes, registros] = await Promise.all([
+    const [profileRes, cursosRes, asignaturasRes, entradas] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", id).single(),
       supabase.from("cursos").select("*").eq("user_id", id).order("start_date", { ascending: false }),
       supabase.from("asignaturas").select("*").eq("user_id", id),
       fetchAllRows(() =>
         supabase
-          .from("registros_estudio")
+          .from("entradas_estudio")
           .select("fecha, minutos, asignatura_id")
           .eq("user_id", id)
           .order("fecha", { ascending: true })
+          .order("id", { ascending: true })
       ),
     ]);
     if (profileRes.error) throw profileRes.error;
     if (cursosRes.error) throw cursosRes.error;
     if (asignaturasRes.error) throw asignaturasRes.error;
+
+    // La app guarda una entrada por cada "Guardar"; aquí se suman por día y
+    // asignatura para que el panel siga viendo un registro por día, como antes.
+    const porDiaYAsignatura = new Map();
+    for (const e of entradas) {
+      const key = `${e.fecha}|${e.asignatura_id}`;
+      const prev = porDiaYAsignatura.get(key);
+      if (prev) prev.minutos += e.minutos;
+      else porDiaYAsignatura.set(key, { fecha: e.fecha, minutos: e.minutos, asignatura_id: e.asignatura_id });
+    }
+    const registros = Array.from(porDiaYAsignatura.values());
 
     const minutosPorAsignatura = new Map();
     for (const r of registros) {

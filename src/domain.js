@@ -305,7 +305,22 @@ export function subjectsForRegisterInCurso(subjects, entries, curso) {
 /*   entries, filtrando a solo esos ids)                                */
 /* ------------------------------------------------------------------ */
 
-export function computeStats(subjects, entries) {
+/** Suma las entradas individuales (una por cada "Guardar") en el mapa
+ * { [fecha]: { [subjectId]: minutos } } que usan todas las estadísticas.
+ * El total de un día/asignatura nunca se guarda: siempre sale de aquí. */
+export function buildEntriesFromLogs(logs) {
+  const entries = {};
+  logs.forEach((l) => {
+    if (!entries[l.date]) entries[l.date] = {};
+    entries[l.date][l.subjectId] = (entries[l.date][l.subjectId] || 0) + l.minutes;
+  });
+  return entries;
+}
+
+/** `logs` (opcional): entradas individuales del mismo rango que `entries`.
+ * Si se pasan, el "máximo en una sesión" es la entrada más grande (cada
+ * entrada es una sesión); si no, el mayor total de un día y asignatura. */
+export function computeStats(subjects, entries, logs) {
   const subjectIds = new Set(subjects.map((s) => s.id));
   const dates = Object.keys(entries).sort();
   const dailyTotals = {};
@@ -328,6 +343,15 @@ export function computeStats(subjects, entries) {
       dailyBySubject[date] = dayEntries;
     }
   });
+
+  if (logs) {
+    maxSession = { minutes: 0, date: null, subjectId: null };
+    logs.forEach((l) => {
+      if (subjectIds.has(l.subjectId) && entries[l.date] && l.minutes > maxSession.minutes) {
+        maxSession = { minutes: l.minutes, date: l.date, subjectId: l.subjectId };
+      }
+    });
+  }
 
   const activeDates = Object.keys(dailyTotals).sort();
   const globalTotal = activeDates.reduce((acc, d) => acc + dailyTotals[d], 0);

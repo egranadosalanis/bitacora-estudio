@@ -5,12 +5,12 @@ import {
 } from "recharts";
 import {
   PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
-  buildDefaultData, migrateData, applyHistoricalImport, computeStats, getSubjectEntries, getAllEntriesFlat,
+  buildDefaultData, migrateData, applyHistoricalImport, computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
 } from "./domain.js";
 import {
-  loadUserData, saveDayEntries, deleteDayEntries, insertSubject, deleteSubject, updateSubject,
+  loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
   updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso, migrateFromGoogleSheets,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
@@ -122,7 +122,54 @@ function formatElapsed(ms) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-const DRAFT_PREFIX = "bitacora:draft:";
+// "draft2": desde que el formulario son "minutos a añadir" (entradas
+// individuales), los borradores antiguos —que guardaban el total del día—
+// ya no significan lo mismo y no deben recuperarse, o se sumarían dos veces.
+const DRAFT_PREFIX = "bitacora:draft2:";
+
+/** UUID v4 para cada entrada nueva (se genera en el dispositivo para que un
+ * reintento del mismo guardado no la duplique). */
+function newUuid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** Identificador anónimo y persistente de este dispositivo/navegador. */
+function getDeviceId() {
+  try {
+    let id = localStorage.getItem("bitacora:deviceId");
+    if (!id) {
+      id = newUuid();
+      localStorage.setItem("bitacora:deviceId", id);
+    }
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+const MAX_MINUTES_PER_ENTRY = 1440;
+
+/** Valida los minutos de un campo: devuelve { minutes } (0 si está vacío)
+ * o { error } si no es un entero entre 0 y MAX_MINUTES_PER_ENTRY. */
+function parseMinutes(raw) {
+  const str = String(raw ?? "").trim();
+  if (str === "") return { minutes: 0 };
+  const n = Number(str);
+  if (!Number.isInteger(n)) return { error: "tiene que ser un número entero de minutos" };
+  if (n < 0) return { error: "no puede ser negativo" };
+  if (n > MAX_MINUTES_PER_ENTRY) return { error: `no puede pasar de ${MAX_MINUTES_PER_ENTRY} min por entrada` };
+  return { minutes: n };
+}
+
+function formatTime(isoTs) {
+  const d = new Date(isoTs);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 // El registro manual sin guardar y el contador viven en memoria (useState).
 // En móvil, al poner la app en segundo plano el sistema puede recargar la
@@ -146,13 +193,15 @@ function saveDraft(cursoId, draft) {
   }
 }
 
-function clearDraft(cursoId) {
-  try {
-    localStorage.removeItem(DRAFT_PREFIX + cursoId);
-  } catch {}
+/** ¿Tiene el borrador algo que se perdería (minutos escritos, contador con
+ * tiempo o un guardado sin confirmar)? */
+function draftHasContent(draft) {
+  if (!draft) return false;
+  const typed = Object.values(draft.values || {}).some((v) => (parseMinutes(v).minutes || 0) > 0);
+  return typed || !!draft.timerRunning || draft.timerAccumulatedMs > 0 || !!draft.pendingSave;
 }
 
-function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDeleteDay, curso }) {
+function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEntries, onUpdateEntry, onDeleteEntry, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
   // Si el curso todavía no ha empezado, no hay "hoy" válido dentro de su rango:
@@ -160,7 +209,16 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   const maxDate = cappedToday >= curso.startDate ? cappedToday : curso.endDate;
   const minDate = curso.startDate;
 
-  const [date, setDate] = useState(() => clampDate(todayIso, minDate, maxDate));
+  // Arranca en hoy — salvo que haya un borrador pendiente de otro día dentro
+  // del curso (p. ej. el contador seguía en marcha pasada la medianoche y el
+  // móvil recargó la página): entonces se vuelve a ese día para no perderlo.
+  const [date, setDate] = useState(() => {
+    const draft = loadDraft(curso.id);
+    if (draftHasContent(draft) && draft.date >= minDate && draft.date <= maxDate) return draft.date;
+    return clampDate(todayIso, minDate, maxDate);
+  });
+  // Minutos A AÑADIR por asignatura (no el total del día): siempre arrancan
+  // vacíos y cada "Guardar" crea una entrada nueva por asignatura con > 0.
   const [values, setValues] = useState({});
   const [historySubjectId, setHistorySubjectId] = useState(HISTORY_ALL);
   const [visibleCount, setVisibleCount] = useState(20);
@@ -172,31 +230,58 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
   const [timerAccumulatedMs, setTimerAccumulatedMs] = useState(0);
   const [, setTimerTick] = useState(0);
 
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false); // bloquea el doble toque antes de que React repinte
+  // Entradas (con sus ids) del guardado en curso o del último que falló. Se
+  // guarda también en el borrador: si se reintenta sin cambiar nada —aunque
+  // sea tras una recarga porque el sistema cerró la app a mitad de guardar—
+  // se reenvían con los MISMOS ids, así que si el primer intento sí llegó al
+  // servidor no se duplican.
+  const pendingSaveRef = useRef(null);
+  const prevCursoIdRef = useRef(curso.id);
+  const [formMsg, setFormMsg] = useState(null); // { type: 'ok' | 'error', text }
+  // Widget derecho: "Registros de hoy" (totales del día por asignatura, que
+  // se despliegan en sus sesiones) o "Últimos registros" (totales por día).
+  const [listView, setListView] = useState("hoy"); // 'hoy' | 'ultimos'
+  // Día que muestra "Registros de hoy": sigue a la fecha del formulario, pero
+  // tocar un día en "Últimos registros" lo cambia SOLO aquí, sin mover el
+  // formulario (así no se pierde lo escrito ni se reinicia el contador).
+  const [viewDate, setViewDate] = useState(date);
+  const [expandedSubjectId, setExpandedSubjectId] = useState(null);
+  const [sessionEdits, setSessionEdits] = useState({}); // { [entryId]: texto }
+  const [sessionErrors, setSessionErrors] = useState({}); // { [entryId]: mensaje }
+  const [sessionBusyId, setSessionBusyId] = useState(null);
+  const [listMsg, setListMsg] = useState(null);
+
+  useEffect(() => { setViewDate(date); }, [date]);
+
   // Al cambiar de curso, la fecha y la asignatura de historial seleccionadas
   // pueden quedar fuera de rango o dejar de existir en el nuevo curso — se
   // resetean para que los registros siempre se guarden en el curso activo.
   useEffect(() => {
+    if (prevCursoIdRef.current === curso.id) return; // al montar no: ahí manda el borrador
+    prevCursoIdRef.current = curso.id;
     setDate(clampDate(isoToday(), minDate, maxDate));
     setHistorySubjectId(HISTORY_ALL);
   }, [curso.id]);
 
-  // Carga los valores del día. Si hay un borrador sin guardar en localStorage
-  // para este mismo curso y fecha (p. ej. porque el móvil recargó la página
-  // al volver de segundo plano), se recupera — incluido el contador, si
-  // seguía en marcha, cuyo tiempo se recalcula contra timerStartedAt (un
-  // timestamp real) y no contra el intervalo perdido. Si cambias de fecha o
-  // de curso a media sesión sin que haya borrador de esa fecha, el contador
-  // se resetea, para que el tiempo medido nunca se cuele en el día equivocado.
+  // Al cambiar de fecha o de curso, el formulario vuelve a 0 — salvo que haya
+  // un borrador sin guardar en localStorage para ese mismo curso y fecha (p.
+  // ej. porque el móvil recargó la página al volver de segundo plano), que se
+  // recupera, incluido el contador si seguía en marcha (su tiempo se
+  // recalcula contra timerStartedAt, un timestamp real). No depende de los
+  // datos del servidor: refrescarlos (al guardar o al volver a la pestaña)
+  // nunca borra lo que se está escribiendo.
   useEffect(() => {
     const draft = loadDraft(curso.id);
     const useDraft = !!draft && draft.date === date;
-    const existing = entries[date] || {};
-    const next = {};
-    loggableSubjects.forEach((s) => {
-      const draftValue = useDraft ? draft.values?.[s.id] : undefined;
-      next[s.id] = draftValue !== undefined ? draftValue : (existing[s.id] ? String(existing[s.id]) : "");
-    });
-    setValues(next);
+    setValues(useDraft ? draft.values || {} : {});
+    pendingSaveRef.current = useDraft ? draft.pendingSave || null : null;
+    setFormMsg(
+      useDraft && date !== isoToday() && draftHasContent(draft)
+        ? { type: "ok", text: `Recuperado lo que tenías sin guardar del ${formatLong(date)}: se guardará en ese día (cámbialo arriba si quieres otro).` }
+        : null
+    );
     if (useDraft) {
       setMode(draft.mode || "manual");
       if (draft.timerSubjectId) setTimerSubjectId(draft.timerSubjectId);
@@ -208,13 +293,16 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
       setTimerStartedAt(null);
       setTimerAccumulatedMs(0);
     }
-  }, [date, loggableSubjects, entries, curso.id]);
+  }, [date, curso.id]);
 
   // Persiste el borrador en cada cambio, para poder recuperarlo si el
   // sistema recarga la página mientras la app está en segundo plano.
-  useEffect(() => {
-    saveDraft(curso.id, { date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs });
-  }, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs]);
+  function persistDraft() {
+    saveDraft(curso.id, {
+      date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs, pendingSave: pendingSaveRef.current,
+    });
+  }
+  useEffect(persistDraft, [curso.id, date, values, mode, timerSubjectId, timerRunning, timerStartedAt, timerAccumulatedMs]);
 
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
 
@@ -245,7 +333,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     const totalMs = timerAccumulatedMs + (timerRunning && timerStartedAt ? Date.now() - timerStartedAt : 0);
     const addedMinutes = Math.round(totalMs / 60000);
     if (addedMinutes > 0 && timerSubjectId) {
-      setValues((v) => ({ ...v, [timerSubjectId]: String((parseFloat(v[timerSubjectId]) || 0) + addedMinutes) }));
+      setValues((v) => ({ ...v, [timerSubjectId]: String((parseInt(v[timerSubjectId], 10) || 0) + addedMinutes) }));
     }
     setTimerAccumulatedMs(0);
     setTimerStartedAt(null);
@@ -257,13 +345,150 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
     setTimerRunning(false);
   }
 
-  const dayTotal = loggableSubjects.reduce((acc, s) => acc + (parseFloat(values[s.id]) || 0), 0);
-  const hasEntryToday = !!entries[date] && loggableSubjects.some((s) => entries[date][s.id] > 0);
+  const subjectById = new Map(cursoSubjects.map((s) => [s.id, s]));
+  const pendingTotal = loggableSubjects.reduce((acc, s) => acc + (parseMinutes(values[s.id]).minutes || 0), 0);
 
+  function collectRows() {
+    const rows = [];
+    const errors = [];
+    loggableSubjects.forEach((s) => {
+      const r = parseMinutes(values[s.id]);
+      if (r.error) errors.push(`${s.name}: ${r.error}`);
+      else if (r.minutes > 0) rows.push({ subjectId: s.id, minutes: r.minutes });
+    });
+    return { rows, errors, signature: JSON.stringify([date, rows]) };
+  }
+
+  // Si hay un guardado sin confirmar (la app se cerró o perdió la respuesta
+  // a mitad) y sus entradas ya aparecen en los datos del servidor, es que sí
+  // llegó: se limpia el formulario en vez de invitar a guardarlo otra vez.
+  // Solo si lo escrito sigue siendo exactamente lo de aquel guardado.
+  useEffect(() => {
+    const pending = pendingSaveRef.current;
+    if (!pending || savingRef.current) return;
+    const ids = new Set(logs.map((l) => l.id));
+    if (!pending.logs.every((l) => ids.has(l.id))) return;
+    if (collectRows().signature !== pending.signature) return;
+    pendingSaveRef.current = null;
+    setValues({});
+    const added = pending.logs.reduce((a, l) => a + l.minutes, 0);
+    setFormMsg({ type: "ok", text: `Tu último guardado sí se completó (${pending.logs.length} entrada(s), +${hm(added)}).` });
+  }, [logs, values]);
+
+  async function handleSave() {
+    if (savingRef.current) return;
+    const { rows, errors, signature } = collectRows();
+    if (errors.length > 0) {
+      setFormMsg({ type: "error", text: errors.join(" · ") });
+      return;
+    }
+    if (rows.length === 0) {
+      setFormMsg({ type: "error", text: "No hay minutos que guardar: escribe los minutos a añadir en alguna asignatura." });
+      return;
+    }
+    if (pendingSaveRef.current?.signature !== signature) {
+      pendingSaveRef.current = { signature, logs: rows.map((r) => ({ ...r, id: newUuid(), date })) };
+    }
+    const toSave = pendingSaveRef.current.logs;
+    persistDraft(); // apunta los ids ANTES de enviar, por si la app se cierra a mitad
+    savingRef.current = true;
+    setSaving(true);
+    setFormMsg(null);
+    try {
+      await onSaveEntries(toSave);
+      pendingSaveRef.current = null;
+      setValues({});
+      const added = toSave.reduce((a, l) => a + l.minutes, 0);
+      setFormMsg({ type: "ok", text: `Guardado: ${toSave.length} entrada(s), +${hm(added)}.` });
+    } catch (e) {
+      setFormMsg({
+        type: "error",
+        text: `No se pudo guardar (${String((e && e.message) || e)}). Tus minutos siguen en el formulario: pulsa "Guardar registro" para reintentar.`,
+      });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  function setSessionError(id, msg) {
+    setSessionErrors((m) => ({ ...m, [id]: msg }));
+  }
+  function forgetSessionEdit(id) {
+    setSessionEdits(({ [id]: _drop, ...rest }) => rest);
+    setSessionErrors(({ [id]: _drop, ...rest }) => rest);
+  }
+
+  async function handleSessionSave(log) {
+    const r = parseMinutes(sessionEdits[log.id]);
+    if (r.error) return setSessionError(log.id, `Los minutos ${r.error}.`);
+    if (r.minutes === 0) return setSessionError(log.id, "Para quitar esta sesión, usa ✕.");
+    if (r.minutes === log.minutes) return forgetSessionEdit(log.id);
+    setSessionBusyId(log.id);
+    setSessionError(log.id, null);
+    setListMsg(null);
+    try {
+      await onUpdateEntry(log.id, r.minutes);
+      forgetSessionEdit(log.id);
+      setListMsg({ type: "ok", text: `Sesión actualizada: ${hm(log.minutes)} → ${hm(r.minutes)}.` });
+    } catch (e) {
+      handleSessionFailure(log.id, e);
+    } finally {
+      setSessionBusyId(null);
+    }
+  }
+
+  async function handleSessionDelete(log) {
+    const subject = subjectById.get(log.subjectId);
+    const ok = window.confirm(`¿Eliminar la sesión de ${hm(log.minutes)} de ${subject?.name ?? "esta asignatura"} (${formatMedium(log.date)})?`);
+    if (!ok) return;
+    setSessionBusyId(log.id);
+    setListMsg(null);
+    try {
+      await onDeleteEntry(log.id);
+      forgetSessionEdit(log.id);
+      setListMsg({ type: "ok", text: `Sesión eliminada (−${hm(log.minutes)}).` });
+    } catch (e) {
+      handleSessionFailure(log.id, e);
+    } finally {
+      setSessionBusyId(null);
+    }
+  }
+
+  function handleSessionFailure(id, e) {
+    if (e && e.name === "EntryNotFoundError") {
+      forgetSessionEdit(id);
+      setListMsg({ type: "error", text: `${e.message} He actualizado la lista.` });
+    } else {
+      setSessionError(id, `No se pudo guardar el cambio (${String((e && e.message) || e)}). Inténtalo de nuevo.`);
+    }
+  }
+
+  // "Registros de hoy": un total por asignatura del día viewDate, cada uno
+  // con las sesiones (entradas) que lo componen, de la más antigua a la última.
+  const viewDayGroups = cursoSubjects
+    .map((subject) => {
+      const sessions = logs
+        .filter((l) => l.date === viewDate && l.subjectId === subject.id)
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+      return { subject, sessions, total: sessions.reduce((acc, l) => acc + l.minutes, 0) };
+    })
+    .filter((g) => g.sessions.length > 0);
+  const viewDayTotal = viewDayGroups.reduce((acc, g) => acc + g.total, 0);
+  const viewDayLabel = viewDate === todayIso ? "Registros de hoy" : `Registros del ${formatShort(viewDate)}`;
+
+  // "Últimos registros": total por día y asignatura (como siempre).
   const historySubject = historySubjectId !== HISTORY_ALL ? cursoSubjects.find((s) => s.id === historySubjectId) : null;
   const history = historySubjectId === HISTORY_ALL
     ? getAllEntriesFlat(cursoSubjects, entries, "desc")
     : (historySubject ? getSubjectEntries(entries, historySubject.id, "desc") : []);
+
+  function openDayInView(day, subjectId) {
+    setViewDate(day);
+    setExpandedSubjectId(subjectId);
+    setListMsg(null);
+    setListView("hoy");
+  }
 
   return (
     <div className="grid-2">
@@ -271,7 +496,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
         <div className="panel-title">Registro de vuelo — {formatLong(date)}</div>
         <div className="field-row">
           <label className="field-label">Fecha</label>
-          <input type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} className="input-field" />
+          <input type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} className="input-field" disabled={saving} />
         </div>
         {loggableSubjects.length === 0 ? (
           <div className="empty-hint">No hay asignaturas activas (todas están aprobadas o no has añadido ninguna todavía).</div>
@@ -285,7 +510,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
             {mode === "contador" && (
               <div className="timer-box">
                 <div className="gauge-sub" style={{ marginBottom: 8 }}>
-                  Lo que mida el contador se sumará al registro de {formatMedium(date)} — cambia la fecha arriba si es para otro día.
+                  Lo que mida el contador se añadirá al registro de {formatMedium(date)} al pulsar "Guardar registro" — cambia la fecha arriba si es para otro día.
                 </div>
                 <div className="field-row">
                   <label className="field-label">Asignatura</label>
@@ -316,9 +541,9 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
                     </button>
                   )}
                 </div>
-                {parseFloat(values[timerSubjectId]) > 0 && (
+                {parseMinutes(values[timerSubjectId]).minutes > 0 && (
                   <div className="gauge-sub">
-                    Ya hay {values[timerSubjectId]} min para esta asignatura ese día — el contador se sumará a eso.
+                    Hay {values[timerSubjectId]} min pendientes de guardar para esta asignatura — el contador se sumará a eso.
                   </div>
                 )}
               </div>
@@ -326,6 +551,9 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
 
             {mode === "manual" && (
               <div className="subject-inputs">
+                <div className="gauge-sub" style={{ marginTop: 0, marginBottom: 8 }}>
+                  Escribe los minutos que quieres AÑADIR; al guardar se suman a los registros de ese día.
+                </div>
                 {loggableSubjects.map((s) => (
                   <div className="field-row" key={s.id}>
                     <label className="field-label">
@@ -334,10 +562,11 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
                     </label>
                     <div className="input-with-unit">
                       <input
-                        type="number" min="0" step="5" placeholder="0"
+                        type="number" min="0" max={MAX_MINUTES_PER_ENTRY} step="1" inputMode="numeric" placeholder="0"
                         value={values[s.id] || ""}
-                        onChange={(e) => setValues((v) => ({ ...v, [s.id]: e.target.value }))}
+                        onChange={(e) => { setValues((v) => ({ ...v, [s.id]: e.target.value })); setFormMsg(null); }}
                         className="input-field input-num"
+                        disabled={saving}
                       />
                       <span className="unit-tag">min</span>
                     </div>
@@ -346,72 +575,137 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, onSaveDay, onDe
               </div>
             )}
             <div className="day-total-row">
-              <span>Total del día</span>
-              <span className="mono">{hm(dayTotal)}</span>
+              <span>Total a añadir</span>
+              <span className="mono">{pendingTotal > 0 ? "+" : ""}{hm(pendingTotal)}</span>
             </div>
             <div className="btn-row">
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  const clean = {};
-                  loggableSubjects.forEach((s) => {
-                    const v = parseFloat(values[s.id]);
-                    if (v > 0) clean[s.id] = v;
-                  });
-                  onSaveDay(date, loggableSubjects.map((s) => s.id), clean);
-                  clearDraft(curso.id);
-                }}
-              >
-                Guardar registro
+              <button className="btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? "Guardando…" : "Guardar registro"}
               </button>
-              {hasEntryToday && (
-                <button
-                  className="btn-ghost"
-                  onClick={() => {
-                    onDeleteDay(date, loggableSubjects.map((s) => s.id));
-                    clearDraft(curso.id);
-                  }}
-                >
-                  Eliminar día
-                </button>
-              )}
             </div>
+            {formMsg && <div className={formMsg.type === "error" ? "auth-error" : "form-ok"}>{formMsg.text}</div>}
           </>
         )}
       </div>
 
       <div className="panel">
-        <div className="panel-title-row">
-          <div className="panel-title" style={{ marginBottom: 0 }}>{historySubjectId === HISTORY_ALL ? "Últimos registros" : "Historial completo"}</div>
-          <select className="input-field subject-select" value={historySubjectId} onChange={(e) => setHistorySubjectId(e.target.value)}>
-            <option value={HISTORY_ALL}>Histórico (todas las asignaturas)</option>
-            {cursoSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+        <div className="seg-control" style={{ marginBottom: 14 }}>
+          <button className={`seg-btn ${listView === "hoy" ? "seg-btn-active" : ""}`} onClick={() => setListView("hoy")}>{viewDayLabel}</button>
+          <button className={`seg-btn ${listView === "ultimos" ? "seg-btn-active" : ""}`} onClick={() => setListView("ultimos")}>Últimos registros</button>
         </div>
-        {history.length === 0 && <div className="empty-hint">Todavía no hay registros{historySubjectId === HISTORY_ALL ? " en este curso" : " para esta asignatura"}.</div>}
-        {history.length > 0 && (
+        {listMsg && <div className={listMsg.type === "error" ? "auth-error" : "form-ok"}>{listMsg.text}</div>}
+
+        {listView === "hoy" && (
           <>
-            <div className="log-list">
-              {history.slice(0, visibleCount).map((e) => (
-                <button key={historySubjectId === HISTORY_ALL ? `${e.date}-${e.subjectId}` : e.date} className="log-item" onClick={() => setDate(e.date)}>
-                  <span className="log-date">{formatShort(e.date)}</span>
-                  <span className="log-detail">
-                    {historySubjectId === HISTORY_ALL ? (
-                      <span className="log-chip" style={{ borderColor: e.subjectColor }}>{e.subjectName}</span>
-                    ) : (
-                      <span className="log-chip" style={{ borderColor: historySubject?.color }}>{formatMedium(e.date)}</span>
-                    )}
-                  </span>
-                  <span className="log-total mono">{hm(e.minutes)}</span>
-                </button>
-              ))}
-            </div>
-            <div className="history-footer">
-              <span className="empty-hint" style={{ padding: "8px 0" }}>{history.length} registro(s) en total</span>
-              {visibleCount < history.length && (
-                <button className="btn-ghost btn-small" onClick={() => setVisibleCount((n) => n + 20)}>Cargar más</button>
+            <div className="panel-title-row">
+              <div className="panel-title" style={{ marginBottom: 0 }}>{formatLong(viewDate)}</div>
+              {viewDate !== date && (
+                <button className="btn-ghost btn-small" onClick={() => setViewDate(date)}>Volver a {formatShort(date)}</button>
               )}
             </div>
+            {viewDayGroups.length === 0 && <div className="empty-hint">Todavía no hay registros este día.</div>}
+            {viewDayGroups.length > 0 && (
+              <>
+                <div className="log-list">
+                  {viewDayGroups.map(({ subject, sessions, total }) => {
+                    const open = expandedSubjectId === subject.id;
+                    return (
+                      <div key={subject.id} className="day-group">
+                        <button className="log-item" onClick={() => setExpandedSubjectId(open ? null : subject.id)} aria-expanded={open}>
+                          <span className="log-caret">{open ? "▾" : "▸"}</span>
+                          <span className="log-detail">
+                            <span className="log-chip" style={{ borderColor: subject.color }}>{subject.name}</span>
+                            <span className="gauge-sub" style={{ marginTop: 0 }}>{sessions.length} {sessions.length === 1 ? "sesión" : "sesiones"}</span>
+                          </span>
+                          <span className="log-total mono">{hm(total)}</span>
+                        </button>
+                        {open && (
+                          <div className="session-list">
+                            {sessions.map((l) => {
+                              const edit = sessionEdits[l.id];
+                              const changed = edit !== undefined && edit !== String(l.minutes);
+                              const busy = sessionBusyId === l.id;
+                              return (
+                                <div key={l.id}>
+                                  <div className="session-row">
+                                    <span className="log-date" title={l.migrated ? "Registro anterior al cambio a sesiones" : undefined}>
+                                      {l.migrated ? "previo" : formatTime(l.createdAt)}
+                                    </span>
+                                    <div className="input-with-unit">
+                                      <input
+                                        type="number" min="1" max={MAX_MINUTES_PER_ENTRY} step="1" inputMode="numeric"
+                                        value={edit ?? String(l.minutes)}
+                                        onChange={(e) => setSessionEdits((m) => ({ ...m, [l.id]: e.target.value }))}
+                                        className="input-field input-num"
+                                        disabled={busy}
+                                        aria-label={`Minutos de la sesión de ${subject.name}`}
+                                      />
+                                      <span className="unit-tag">min</span>
+                                    </div>
+                                    <button className="btn-primary btn-small" onClick={() => handleSessionSave(l)} disabled={!changed || busy}>
+                                      {busy ? "…" : "Guardar"}
+                                    </button>
+                                    <button className="btn-ghost btn-small" onClick={() => handleSessionDelete(l)} disabled={busy} title="Eliminar sesión" aria-label="Eliminar sesión">✕</button>
+                                  </div>
+                                  {sessionErrors[l.id] && <div className="auth-error">{sessionErrors[l.id]}</div>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="day-total-row">
+                  <span>Total del día</span>
+                  <span className="mono">{hm(viewDayTotal)}</span>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {listView === "ultimos" && (
+          <>
+            <div className="panel-title-row">
+              <div className="panel-title" style={{ marginBottom: 0 }}>{historySubjectId === HISTORY_ALL ? "Últimos registros" : "Historial completo"}</div>
+              <select className="input-field subject-select" value={historySubjectId} onChange={(e) => setHistorySubjectId(e.target.value)}>
+                <option value={HISTORY_ALL}>Histórico (todas las asignaturas)</option>
+                {cursoSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            {history.length === 0 && <div className="empty-hint">Todavía no hay registros{historySubjectId === HISTORY_ALL ? " en este curso" : " para esta asignatura"}.</div>}
+            {history.length > 0 && (
+              <>
+                <div className="log-list">
+                  {history.slice(0, visibleCount).map((e) => (
+                    <button
+                      key={historySubjectId === HISTORY_ALL ? `${e.date}-${e.subjectId}` : e.date}
+                      className="log-item"
+                      onClick={() => openDayInView(e.date, historySubjectId === HISTORY_ALL ? e.subjectId : historySubjectId)}
+                      title="Ver las sesiones de ese día"
+                    >
+                      <span className="log-date">{formatShort(e.date)}</span>
+                      <span className="log-detail">
+                        {historySubjectId === HISTORY_ALL ? (
+                          <span className="log-chip" style={{ borderColor: e.subjectColor }}>{e.subjectName}</span>
+                        ) : (
+                          <span className="log-chip" style={{ borderColor: historySubject?.color }}>{formatMedium(e.date)}</span>
+                        )}
+                      </span>
+                      <span className="log-total mono">{hm(e.minutes)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="history-footer">
+                  <span className="empty-hint" style={{ padding: "8px 0" }}>{history.length} registro(s) en total</span>
+                  {visibleCount < history.length && (
+                    <button className="btn-ghost btn-small" onClick={() => setVisibleCount((n) => n + 20)}>Cargar más</button>
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -1427,6 +1721,158 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  REPORTAR UN PROBLEMA y NOVEDADES                                    */
+/* ------------------------------------------------------------------ */
+
+const SUPPORT_EMAIL = "cleverapp2026@gmail.com";
+
+const TAB_LABELS = {
+  bitacora: "Bitácora", panel: "Panel", trayectoria: "Trayectoria", desgaste: "Desgaste",
+  clasificacion: "Clasificación", asignaturas: "Asignaturas",
+};
+
+/** Prepara un correo a SUPPORT_EMAIL con la descripción del usuario y,
+ * si lo acepta, datos técnicos que ayudan a reproducir el fallo. Lo abre
+ * siempre en Gmail (ventana de redactar de Gmail web, en otra pestaña), así
+ * que no hace falta ningún servidor ni una app de correo configurada. */
+function BugReportModal({ onClose, userId, tab }) {
+  const [kind, setKind] = useState("Error");
+  const [text, setText] = useState("");
+  const [includeTech, setIncludeTech] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const tech = [
+    `Sección: ${TAB_LABELS[tab] || tab}`,
+    `Fecha: ${new Date().toLocaleString("es-ES")}`,
+    `Dirección: ${window.location.host}`,
+    `Pantalla: ${window.innerWidth}×${window.innerHeight}`,
+    `Navegador: ${navigator.userAgent}`,
+    `ID de cuenta: ${userId}`,
+  ].join("\n");
+  const subject = `[Clever] ${kind}: ${text.trim().split("\n")[0].slice(0, 60) || "sin título"}`;
+  const body = `${text.trim()}\n\n${includeTech ? `— Datos técnicos —\n${tech}\n` : ""}`;
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(SUPPORT_EMAIL)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  async function copyAll() {
+    try {
+      await navigator.clipboard.writeText(`Para: ${SUPPORT_EMAIL}\nAsunto: ${subject}\n\n${body}`);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <Modal title="🐞 Reportar un problema" onClose={onClose}>
+      <p className="panel-subtitle">
+        Cuéntanos qué ha pasado y qué esperabas que pasara. Se abrirá Gmail con el mensaje listo para
+        enviar a <strong>{SUPPORT_EMAIL}</strong>.
+      </p>
+      <div className="seg-control" style={{ marginBottom: 12 }}>
+        {["Error", "Sugerencia", "Otro"].map((k) => (
+          <button key={k} className={`seg-btn ${kind === k ? "seg-btn-active" : ""}`} onClick={() => setKind(k)}>{k}</button>
+        ))}
+      </div>
+      <textarea
+        className="input-field report-textarea"
+        rows={5}
+        placeholder={kind === "Error" ? "Ej.: en la Bitácora, al pulsar Guardar con el contador en marcha, los minutos no se sumaron…" : "Escribe aquí tu mensaje…"}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <label className="report-check">
+        <input type="checkbox" checked={includeTech} onChange={(e) => setIncludeTech(e.target.checked)} />
+        Incluir datos técnicos (sección, navegador, tamaño de pantalla e ID de cuenta) para localizar el fallo
+      </label>
+      <div className="btn-row">
+        <a
+          className={`btn-primary report-send ${text.trim() ? "" : "report-send-disabled"}`}
+          href={text.trim() ? gmailUrl : undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={!text.trim()}
+          onClick={(e) => { if (!text.trim()) e.preventDefault(); }}
+        >
+          Abrir en Gmail
+        </a>
+        <button className="btn-ghost" onClick={copyAll} disabled={!text.trim()}>{copied ? "✓ Copiado" : "Copiar mensaje"}</button>
+      </div>
+      <div className="gauge-sub">
+        ¿No usas Gmail? Pulsa "Copiar mensaje" y pégalo en un correo nuevo a {SUPPORT_EMAIL} desde tu correo
+        habitual (Outlook, iCloud…).
+      </div>
+    </Modal>
+  );
+}
+
+// Novedades de esta actualización: se muestran en las primeras
+// NEWS_MAX_SHOWS entradas a la app (por cuenta y dispositivo), salvo que
+// el usuario marque "No volver a mostrar". Para anunciar otra novedad en
+// el futuro basta con cambiar NEWS_VERSION y el contenido.
+const NEWS_VERSION = "2026-09-sesiones";
+const NEWS_MAX_SHOWS = 3;
+const newsCountedThisLoad = new Set(); // evita contar dos veces la misma carga
+
+function newsKey(userId) {
+  return `clever:novedades:${NEWS_VERSION}:${userId}`;
+}
+function readNewsState(userId) {
+  try {
+    return JSON.parse(localStorage.getItem(newsKey(userId))) || { shows: 0, dismissed: false };
+  } catch {
+    return { shows: 0, dismissed: false };
+  }
+}
+function writeNewsState(userId, state) {
+  try {
+    localStorage.setItem(newsKey(userId), JSON.stringify(state));
+  } catch {}
+}
+
+function NewsModal({ onClose, onReport, showDontShowAgain }) {
+  const [dontShow, setDontShow] = useState(false);
+  return (
+    <Modal title="🚀 Novedades en Clever" onClose={() => onClose(dontShow)} wide>
+      <div className="news">
+        <section className="news-item">
+          <div className="news-icon">⏱️</div>
+          <div>
+            <div className="news-title">El registro ahora suma, siempre desde 0</div>
+            <ul className="news-list">
+              <li><strong>Registro de vuelo</strong> sirve para <em>añadir</em> minutos: escribe (o mide con el contador) lo que acabas de estudiar y pulsa Guardar. Se suma a lo que ya tenías ese día y el formulario vuelve a 0.</li>
+              <li>Cada vez que guardas se crea una <strong>sesión</strong>. En <strong>Registros de hoy</strong> ves el total de cada asignatura; tócala para desplegar sus sesiones y corregir o borrar cualquiera.</li>
+              <li><strong>Últimos registros</strong> sigue mostrando el total de cada asignatura por día, como siempre.</li>
+              <li>Móvil y ordenador ya no se pisan: puedes guardar desde los dos y todo se suma. Al volver a la app se actualiza sola.</li>
+              <li>El <strong>máximo en una sesión</strong> del Panel ahora mide cada sesión por separado.</li>
+            </ul>
+          </div>
+        </section>
+        <section className="news-item">
+          <div className="news-icon">🐞</div>
+          <div>
+            <div className="news-title">¿Algo no funciona? Cuéntanoslo</div>
+            <p className="news-text">
+              Desde el menú <strong>☰ → Reportar un problema</strong> puedes enviarnos errores o sugerencias en un momento, o escribirnos
+              directamente a <a href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(SUPPORT_EMAIL)}`} target="_blank" rel="noopener noreferrer">{SUPPORT_EMAIL}</a>.
+            </p>
+            <button className="btn-ghost btn-small" onClick={onReport}>Reportar un problema</button>
+          </div>
+        </section>
+      </div>
+      <div className="news-footer">
+        {showDontShowAgain ? (
+          <label className="report-check" style={{ margin: 0 }}>
+            <input type="checkbox" checked={dontShow} onChange={(e) => setDontShow(e.target.checked)} />
+            No volver a mostrar
+          </label>
+        ) : <span />}
+        <button className="btn-primary" onClick={() => onClose(dontShow)}>¡Entendido!</button>
+      </div>
+    </Modal>
+  );
+}
+
 export default function App({ session, profile, onSignOut, onDeleteAccount } = {}) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
@@ -1452,6 +1898,24 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   // tema, cerrar sesión y eliminar cuenta en un desplegable, para no
   // llenar la cabecera de botones sueltos. Se cierra solo al tocar fuera.
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  // null = cerrado; "auto" = abierto solo al entrar; "manual" = desde el menú
+  const [newsOpen, setNewsOpen] = useState(null);
+
+  useEffect(() => {
+    const userIdForNews = session.user.id;
+    if (newsCountedThisLoad.has(userIdForNews)) return;
+    newsCountedThisLoad.add(userIdForNews);
+    const state = readNewsState(userIdForNews);
+    if (state.dismissed || state.shows >= NEWS_MAX_SHOWS) return;
+    writeNewsState(userIdForNews, { ...state, shows: state.shows + 1 });
+    setNewsOpen("auto");
+  }, [session.user.id]);
+
+  function closeNews(dontShowAgain) {
+    if (dontShowAgain) writeNewsState(session.user.id, { ...readNewsState(session.user.id), dismissed: true });
+    setNewsOpen(null);
+  }
   const menuRef = useRef(null);
   useEffect(() => {
     if (!menuOpen) return;
@@ -1532,15 +1996,47 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     }
   }
 
+  const deviceId = useMemo(() => getDeviceId(), []);
+  const loadSeqRef = useRef(0);
+  const lastLoadAtRef = useRef(0);
+
+  // Trae de Supabase el estado actual (lo guardado desde cualquier
+  // dispositivo). Si hay varias cargas en vuelo, solo se aplica la última
+  // que se empezó, para que una respuesta antigua no pise a una más nueva.
+  // Mantiene el curso que estuviera seleccionado. No toca el formulario de
+  // la Bitácora (lo escrito sin guardar vive allí, no en `data`).
+  async function refreshData() {
+    const seq = ++loadSeqRef.current;
+    lastLoadAtRef.current = Date.now();
+    try {
+      const fresh = await loadUserData(userId);
+      if (seq !== loadSeqRef.current) return;
+      setData((prev) =>
+        prev && fresh.cursos.some((c) => c.id === prev.activeCursoId) ? { ...fresh, activeCursoId: prev.activeCursoId } : fresh
+      );
+      setCloudError(null);
+    } catch (e) {
+      if (seq === loadSeqRef.current) setCloudError(String((e && e.message) || e));
+    }
+  }
+
   useEffect(() => {
-    (async () => {
-      try {
-        setData(await loadUserData(userId));
-        setCloudError(null);
-      } catch (e) {
-        setCloudError(String((e && e.message) || e));
-      }
-    })();
+    refreshData();
+    // Al volver a la pestaña/app (p. ej. tras guardar desde el móvil), se
+    // recargan los datos. "focus" cubre el caso de PC en que la ventana
+    // nunca llegó a ocultarse; el margen de 2 s evita cargar dos veces
+    // cuando saltan los dos eventos a la vez.
+    function onReturn() {
+      if (DISABLE_CLOUD_SAVE || document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAtRef.current < 2000) return;
+      refreshData();
+    }
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
   }, [userId]);
 
   // Cada acción del usuario (guardar un día, añadir una asignatura, etc.)
@@ -1575,31 +2071,60 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     () => cursoSubjectsForManagement.filter((s) => s.estado !== "aprobada"),
     [cursoSubjectsForManagement]
   );
-  const stats = useMemo(() => (data && curso ? computeStats(cursoSubjects, cursoEntries) : null), [data, curso, cursoSubjects, cursoEntries]);
+  const cursoLogs = useMemo(
+    () => (data && curso ? data.logs.filter((l) => l.date >= curso.startDate && l.date <= curso.endDate) : []),
+    [data, curso]
+  );
+  const stats = useMemo(
+    () => (data && curso ? computeStats(cursoSubjects, cursoEntries, cursoLogs) : null),
+    [data, curso, cursoSubjects, cursoEntries, cursoLogs]
+  );
 
-  function handleSaveDay(date, loggableIds, values) {
+  // Aplica un cambio a la lista de entradas y recalcula a partir de ella
+  // los totales por día/asignatura (entries) que usan las estadísticas.
+  function applyLogs(updater) {
     setData((d) => {
-      const nextDay = { ...(d.entries[date] || {}) };
-      loggableIds.forEach((id) => delete nextDay[id]);
-      Object.entries(values).forEach(([id, v]) => { nextDay[id] = v; });
-      const entries = { ...d.entries };
-      if (Object.keys(nextDay).length === 0) delete entries[date];
-      else entries[date] = nextDay;
-      return { ...d, entries };
+      const logs = updater(d.logs);
+      return { ...d, logs, entries: buildEntriesFromLogs(logs) };
     });
-    withCloudWrite(() => saveDayEntries(userId, date, loggableIds, values));
   }
 
-  function handleDeleteDay(date, loggableIds) {
-    setData((d) => {
-      const nextDay = { ...(d.entries[date] || {}) };
-      loggableIds.forEach((id) => delete nextDay[id]);
-      const entries = { ...d.entries };
-      if (Object.keys(nextDay).length === 0) delete entries[date];
-      else entries[date] = nextDay;
-      return { ...d, entries };
-    });
-    withCloudWrite(() => deleteDayEntries(userId, date, loggableIds));
+  // Las acciones de entradas esperan a que Supabase confirme ANTES de tocar
+  // la vista: si falla, lanzan el error y la Bitácora conserva lo escrito y
+  // lo muestra. Tras confirmar, se recarga todo para ver también lo que se
+  // haya guardado desde otros dispositivos.
+  async function handleSaveEntries(newLogs) {
+    if (!DISABLE_CLOUD_SAVE) await insertEntries(userId, newLogs, deviceId);
+    const createdAt = new Date().toISOString();
+    const ids = new Set(newLogs.map((l) => l.id));
+    applyLogs((logs) => [
+      ...logs.filter((l) => !ids.has(l.id)),
+      ...newLogs.map((l) => ({ ...l, createdAt, deviceId, migrated: false })),
+    ]);
+    if (!DISABLE_CLOUD_SAVE) refreshData();
+  }
+
+  async function runEntryWrite(write, updater) {
+    try {
+      if (!DISABLE_CLOUD_SAVE) await write();
+    } catch (e) {
+      // Otro dispositivo ya la había borrado: se recarga para mostrar la realidad.
+      if (e instanceof EntryNotFoundError) refreshData();
+      throw e;
+    }
+    applyLogs(updater);
+    if (!DISABLE_CLOUD_SAVE) refreshData();
+  }
+
+  function handleUpdateEntry(entryId, minutes) {
+    return runEntryWrite(
+      () => updateEntryMinutes(userId, entryId, minutes),
+      (logs) => logs.map((l) => (l.id === entryId ? { ...l, minutes } : l))
+    );
+  }
+
+  function handleDeleteEntry(entryId) {
+    return runEntryWrite(() => deleteEntry(userId, entryId), (logs) => logs.filter((l) => l.id !== entryId));
   }
 
   // Añadir asignatura/curso necesita el id real que genera Supabase antes
@@ -1705,7 +2230,17 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     <div className="app-shell">
       <style>{CSS}</style>
       <header className="app-header">
-        <h1 className="app-title">Bitácora de vuelo</h1>
+        <div className="brand">
+          <img className="brand-logo" src="/icon-192.png?v=2" alt="" width="44" height="44" />
+          <div className="brand-text">
+            <h1 className="brand-name">Clever</h1>
+            <div className="brand-sub">
+              <span className="brand-sub-line" />
+              Bitácora de vuelo
+              <span className="brand-sub-line brand-sub-line-fade" />
+            </div>
+          </div>
+        </div>
         <div className="header-right">
           {cloudError && <span className="cloud-error" title={cloudError}>⚠ nube: {cloudError}</span>}
           <select
@@ -1756,6 +2291,12 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
                 >
                   {theme === "dark" ? "☀️ Modo claro" : "🌙 Modo oscuro"}
                 </button>
+                <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setNewsOpen("manual"); }}>
+                  🚀 Novedades
+                </button>
+                <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setReportOpen(true); }}>
+                  🐞 Reportar un problema
+                </button>
                 <button className="account-dropdown-row" onClick={onSignOut}>Cerrar sesión</button>
                 <div className="account-dropdown-divider" />
                 <button
@@ -1769,6 +2310,15 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           </div>
         </div>
       </header>
+
+      {newsOpen && (
+        <NewsModal
+          onClose={closeNews}
+          onReport={() => { closeNews(false); setReportOpen(true); }}
+          showDontShowAgain={newsOpen === "auto"}
+        />
+      )}
+      {reportOpen && <BugReportModal onClose={() => setReportOpen(false)} userId={session.user.id} tab={tab} />}
 
       {deleteConfirmOpen && (
         <Modal
@@ -1827,8 +2377,10 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             cursoSubjects={cursoSubjects}
             loggableSubjects={loggableSubjects}
             entries={cursoEntries}
-            onSaveDay={handleSaveDay}
-            onDeleteDay={handleDeleteDay}
+            logs={cursoLogs}
+            onSaveEntries={handleSaveEntries}
+            onUpdateEntry={handleUpdateEntry}
+            onDeleteEntry={handleDeleteEntry}
             curso={curso}
           />
         )}
@@ -1918,7 +2470,46 @@ export const CSS = `
     max-width: 1080px; margin: 0 auto 18px; display: flex; justify-content: space-between;
     align-items: center; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--border); padding-bottom: 16px;
   }
-  .app-title { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .app-header { position: relative; border-bottom-color: transparent; }
+  /* Estela bajo la cabecera: sale del logo y se desvanece, como la del cohete. */
+  .app-header::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--cyan) 0%, rgba(79,216,234,0.35) 35%, var(--border) 70%, transparent 100%);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-logo {
+    width: 44px; height: 44px; border-radius: 11px; flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(79,216,234,0.25), 0 6px 18px rgba(20,57,110,0.55);
+  }
+  .brand-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .brand-name {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 26px; font-weight: 800; margin: 0; letter-spacing: -0.02em; line-height: 1;
+    background: linear-gradient(90deg, var(--text) 0%, var(--cyan-text) 115%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .brand-sub {
+    display: flex; align-items: center; gap: 8px; font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-dim); white-space: nowrap;
+  }
+  .brand-sub-line { display: inline-block; width: 14px; height: 1px; background: var(--cyan); opacity: 0.8; }
+  .brand-sub-line-fade { width: 28px; background: linear-gradient(90deg, var(--cyan), transparent); }
+  .report-textarea { width: 100%; resize: vertical; min-height: 110px; font: inherit; box-sizing: border-box; }
+  .report-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--text-dim); margin: 10px 0 2px; cursor: pointer; }
+  .report-send { text-decoration: none; display: inline-flex; align-items: center; }
+  .report-send-disabled { opacity: 0.5; cursor: not-allowed; }
+  .news { display: flex; flex-direction: column; gap: 18px; }
+  .news-item { display: flex; gap: 14px; }
+  .news-icon {
+    font-size: 20px; width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border);
+  }
+  .news-title { font-weight: 700; font-size: 14px; margin: 2px 0 6px; }
+  .news-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: var(--text-dim); display: flex; flex-direction: column; gap: 5px; }
+  .news-list strong, .news-text strong { color: var(--text); }
+  .news-text { font-size: 13px; line-height: 1.55; color: var(--text-dim); margin: 0 0 10px; }
+  .news-text a { color: var(--cyan-text); }
+  .news-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); }
   .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
   .account-menu { position: relative; }
   .menu-trigger { font-size: 16px; line-height: 1; padding: 8px 12px; }
@@ -2041,6 +2632,13 @@ export const CSS = `
 
   .empty-hint { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
   .log-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+  .log-caret { font-size: 11px; color: var(--text-dim); width: 12px; flex-shrink: 0; }
+  .log-detail .gauge-sub { align-self: center; }
+  .session-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 4px 22px; }
+  .session-row { display: flex; align-items: center; gap: 8px; }
+  .session-row .log-date { width: 44px; }
+  .session-row .input-num { width: 76px; }
+  .form-ok { color: var(--green); font-size: 13px; margin: 8px 0; }
   .log-item {
     display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border);
     border-radius: 10px; padding: 10px 12px; cursor: pointer; text-align: left; width: 100%;
