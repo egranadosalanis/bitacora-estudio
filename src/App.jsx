@@ -440,6 +440,12 @@ function PanelTab({ stats }) {
           accent="var(--purple)"
         />
         <StatCard
+          label="Día con más minutos"
+          value={stats.maxDayTotal.date ? hm(stats.maxDayTotal.minutes) : "—"}
+          hint={stats.maxDayTotal.date ? formatShort(stats.maxDayTotal.date) : "sin datos"}
+          accent="#3DDC84"
+        />
+        <StatCard
           label="Último registro"
           value={stats.lastActiveDate ? formatShort(stats.lastActiveDate) : "—"}
           hint={stats.daysSinceLast != null ? `hace ${stats.daysSinceLast} día(s)` : ""}
@@ -731,6 +737,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
   const [newSubject, setNewSubject] = useState({ name: "", credits: "" });
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
+  const [cursoToDeleteId, setCursoToDeleteId] = useState(null);
 
   function addSubject() {
     if (!newSubject.name.trim() || !newSubject.credits) return;
@@ -757,6 +764,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
   const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
   const curso = cursos.find((c) => c.id === activeCursoId);
+  const cursoToDelete = cursoToDeleteId ? cursos.find((c) => c.id === cursoToDeleteId) : null;
 
   return (
     <div>
@@ -774,7 +782,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
                 {c.estado === "terminado" && <span className="curso-badge">terminado</span>}
               </button>
               {cursos.length > 1 && (
-                <span className="curso-remove" onClick={() => onRemoveCurso(c.id)}>×</span>
+                <span className="curso-remove" onClick={() => setCursoToDeleteId(c.id)}>×</span>
               )}
             </div>
           ))}
@@ -932,6 +940,24 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
             onCancel={() => setApprovingId(null)}
             onConfirm={({ nota, cursosNecesarios }) => { onApprove(approvingSubject.id, { nota, cursosNecesarios }); setApprovingId(null); }}
           />
+        </Modal>
+      )}
+
+      {cursoToDelete && (
+        <Modal title="Eliminar curso" onClose={() => setCursoToDeleteId(null)}>
+          <p>
+            ¿Seguro que quieres eliminar <strong>{cursoToDelete.name}</strong>? Se borrarán todas las asignaturas
+            y registros de estudio de este curso de forma permanente. Esta acción no se puede deshacer.
+          </p>
+          <div className="btn-row" style={{ marginTop: 16, justifyContent: "flex-end" }}>
+            <button className="btn-ghost" onClick={() => setCursoToDeleteId(null)}>Cancelar</button>
+            <button
+              className="btn-danger"
+              onClick={() => { onRemoveCurso(cursoToDelete.id); setCursoToDeleteId(null); }}
+            >
+              Eliminar curso
+            </button>
+          </div>
         </Modal>
       )}
     </div>
@@ -1920,6 +1946,11 @@ export const CSS = `
   .btn-ghost:hover { color: var(--red); border-color: rgba(255,92,92,0.4); }
   .btn-ghost.btn-account:hover { color: var(--cyan); border-color: rgba(79,216,234,0.4); }
   .btn-small { padding: 6px 10px; font-size: 12px; }
+  .btn-danger {
+    background: var(--red); color: #2A0E0E; border: none; border-radius: 8px; padding: 10px 18px;
+    font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  .btn-danger:hover { filter: brightness(1.1); }
 
   .empty-hint { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
   .log-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
@@ -1934,7 +1965,7 @@ export const CSS = `
   .log-total { font-size: 12px; color: var(--text); flex-shrink: 0; }
   .history-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 
-  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
   @media (max-width: 900px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
   .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
   .stat-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }

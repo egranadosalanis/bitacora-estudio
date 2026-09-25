@@ -332,6 +332,11 @@ export function computeStats(subjects, entries) {
   const activeDates = Object.keys(dailyTotals).sort();
   const globalTotal = activeDates.reduce((acc, d) => acc + dailyTotals[d], 0);
 
+  let maxDayTotal = { minutes: 0, date: null };
+  activeDates.forEach((d) => {
+    if (dailyTotals[d] > maxDayTotal.minutes) maxDayTotal = { minutes: dailyTotals[d], date: d };
+  });
+
   let longest = 0, run = 0, prev = null;
   activeDates.forEach((d) => {
     if (prev && daysBetween(prev, d) === 1) run += 1;
@@ -377,7 +382,7 @@ export function computeStats(subjects, entries) {
 
   return {
     dailyTotals, dailyBySubject, activeDates, globalTotal, longest, current,
-    lastActiveDate, daysSinceLast, maxSession, perSubject,
+    lastActiveDate, daysSinceLast, maxSession, maxDayTotal, perSubject,
     totalDaysLogged: activeDates.length,
   };
 }
