@@ -15,17 +15,21 @@ where a.origen = 'seed'
 group by u.nombre, c.nombre
 order by u.nombre;
 
--- 2. Suma de créditos por año — cada curso de un grado español ronda
--- 60 ECTS anuales (30 por cuatrimestre); un año muy alejado de eso
--- señala una fila mal transcrita o un curso con muchas optativas
--- agregadas (normal en los cursos 3º/4º de Sevilla).
-select u.nombre as universidad, a.anio, a.cuatrimestre, sum(a.creditos) as creditos
+-- 2. Suma de créditos por CARRERA y año — cada curso de un grado
+-- español ronda 60 ECTS anuales (30 por cuatrimestre); un año muy
+-- alejado de eso señala una fila mal transcrita o un curso con
+-- muchas optativas agregadas (normal en los cursos 3º/4º). Se agrupa
+-- también por carrera: si solo se agrupara por universidad, en
+-- cuanto haya más de una carrera sembrada bajo la misma universidad
+-- (p. ej. tras ejecutar 007) los totales saldrían todos sumados
+-- entre sí y no dirían nada.
+select u.nombre as universidad, c.nombre as carrera, a.anio, a.cuatrimestre, sum(a.creditos) as creditos
 from public.asignaturas_canonicas a
 join public.carreras_canonicas c on c.id = a.carrera_id
 join public.universidades_canonicas u on u.id = c.universidad_id
 where a.origen = 'seed'
-group by u.nombre, a.anio, a.cuatrimestre
-order by u.nombre, a.anio, a.cuatrimestre;
+group by u.nombre, c.nombre, a.anio, a.cuatrimestre
+order by u.nombre, c.nombre, a.anio, a.cuatrimestre;
 
 -- 3. Cero duplicados por carrera (además de la unique constraint,
 -- comprobación de cinturón y tirantes).
