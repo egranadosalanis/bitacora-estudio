@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     const [profileRes, cursosRes, asignaturasRes, entradas] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", id).single(),
       supabase.from("cursos").select("*").eq("user_id", id).order("start_date", { ascending: false }),
-      supabase.from("asignaturas").select("*").eq("user_id", id),
+      supabase.from("asignaturas").select("*, asignaturas_canonicas(estado, nombre_oficial)").eq("user_id", id),
       fetchAllRows(() =>
         supabase
           .from("entradas_estudio")
@@ -49,8 +49,18 @@ export default async function handler(req, res) {
     for (const r of registros) {
       minutosPorAsignatura.set(r.asignatura_id, (minutosPorAsignatura.get(r.asignatura_id) || 0) + r.minutos);
     }
+    // Igual que en la app: una vez vinculada a una canónica válida (no
+    // Erasmus, no rechazada), lo que se muestra es el nombre oficial, no
+    // el texto libre que escribió el usuario.
     const asignaturas = asignaturasRes.data
-      .map((a) => ({ ...a, minutosTotal: minutosPorAsignatura.get(a.id) || 0 }))
+      .map((a) => {
+        const canonicalEstado = a.asignaturas_canonicas?.estado ?? null;
+        const vinculadaValida = Boolean(a.asignatura_canonica_id) && !a.es_erasmus && canonicalEstado !== "rechazada";
+        const nombreMostrado = vinculadaValida && a.asignaturas_canonicas?.nombre_oficial
+          ? a.asignaturas_canonicas.nombre_oficial
+          : a.nombre;
+        return { ...a, nombreMostrado, minutosTotal: minutosPorAsignatura.get(a.id) || 0 };
+      })
       .sort((a, b) => b.minutosTotal - a.minutosTotal);
 
     res.status(200).json({

@@ -305,7 +305,13 @@ function CompleteProfileForm({ onSubmit }) {
 function NormalizationGate({ userId, status, initialUniversidadQuery, initialCarreraQuery, onStatusChange }) {
   const [universidadSel, setUniversidadSel] = useState(null);
   const [carreraSel, setCarreraSel] = useState(null);
-  const [busyId, setBusyId] = useState(null);
+  // Elecciones hechas en esta pantalla pero todavía no guardadas: se
+  // acumulan aquí mientras el usuario va resolviendo asignaturas, y solo se
+  // escriben todas de golpe al pulsar "Aceptar cambios" — así puede revisar
+  // varias antes de confirmar, en vez de que cada clic dispare su propia
+  // llamada y la haga desaparecer de la lista al instante.
+  const [choices, setChoices] = useState({});
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [initialTotal, setInitialTotal] = useState(
     status.profileLinked && status.pendingSubjects.length > 0 ? status.pendingSubjects.length : null
@@ -317,28 +323,71 @@ function NormalizationGate({ userId, status, initialUniversidadQuery, initialCar
     }
   }, [status, initialTotal]);
 
+  // Tras cada "Aceptar cambios", status.pendingSubjects se recalcula y ya no
+  // trae las que se acaban de guardar — se limpia aquí lo que sobre de
+  // choices por si alguna quedó a medias (p. ej. por un error parcial).
+  useEffect(() => {
+    setChoices((prev) => {
+      const pendingIds = new Set(status.pendingSubjects.map((s) => s.id));
+      const next = {};
+      for (const id of Object.keys(prev)) if (pendingIds.has(id)) next[id] = prev[id];
+      return next;
+    });
+  }, [status.pendingSubjects]);
+
   const resolvedCount = Math.max(0, (initialTotal ?? status.pendingSubjects.length) - status.pendingSubjects.length);
+  const chosenCount = Object.keys(choices).length;
 
   async function refresh() {
     const next = await getNormalizationStatus(userId);
     onStatusChange(next);
   }
 
-  async function withBusy(id, action) {
-    setBusyId(id);
+  async function confirmProfileLink() {
+    setBusy(true);
     setError(null);
     try {
-      await action();
+      await linkProfileToCanonical(userId, { universidadId: universidadSel.id, carreraId: carreraSel.id });
       await refresh();
     } catch (err) {
       setError(err.message || String(err));
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   }
 
-  const confirmProfileLink = () =>
-    withBusy("profile", () => linkProfileToCanonical(userId, { universidadId: universidadSel.id, carreraId: carreraSel.id }));
+  function chooseLink(subjectId, row) {
+    setChoices((prev) => ({ ...prev, [subjectId]: { kind: "link", row } }));
+  }
+  function chooseErasmus(subjectId) {
+    setChoices((prev) => ({ ...prev, [subjectId]: { kind: "erasmus" } }));
+  }
+  function undoChoice(subjectId) {
+    setChoices((prev) => {
+      const next = { ...prev };
+      delete next[subjectId];
+      return next;
+    });
+  }
+
+  async function acceptChanges() {
+    setBusy(true);
+    setError(null);
+    try {
+      await Promise.all(
+        Object.entries(choices).map(([subjectId, choice]) =>
+          choice.kind === "erasmus"
+            ? markAsignaturaErasmus(userId, subjectId, true)
+            : linkAsignaturaToCanonical(userId, subjectId, choice.row.id)
+        )
+      );
+      await refresh();
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const subjectsByCurso = new Map();
   status.pendingSubjects.forEach((s) => {
@@ -374,10 +423,10 @@ function NormalizationGate({ userId, status, initialUniversidadQuery, initialCar
             <div className="btn-row">
               <button
                 className="btn-primary"
-                disabled={!universidadSel || !carreraSel || busyId === "profile"}
+                disabled={!universidadSel || !carreraSel || busy}
                 onClick={confirmProfileLink}
               >
-                {busyId === "profile" ? "…" : "Confirmar"}
+                {busy ? "…" : "Confirmar"}
               </button>
             </div>
           </div>
@@ -387,33 +436,55 @@ function NormalizationGate({ userId, status, initialUniversidadQuery, initialCar
           <div>
             <p className="panel-subtitle">
               {resolvedCount} de {initialTotal ?? status.pendingSubjects.length} asignatura(s) resueltas — de todos tus cursos, no solo el actual.
+              {chosenCount > 0 && ` ${chosenCount} lista(s) para confirmar.`}
             </p>
             {Array.from(subjectsByCurso.entries()).map(([cursoName, subs]) => (
               <div key={cursoName} style={{ marginBottom: 16 }}>
                 <div className="panel-title" style={{ fontSize: 13 }}>{cursoName}</div>
-                {subs.map((s) => (
-                  <div key={s.id} className="field-row" style={{ alignItems: "flex-start", gap: 10 }}>
-                    <div style={{ minWidth: 130 }}>
-                      <div>{s.name}</div>
-                      <div className="gauge-sub">{s.credits} créditos</div>
+                {subs.map((s) => {
+                  const choice = choices[s.id];
+                  return (
+                    <div key={s.id} className="field-row" style={{ alignItems: "flex-start", gap: 10 }}>
+                      <div style={{ minWidth: 130 }}>
+                        <div>{s.name}</div>
+                        <div className="gauge-sub">{s.credits} créditos</div>
+                      </div>
+                      {choice ? (
+                        <>
+                          <div className="gauge-sub">
+                            Elegido: {choice.kind === "erasmus" ? "Erasmus" : choice.row.nombre_oficial}
+                          </div>
+                          <button type="button" className="btn-ghost btn-small" disabled={busy} onClick={() => undoChoice(s.id)}>
+                            Deshacer
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <CanonicalAsignaturaPicker
+                            carreraId={status.carreraCanonicaId}
+                            initialQuery={s.name}
+                            onSelect={(row) => chooseLink(s.id, row)}
+                          />
+                          <button
+                            type="button"
+                            className="btn-ghost btn-small"
+                            disabled={busy}
+                            onClick={() => chooseErasmus(s.id)}
+                          >
+                            Es Erasmus
+                          </button>
+                        </>
+                      )}
                     </div>
-                    <CanonicalAsignaturaPicker
-                      carreraId={status.carreraCanonicaId}
-                      initialQuery={s.name}
-                      onSelect={(row) => withBusy(s.id, () => linkAsignaturaToCanonical(userId, s.id, row.id))}
-                    />
-                    <button
-                      type="button"
-                      className="btn-ghost btn-small"
-                      disabled={busyId === s.id}
-                      onClick={() => withBusy(s.id, () => markAsignaturaErasmus(userId, s.id, true))}
-                    >
-                      Es Erasmus
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ))}
+            <div className="btn-row">
+              <button className="btn-primary" disabled={chosenCount === 0 || busy} onClick={acceptChanges}>
+                {busy ? "Guardando…" : `Aceptar cambios (${chosenCount})`}
+              </button>
+            </div>
           </div>
         )}
 
