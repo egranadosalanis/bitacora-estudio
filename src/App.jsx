@@ -997,7 +997,7 @@ function useDebouncedValue(value, delay = 250) {
   return debounced;
 }
 
-function CanonicalPickerBase({ placeholder, initialQuery, disabled, disabledHint, searchFn, renderResult, onSelect, onCreatePendiente }) {
+function CanonicalPickerBase({ placeholder, initialQuery, disabled, disabledHint, searchFn, renderResult, renderOption, onSelect, onCreatePendiente }) {
   const [query, setQuery] = useState(initialQuery || "");
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState([]);
@@ -1051,7 +1051,7 @@ function CanonicalPickerBase({ placeholder, initialQuery, disabled, disabledHint
           {loading && <div className="canonical-picker-hint">Buscando…</div>}
           {!loading && results.map((row) => (
             <button type="button" key={row.id} className="canonical-picker-option" onClick={() => select(row)}>
-              {renderResult(row)}
+              {(renderOption || renderResult)(row)}
             </button>
           ))}
           {!loading && query.trim() && (
@@ -1108,6 +1108,13 @@ export function CanonicalAsignaturaPicker({ carreraId, initialQuery, onSelect })
       initialQuery={initialQuery}
       searchFn={(q) => searchAsignaturasCanonicas(carreraId, q)}
       renderResult={(row) => row.nombre_oficial}
+      renderOption={(row) => (
+        <>
+          {row.nombre_oficial}
+          {row.creditos != null && <span className="canonical-picker-hint-inline"> — {row.creditos} créditos</span>}
+          {row.anio != null && <span className="canonical-picker-hint-inline"> · {row.anio}º curso</span>}
+        </>
+      )}
       onSelect={onSelect}
       onCreatePendiente={async (texto) => {
         const id = await createAsignaturaPendiente(carreraId, texto, null);
@@ -2987,6 +2994,7 @@ export const CSS = `
   .canonical-picker-option:last-child { border-bottom: none; }
   .canonical-picker-option:hover { background: var(--panel-2); }
   .canonical-picker-create { color: var(--cyan-text); font-style: italic; }
+  .canonical-picker-hint-inline { color: var(--text-dim); font-size: 11.5px; }
 
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(6,10,20,0.7); backdrop-filter: blur(2px);
