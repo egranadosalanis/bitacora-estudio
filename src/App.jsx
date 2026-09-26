@@ -1311,12 +1311,13 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
             <tbody>
               {cursoSubjects.map((s) => {
                 // "Combinar con" es un mecanismo personal (sumar tus horas de
-                // una asignatura que repites en otro curso), independiente de
-                // la vinculación canónica: solo tienen sentido asignaturas de
-                // OTRO curso, nunca otra del mismo curso que se está viendo.
-                const mergeOptions = subjects.filter(
-                  (o) => o.id !== s.id && !o.mergedInto && cursoIdBySubjectId.get(o.id) !== activeCursoId
-                );
+                // una asignatura que repites en otro curso). No se filtra por
+                // curso: a qué curso "pertenece" cada asignatura se infiere
+                // por fecha de sus registros y no es fiable en todos los
+                // casos (p. ej. una repetida sin apenas registros propios
+                // todavía), así que solo se usa para la etiqueta informativa
+                // del curso en cada opción, nunca para ocultarla.
+                const mergeOptions = subjects.filter((o) => o.id !== s.id && !o.mergedInto);
                 const hasOwnSources = subjects.some((o) => o.mergedInto === s.id);
                 const deletable = !hasEntries(s.id);
                 return (
