@@ -1180,6 +1180,19 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
   const [cursoToDeleteId, setCursoToDeleteId] = useState(null);
   const [reviewingId, setReviewingId] = useState(null);
   const cursoNameById = new Map(cursos.map((c) => [c.id, c.name]));
+  // A qué curso "pertenece" cada asignatura para mostrarlo en "Combinar
+  // con": igual que el resto de la app, por el rango de fechas de sus
+  // registros, no por `originCursoId` (que solo es una pista de creación,
+  // null en asignaturas migradas de cursos antiguos sin registro nuevo).
+  const cursoIdBySubjectId = new Map();
+  cursos.forEach((c) => {
+    subjectsWithActivityInRange(subjects, entries, c.startDate, c.endDate).forEach((s) => {
+      if (!cursoIdBySubjectId.has(s.id)) cursoIdBySubjectId.set(s.id, c.id);
+    });
+  });
+  subjects.forEach((s) => {
+    if (!cursoIdBySubjectId.has(s.id) && s.originCursoId) cursoIdBySubjectId.set(s.id, s.originCursoId);
+  });
 
   function selectCanonicalAsignatura(row) {
     setNewSubject((v) => ({
@@ -1328,7 +1341,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
                           <option value="">No combinar (cuenta por separado)</option>
                           {mergeOptions.map((o) => (
                             <option key={o.id} value={o.id}>
-                              Combinada con: {o.name} ({cursoNameById.get(o.originCursoId) ?? "sin curso"})
+                              Combinada con: {o.name} ({cursoNameById.get(cursoIdBySubjectId.get(o.id)) ?? "sin curso"})
                             </option>
                           ))}
                         </select>
