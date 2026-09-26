@@ -32,11 +32,16 @@ group by u.nombre, c.nombre, a.anio, a.cuatrimestre
 order by u.nombre, c.nombre, a.anio, a.cuatrimestre;
 
 -- 3. Cero duplicados por carrera (además de la unique constraint,
--- comprobación de cinturón y tirantes).
-select c.nombre as carrera, a.nombre_normalizado, count(*)
+-- comprobación de cinturón y tirantes). Se agrupa por c.id (la fila
+-- real de la carrera), no por c.nombre: "Grado en Ingeniería
+-- Aeroespacial" existe dos veces como carrera (una en Sevilla, otra
+-- en la UC3M) con el mismo nombre de texto pero id distinto —
+-- agrupar solo por nombre las mezclaría y daría falsos positivos.
+select u.nombre as universidad, c.nombre as carrera, a.nombre_normalizado, count(*)
 from public.asignaturas_canonicas a
 join public.carreras_canonicas c on c.id = a.carrera_id
+join public.universidades_canonicas u on u.id = c.universidad_id
 where a.origen = 'seed'
-group by c.nombre, a.nombre_normalizado
+group by c.id, u.nombre, c.nombre, a.nombre_normalizado
 having count(*) > 1;
 -- Esperado: 0 filas.
