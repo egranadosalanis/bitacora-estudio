@@ -997,7 +997,7 @@ function useDebouncedValue(value, delay = 250) {
   return debounced;
 }
 
-function CanonicalPickerBase({ placeholder, initialQuery, disabled, disabledHint, searchFn, renderResult, renderOption, onSelect, onCreatePendiente }) {
+function CanonicalPickerBase({ placeholder, entityLabel, initialQuery, disabled, disabledHint, searchFn, renderResult, renderOption, onSelect, onCreatePendiente }) {
   const [query, setQuery] = useState(initialQuery || "");
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState([]);
@@ -1056,7 +1056,7 @@ function CanonicalPickerBase({ placeholder, initialQuery, disabled, disabledHint
           ))}
           {!loading && query.trim() && (
             <button type="button" className="canonical-picker-option canonical-picker-create" onClick={createPendiente}>
-              No la encuentro — usar "{query.trim()}"
+              Mi {entityLabel} no aparece aquí — introducirla manualmente: "{query.trim()}"
             </button>
           )}
         </div>
@@ -1069,6 +1069,7 @@ export function CanonicalUniversidadPicker({ initialQuery, onSelect }) {
   return (
     <CanonicalPickerBase
       placeholder="Busca tu universidad"
+      entityLabel="universidad"
       initialQuery={initialQuery}
       searchFn={(q) => searchUniversidades(q)}
       renderResult={(row) => row.nombre}
@@ -1085,6 +1086,7 @@ export function CanonicalCarreraPicker({ universidadId, initialQuery, onSelect }
   return (
     <CanonicalPickerBase
       placeholder="Busca tu carrera"
+      entityLabel="carrera"
       disabledHint="Elige primero tu universidad"
       disabled={!universidadId}
       initialQuery={initialQuery}
@@ -1103,6 +1105,7 @@ export function CanonicalAsignaturaPicker({ carreraId, initialQuery, onSelect })
   return (
     <CanonicalPickerBase
       placeholder="Busca tu asignatura"
+      entityLabel="asignatura"
       disabledHint="Vincula primero tu carrera"
       disabled={!carreraId}
       initialQuery={initialQuery}
