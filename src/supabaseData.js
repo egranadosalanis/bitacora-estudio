@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { buildEntriesFromLogs } from "./domain.js";
+import { buildEntriesFromLogs, subjectsWithActivityInRange } from "./domain.js";
 
 /* ------------------------------------------------------------------ */
 /*  Traduce entre las tablas de Supabase y la forma en memoria         */
@@ -387,30 +387,47 @@ export async function markAsignaturaErasmus(userId, subjectId, isErasmus = true)
  * usuario — se recalcula siempre desde estos datos, nunca desde un
  * flag guardado (ver informe de normalización). */
 export async function getNormalizationStatus(userId) {
-  const [{ data: profile, error: profileError }, { data: subjectRows, error: subjectsError }, { data: cursoRows, error: cursosError }] =
+  const [{ data: profile, error: profileError }, { data: subjectRows, error: subjectsError }, { data: cursoRows, error: cursosError }, entradas] =
     await Promise.all([
       supabase.from("profiles").select("universidad_canonica_id, carrera_canonica_id").eq("id", userId).single(),
       supabase
         .from("asignaturas")
         .select("id, nombre, creditos, origin_curso_id, es_erasmus, asignatura_canonica_id, asignaturas_canonicas(estado)")
         .eq("user_id", userId),
-      supabase.from("cursos").select("id, name").eq("user_id", userId),
+      supabase.from("cursos").select("id, name, start_date, end_date").eq("user_id", userId),
+      fetchAllEntradas(userId),
     ]);
   if (profileError) throw profileError;
   if (subjectsError) throw subjectsError;
   if (cursosError) throw cursosError;
 
   const cursoNameById = new Map(cursoRows.map((c) => [c.id, c.name]));
-  const subjects = subjectRows.map((s) => ({
-    id: s.id,
-    name: s.nombre,
-    credits: s.creditos,
-    cursoId: s.origin_curso_id,
-    cursoName: cursoNameById.get(s.origin_curso_id) ?? null,
-    esErasmus: s.es_erasmus,
-    asignaturaCanonicaId: s.asignatura_canonica_id,
-    canonicalEstado: s.asignaturas_canonicas?.estado ?? null,
-  }));
+  // A qué curso "pertenece" cada asignatura para agruparla aquí: por el
+  // rango de fechas de sus registros, igual que el resto de la app agrupa
+  // por curso — no por `origin_curso_id`, que solo es una pista de creación
+  // (null en asignaturas de cursos antiguos migradas antes de que existiera
+  // ese campo, así que sin esto todas caían en "Sin curso").
+  const entries = buildEntriesFromLogs(entradas.map(rowToLog));
+  const cursoIdBySubjectId = new Map();
+  cursoRows.forEach((c) => {
+    subjectsWithActivityInRange(subjectRows, entries, c.start_date, c.end_date).forEach((s) => {
+      if (!cursoIdBySubjectId.has(s.id)) cursoIdBySubjectId.set(s.id, c.id);
+    });
+  });
+
+  const subjects = subjectRows.map((s) => {
+    const cursoId = cursoIdBySubjectId.get(s.id) ?? s.origin_curso_id;
+    return {
+      id: s.id,
+      name: s.nombre,
+      credits: s.creditos,
+      cursoId,
+      cursoName: cursoNameById.get(cursoId) ?? null,
+      esErasmus: s.es_erasmus,
+      asignaturaCanonicaId: s.asignatura_canonica_id,
+      canonicalEstado: s.asignaturas_canonicas?.estado ?? null,
+    };
+  });
 
   const profileLinked = Boolean(profile.universidad_canonica_id && profile.carrera_canonica_id);
   const pendingSubjects = subjects.filter((s) => !s.asignaturaCanonicaId && !s.esErasmus);
