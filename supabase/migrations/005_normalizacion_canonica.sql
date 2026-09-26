@@ -42,7 +42,12 @@ as $$
   select lower(trim(regexp_replace(unaccent('unaccent', coalesce(t, '')), '\s+', ' ', 'g')))
 $$;
 
-revoke execute on function public.normalizar_texto(text) from public;
+-- Supabase concede EXECUTE a anon/authenticated/service_role de forma
+-- automática al crear cualquier función nueva en el esquema public (para
+-- que PostgREST pueda exponerla) — revocar solo de "public" (el
+-- pseudo-rol) NO quita ese permiso automático a anon/authenticated,
+-- hay que revocárselo explícitamente por su nombre.
+revoke execute on function public.normalizar_texto(text) from public, anon, authenticated;
 grant execute on function public.normalizar_texto(text) to authenticated, service_role;
 
 -- ============================================================
@@ -445,15 +450,19 @@ $$;
 -- ---------- permisos explícitos ----------
 -- Primera vez que este esquema usa RPCs: en vez de fiarse del grant
 -- por defecto a PUBLIC, se revoca y se concede exactamente a quien
--- debe poder llamar cada función.
+-- debe poder llamar cada función. OJO: Supabase concede EXECUTE a
+-- anon/authenticated/service_role automáticamente al crear la
+-- función (para que PostgREST la exponga) — hay que revocárselo a
+-- "anon" y "authenticated" por su nombre, revocar solo de "public"
+-- (el pseudo-rol) no les quita ese permiso automático.
 
-revoke execute on function public.buscar_universidades(text, int) from public;
-revoke execute on function public.buscar_carreras(uuid, text, int) from public;
-revoke execute on function public.buscar_asignaturas_canonicas(uuid, text, int) from public;
-revoke execute on function public.crear_universidad_pendiente(text, text) from public;
-revoke execute on function public.crear_carrera_pendiente(uuid, text) from public;
-revoke execute on function public.crear_asignatura_pendiente(uuid, text, numeric) from public;
-revoke execute on function public.fusionar_normalizacion(text, uuid, uuid) from public;
+revoke execute on function public.buscar_universidades(text, int) from public, anon, authenticated;
+revoke execute on function public.buscar_carreras(uuid, text, int) from public, anon, authenticated;
+revoke execute on function public.buscar_asignaturas_canonicas(uuid, text, int) from public, anon, authenticated;
+revoke execute on function public.crear_universidad_pendiente(text, text) from public, anon, authenticated;
+revoke execute on function public.crear_carrera_pendiente(uuid, text) from public, anon, authenticated;
+revoke execute on function public.crear_asignatura_pendiente(uuid, text, numeric) from public, anon, authenticated;
+revoke execute on function public.fusionar_normalizacion(text, uuid, uuid) from public, anon, authenticated, service_role;
 
 grant execute on function public.buscar_universidades(text, int) to authenticated;
 grant execute on function public.buscar_carreras(uuid, text, int) to authenticated;

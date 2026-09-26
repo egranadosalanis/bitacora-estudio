@@ -25,11 +25,25 @@ order by table_name, column_name;
 -- Esperado: 4 filas.
 
 -- 4. La fusión solo la puede ejecutar el service_role (nunca un
--- usuario normal desde el cliente).
+-- usuario normal ni anónimo desde el cliente). OJO: Supabase concede
+-- EXECUTE a anon/authenticated automáticamente al crear una función
+-- nueva — si aquí aparece 'anon' o 'authenticated', hay que volver a
+-- ejecutar supabase/migrations/008_endurecer_permisos_rpc.sql.
 select grantee, privilege_type
 from information_schema.role_routine_grants
 where routine_name = 'fusionar_normalizacion';
 -- Esperado: únicamente la fila con grantee = 'service_role'.
+
+-- 4b. Las funciones de búsqueda/alta-pendiente deben ser de
+-- authenticated (usuario logueado), nunca de anon.
+select routine_name, grantee
+from information_schema.role_routine_grants
+where routine_name in (
+  'buscar_universidades', 'buscar_carreras', 'buscar_asignaturas_canonicas',
+  'crear_universidad_pendiente', 'crear_carrera_pendiente', 'crear_asignatura_pendiente'
+)
+order by routine_name, grantee;
+-- Esperado: solo filas con grantee = 'authenticated' (ninguna con 'anon').
 
 -- 5. Prueba manual de búsqueda difusa con una falta de tilde a
 -- propósito (falla si 006 todavía no se ha ejecutado, es normal).
