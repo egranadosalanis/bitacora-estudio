@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient.js";
 import Login from "./Login.jsx";
 import Overview from "./Overview.jsx";
 import UsersView from "./UsersView.jsx";
+import NormalizationQueue from "./NormalizationQueue.jsx";
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = comprobando
@@ -56,10 +57,15 @@ export default function App() {
         <button className={`tab ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>
           Usuarios
         </button>
+        <button className={`tab ${tab === "normalizacion" ? "active" : ""}`} onClick={() => setTab("normalizacion")}>
+          Normalización
+        </button>
       </div>
 
       <div className="content">
-        {tab === "overview" ? <Overview /> : <UsersView />}
+        {tab === "overview" && <Overview />}
+        {tab === "users" && <UsersView />}
+        {tab === "normalizacion" && <NormalizationQueue />}
       </div>
     </div>
   );

@@ -21,6 +21,9 @@ function rowToSubject(s) {
     estado: s.estado,
     mergedInto: s.asignatura_equivalente_id,
     originCursoId: s.origin_curso_id,
+    asignaturaCanonicaId: s.asignatura_canonica_id,
+    esErasmus: s.es_erasmus,
+    canonicalEstado: s.asignaturas_canonicas?.estado ?? null,
     frozen: s.estado === "aprobada"
       ? { nota: s.frozen_nota, cursosNecesarios: s.frozen_cursos_necesarios, fechaAprobacion: s.frozen_fecha_aprobacion }
       : null,
@@ -69,7 +72,7 @@ async function fetchAllEntradas(userId) {
 export async function loadUserData(userId) {
   const [cursosRes, asigRes, entradas] = await Promise.all([
     supabase.from("cursos").select("*").eq("user_id", userId),
-    supabase.from("asignaturas").select("*").eq("user_id", userId),
+    supabase.from("asignaturas").select("*, asignaturas_canonicas(estado)").eq("user_id", userId),
     fetchAllEntradas(userId),
   ]);
   if (cursosRes.error) throw cursosRes.error;
@@ -131,10 +134,13 @@ export async function deleteEntry(userId, entryId) {
 
 /* ---------- asignaturas ---------- */
 
-export async function insertSubject(userId, { name, credits, color, originCursoId }) {
+export async function insertSubject(userId, { name, credits, color, originCursoId, asignaturaCanonicaId = null, esErasmus = false }) {
   const { data, error } = await supabase
     .from("asignaturas")
-    .insert({ user_id: userId, nombre: name, creditos: credits, color, origin_curso_id: originCursoId, estado: "en_curso" })
+    .insert({
+      user_id: userId, nombre: name, creditos: credits, color, origin_curso_id: originCursoId, estado: "en_curso",
+      asignatura_canonica_id: asignaturaCanonicaId, es_erasmus: esErasmus,
+    })
     .select()
     .single();
   if (error) throw error;
@@ -152,6 +158,8 @@ const SUBJECT_PATCH_TO_COLUMN = {
   target: "target",
   color: "color",
   mergedInto: "asignatura_equivalente_id",
+  asignaturaCanonicaId: "asignatura_canonica_id",
+  esErasmus: "es_erasmus",
 };
 
 export async function updateSubject(userId, subjectId, patch) {
@@ -282,6 +290,131 @@ export async function migrateFromGoogleSheets(userId, legacyData, onProgress) {
   }
 
   return { cursos: legacyData.cursos.length, subjects: legacyData.subjects.length, registros: rows.length };
+}
+
+/* ---------- normalización: búsqueda ---------- */
+
+export async function searchUniversidades(query, { limit = 20 } = {}) {
+  const { data, error } = await supabase.rpc("buscar_universidades", { p_query: query ?? "", p_limite: limit });
+  if (error) throw error;
+  return data;
+}
+
+export async function searchCarreras(universidadId, query, { limit = 20 } = {}) {
+  const { data, error } = await supabase.rpc("buscar_carreras", {
+    p_universidad_id: universidadId, p_query: query ?? "", p_limite: limit,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function searchAsignaturasCanonicas(carreraId, query, { limit = 20 } = {}) {
+  const { data, error } = await supabase.rpc("buscar_asignaturas_canonicas", {
+    p_carrera_id: carreraId, p_query: query ?? "", p_limite: limit,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/* ---------- normalización: alta de fila "pendiente" ---------- */
+
+export async function createUniversidadPendiente(nombre, pais = null) {
+  const { data, error } = await supabase.rpc("crear_universidad_pendiente", { p_nombre: nombre, p_pais: pais });
+  if (error) throw error;
+  return data;
+}
+
+export async function createCarreraPendiente(universidadId, nombre) {
+  const { data, error } = await supabase.rpc("crear_carrera_pendiente", {
+    p_universidad_id: universidadId, p_nombre: nombre,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function createAsignaturaPendiente(carreraId, nombre, creditos) {
+  const { data, error } = await supabase.rpc("crear_asignatura_pendiente", {
+    p_carrera_id: carreraId, p_nombre: nombre, p_creditos: creditos,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/* ---------- normalización: enlazar ---------- */
+
+export async function linkProfileToCanonical(userId, { universidadId, carreraId }) {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ universidad_canonica_id: universidadId, carrera_canonica_id: carreraId })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
+export async function linkAsignaturaToCanonical(userId, subjectId, asignaturaCanonicaId) {
+  const { error } = await supabase
+    .from("asignaturas")
+    .update({ asignatura_canonica_id: asignaturaCanonicaId, es_erasmus: false })
+    .eq("user_id", userId)
+    .eq("id", subjectId);
+  if (error) throw error;
+}
+
+export async function markAsignaturaErasmus(userId, subjectId, isErasmus = true) {
+  const { error } = await supabase
+    .from("asignaturas")
+    .update({ es_erasmus: isErasmus, asignatura_canonica_id: null })
+    .eq("user_id", userId)
+    .eq("id", subjectId);
+  if (error) throw error;
+}
+
+/* ---------- normalización: estado de la migración ---------- */
+
+/** Todo lo que hace falta para saber si a `userId` le queda algo por
+ * vincular: si su universidad/carrera no están enlazadas a una fila
+ * canónica, o si tiene alguna asignatura (de cualquier curso, no solo
+ * el activo) sin vincular y sin marcar como Erasmus. `done` es lo que
+ * decide si la pantalla de migración obligatoria deja pasar al
+ * usuario — se recalcula siempre desde estos datos, nunca desde un
+ * flag guardado (ver informe de normalización). */
+export async function getNormalizationStatus(userId) {
+  const [{ data: profile, error: profileError }, { data: subjectRows, error: subjectsError }, { data: cursoRows, error: cursosError }] =
+    await Promise.all([
+      supabase.from("profiles").select("universidad_canonica_id, carrera_canonica_id").eq("id", userId).single(),
+      supabase
+        .from("asignaturas")
+        .select("id, nombre, creditos, origin_curso_id, es_erasmus, asignatura_canonica_id, asignaturas_canonicas(estado)")
+        .eq("user_id", userId),
+      supabase.from("cursos").select("id, name").eq("user_id", userId),
+    ]);
+  if (profileError) throw profileError;
+  if (subjectsError) throw subjectsError;
+  if (cursosError) throw cursosError;
+
+  const cursoNameById = new Map(cursoRows.map((c) => [c.id, c.name]));
+  const subjects = subjectRows.map((s) => ({
+    id: s.id,
+    name: s.nombre,
+    credits: s.creditos,
+    cursoId: s.origin_curso_id,
+    cursoName: cursoNameById.get(s.origin_curso_id) ?? null,
+    esErasmus: s.es_erasmus,
+    asignaturaCanonicaId: s.asignatura_canonica_id,
+    canonicalEstado: s.asignaturas_canonicas?.estado ?? null,
+  }));
+
+  const profileLinked = Boolean(profile.universidad_canonica_id && profile.carrera_canonica_id);
+  const pendingSubjects = subjects.filter((s) => !s.asignaturaCanonicaId && !s.esErasmus);
+  const rejectedSubjects = subjects.filter((s) => s.canonicalEstado === "rechazada");
+
+  return {
+    profileLinked,
+    universidadCanonicaId: profile.universidad_canonica_id,
+    carreraCanonicaId: profile.carrera_canonica_id,
+    pendingSubjects,
+    rejectedSubjects,
+    done: profileLinked && pendingSubjects.length === 0,
+  };
 }
 
 /* ---------- borrar cuenta ---------- */

@@ -12,6 +12,8 @@ import {
 import {
   loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
   updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso, migrateFromGoogleSheets,
+  searchUniversidades, searchCarreras, searchAsignaturasCanonicas,
+  createUniversidadPendiente, createCarreraPendiente, createAsignaturaPendiente,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
 
@@ -979,6 +981,142 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
 /*  TAB: ASIGNATURAS (gestion de cursos y asignaturas)                 */
 /* ------------------------------------------------------------------ */
 
+/* ---------- buscadores de universidad/carrera/asignatura canónica ---------- */
+/* Se usan tanto aquí (alta de asignatura nueva) como en AuthGate.jsx
+ * (completar perfil y pantalla de migración obligatoria): un input con
+ * autocompletado difuso contra las filas canónicas y, si no aparece lo
+ * que busca el usuario, un "no la encuentro" que la da de alta como
+ * pendiente de aprobación y la deja usar de inmediato. */
+
+function useDebouncedValue(value, delay = 250) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+function CanonicalPickerBase({ placeholder, initialQuery, disabled, disabledHint, searchFn, renderResult, onSelect, onCreatePendiente }) {
+  const [query, setQuery] = useState(initialQuery || "");
+  const [open, setOpen] = useState(false);
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const debouncedQuery = useDebouncedValue(query, 250);
+
+  useEffect(() => {
+    if (disabled || !open) return;
+    let cancelled = false;
+    setLoading(true);
+    searchFn(debouncedQuery)
+      .then((rows) => { if (!cancelled) setResults(rows); })
+      .catch(() => { if (!cancelled) setResults([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [debouncedQuery, disabled, open, searchFn]);
+
+  function select(row) {
+    setQuery(renderResult(row));
+    setOpen(false);
+    onSelect(row);
+  }
+
+  async function createPendiente() {
+    const texto = query.trim();
+    if (!texto) return;
+    setLoading(true);
+    try {
+      await onCreatePendiente(texto);
+      setOpen(false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (disabled) {
+    return <input className="input-field" placeholder={disabledHint || placeholder} disabled />;
+  }
+
+  return (
+    <div className="canonical-picker">
+      <input
+        className="input-field"
+        placeholder={placeholder}
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+      />
+      {open && (
+        <div className="canonical-picker-results">
+          {loading && <div className="canonical-picker-hint">Buscando…</div>}
+          {!loading && results.map((row) => (
+            <button type="button" key={row.id} className="canonical-picker-option" onClick={() => select(row)}>
+              {renderResult(row)}
+            </button>
+          ))}
+          {!loading && query.trim() && (
+            <button type="button" className="canonical-picker-option canonical-picker-create" onClick={createPendiente}>
+              No la encuentro — usar "{query.trim()}"
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function CanonicalUniversidadPicker({ initialQuery, onSelect }) {
+  return (
+    <CanonicalPickerBase
+      placeholder="Busca tu universidad"
+      initialQuery={initialQuery}
+      searchFn={(q) => searchUniversidades(q)}
+      renderResult={(row) => row.nombre}
+      onSelect={onSelect}
+      onCreatePendiente={async (texto) => {
+        const id = await createUniversidadPendiente(texto);
+        onSelect({ id, nombre: texto, estado: "pendiente" });
+      }}
+    />
+  );
+}
+
+export function CanonicalCarreraPicker({ universidadId, initialQuery, onSelect }) {
+  return (
+    <CanonicalPickerBase
+      placeholder="Busca tu carrera"
+      disabledHint="Elige primero tu universidad"
+      disabled={!universidadId}
+      initialQuery={initialQuery}
+      searchFn={(q) => searchCarreras(universidadId, q)}
+      renderResult={(row) => row.nombre}
+      onSelect={onSelect}
+      onCreatePendiente={async (texto) => {
+        const id = await createCarreraPendiente(universidadId, texto);
+        onSelect({ id, nombre: texto, estado: "pendiente" });
+      }}
+    />
+  );
+}
+
+export function CanonicalAsignaturaPicker({ carreraId, initialQuery, onSelect }) {
+  return (
+    <CanonicalPickerBase
+      placeholder="Busca tu asignatura"
+      disabledHint="Vincula primero tu carrera"
+      disabled={!carreraId}
+      initialQuery={initialQuery}
+      searchFn={(q) => searchAsignaturasCanonicas(carreraId, q)}
+      renderResult={(row) => row.nombre_oficial}
+      onSelect={onSelect}
+      onCreatePendiente={async (texto) => {
+        const id = await createAsignaturaPendiente(carreraId, texto, null);
+        onSelect({ id, nombre_oficial: texto, creditos: null, estado: "pendiente" });
+      }}
+    />
+  );
+}
+
 function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   const [nota, setNota] = useState("");
   const [cursosNecesarios, setCursosNecesarios] = useState("1");
@@ -1027,16 +1165,36 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   );
 }
 
-function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado }) {
-  const [newSubject, setNewSubject] = useState({ name: "", credits: "" });
+function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado }) {
+  const carreraCanonicaId = profile?.carrera_canonica_id ?? null;
+  const [newSubject, setNewSubject] = useState({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: 0 });
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
   const [cursoToDeleteId, setCursoToDeleteId] = useState(null);
+  const [reviewingId, setReviewingId] = useState(null);
+
+  function selectCanonicalAsignatura(row) {
+    setNewSubject((v) => ({
+      ...v,
+      name: row.nombre_oficial,
+      credits: row.creditos != null ? String(row.creditos) : v.credits,
+      asignaturaCanonicaId: row.id,
+    }));
+  }
+
+  function toggleErasmus(checked) {
+    setNewSubject((v) => ({ ...v, esErasmus: checked, name: "", asignaturaCanonicaId: null, resetKey: v.resetKey + 1 }));
+  }
 
   function addSubject() {
     if (!newSubject.name.trim() || !newSubject.credits) return;
-    onAddSubject(newSubject.name.trim(), parseFloat(newSubject.credits));
-    setNewSubject({ name: "", credits: "" });
+    onAddSubject({
+      name: newSubject.name.trim(),
+      credits: parseFloat(newSubject.credits),
+      asignaturaCanonicaId: newSubject.esErasmus ? null : newSubject.asignaturaCanonicaId,
+      esErasmus: newSubject.esErasmus,
+    });
+    setNewSubject({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: newSubject.resetKey + 1 });
   }
 
   function updateNewCursoName(name) {
@@ -1172,6 +1330,25 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
                           </div>
                         );
                       })()}
+                      {s.canonicalEstado === "rechazada" && reviewingId !== s.id && (
+                        <div className="gauge-sub" style={{ color: "var(--red, #e5484d)" }}>
+                          Rechazada al revisarla.{" "}
+                          <button type="button" className="btn-ghost btn-small" onClick={() => setReviewingId(s.id)}>
+                            Volver a buscar
+                          </button>
+                        </div>
+                      )}
+                      {reviewingId === s.id && (
+                        <div style={{ marginTop: 4 }}>
+                          <CanonicalAsignaturaPicker
+                            carreraId={carreraCanonicaId}
+                            onSelect={(row) => {
+                              onUpdateSubject(s.id, { asignaturaCanonicaId: row.id, esErasmus: false });
+                              setReviewingId(null);
+                            }}
+                          />
+                        </div>
+                      )}
                     </td>
                     <td>
                       <select
@@ -1219,10 +1396,34 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, onAddSubject, onDele
             </tbody>
           </table>
         </div>
-        <div className="btn-row" style={{ marginTop: 14 }}>
-          <input className="input-field" placeholder="Nombre de la asignatura" value={newSubject.name} onChange={(e) => setNewSubject((v) => ({ ...v, name: e.target.value }))} />
-          <input className="input-field input-num" type="number" min="1" placeholder="Créditos" value={newSubject.credits} onChange={(e) => setNewSubject((v) => ({ ...v, credits: e.target.value }))} />
-          <button className="btn-primary" onClick={addSubject}>Añadir asignatura nueva</button>
+        <div className="panel-subtitle" style={{ marginTop: 14 }}>
+          {carreraCanonicaId
+            ? "Busca la asignatura en el listado de tu carrera. Si no aparece, se guarda como pendiente de revisión y puedes usarla ya."
+            : "Vincula tu universidad y carrera desde la pantalla de inicio para poder buscar asignaturas."}
+        </div>
+        <div className="btn-row" style={{ marginTop: 8, alignItems: "flex-start" }}>
+          {newSubject.esErasmus ? (
+            <input
+              className="input-field"
+              placeholder="Nombre de la asignatura (Erasmus)"
+              value={newSubject.name}
+              onChange={(e) => setNewSubject((v) => ({ ...v, name: e.target.value }))}
+            />
+          ) : (
+            <CanonicalAsignaturaPicker key={newSubject.resetKey} carreraId={carreraCanonicaId} onSelect={selectCanonicalAsignatura} />
+          )}
+          <input
+            className="input-field input-num" type="number" min="0" step="0.5" placeholder="Créditos"
+            value={newSubject.credits}
+            onChange={(e) => setNewSubject((v) => ({ ...v, credits: e.target.value }))}
+          />
+          <label className="report-check" style={{ margin: 0 }}>
+            <input type="checkbox" checked={newSubject.esErasmus} onChange={(e) => toggleErasmus(e.target.checked)} />
+            ¿Es Erasmus?
+          </label>
+          <button className="btn-primary" onClick={addSubject} disabled={!newSubject.name.trim() || !newSubject.credits}>
+            Añadir asignatura
+          </button>
         </div>
       </div>
 
@@ -1836,7 +2037,7 @@ function BugReportModal({ onClose, userId, tab }) {
 // NEWS_MAX_SHOWS entradas a la app (por cuenta y dispositivo), salvo que
 // el usuario marque "No volver a mostrar". Para anunciar otra novedad en
 // el futuro basta con cambiar NEWS_VERSION y el contenido.
-const NEWS_VERSION = "2026-09-sesiones";
+const NEWS_VERSION = "2026-09-normalizacion";
 const NEWS_MAX_SHOWS = 3;
 const newsCountedThisLoad = new Set(); // evita contar dos veces la misma carga
 
@@ -1861,6 +2062,19 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
   return (
     <Modal title="🚀 Novedades en Clever" onClose={() => onClose(dontShow)} wide>
       <div className="news">
+        <section className="news-item">
+          <div className="news-icon">🎓</div>
+          <div>
+            <div className="news-title">Universidad, carrera y asignaturas ya se buscan, no se escriben</div>
+            <ul className="news-list">
+              <li>Al añadir una asignatura la buscas en el listado de tu carrera en vez de escribirla a mano — así podemos comparar tus datos con los de otros estudiantes de forma fiable.</li>
+              <li>Si no aparece, se guarda como <strong>pendiente de revisión</strong> y ya puedes usarla: no te bloquea.</li>
+              <li>Si es una asignatura de Erasmus, márcala como tal: cuenta igual en tus horas, pero nunca entra en la revisión.</li>
+              <li>Al entrar por primera vez tras esta actualización te pediremos vincular tu universidad, carrera y las asignaturas que ya tenías — es un paso obligatorio, pero corto.</li>
+              <li>Tu historial y tus minutos registrados no se pierden ni se alteran en ningún momento.</li>
+            </ul>
+          </div>
+        </section>
         <section className="news-item">
           <div className="news-icon">⏱️</div>
           <div>
@@ -2157,19 +2371,20 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   // de poder guardarlo en el estado local (los registros de estudio se
   // referencian a ese id), así que aquí sí se espera a la respuesta del
   // servidor en vez de actualizar la vista primero.
-  async function handleAddSubject(name, credits) {
+  async function handleAddSubject({ name, credits, asignaturaCanonicaId = null, esErasmus = false }) {
     const color = PALETTE[(data?.subjects.length || 0) % PALETTE.length];
     const originCursoId = curso?.id ?? null;
     if (DISABLE_CLOUD_SAVE) {
       const newSub = {
         id: uid("sub"), name, credits, target: null, color,
         estado: "en_curso", mergedInto: null, originCursoId, frozen: null,
+        asignaturaCanonicaId, esErasmus, canonicalEstado: null,
       };
       setData((d) => ({ ...d, subjects: [...d.subjects, newSub] }));
       return;
     }
     try {
-      const newSub = await insertSubject(userId, { name, credits, color, originCursoId });
+      const newSub = await insertSubject(userId, { name, credits, color, originCursoId, asignaturaCanonicaId, esErasmus });
       setData((d) => ({ ...d, subjects: [...d.subjects, newSub] }));
       setCloudError(null);
     } catch (e) {
@@ -2423,6 +2638,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             subjects={data.subjects}
             cursoSubjects={cursoSubjectsForManagement}
             entries={data.entries}
+            profile={profile}
             cursos={data.cursos}
             activeCursoId={data.activeCursoId}
             onSelectCurso={(id) => setData((d) => ({ ...d, activeCursoId: id }))}
@@ -2756,6 +2972,21 @@ export const CSS = `
   .wear-factor-explain { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
 
   .merge-select { margin-top: 6px; font-size: 11.5px; color: var(--text-dim); padding: 5px 8px; }
+
+  .canonical-picker { position: relative; flex: 1; min-width: 200px; }
+  .canonical-picker-results {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35); max-height: 240px; overflow-y: auto;
+  }
+  .canonical-picker-hint { padding: 8px 12px; font-size: 12px; color: var(--text-dim); }
+  .canonical-picker-option {
+    display: block; width: 100%; text-align: left; padding: 8px 12px; font-size: 13px;
+    background: transparent; border: none; border-bottom: 1px solid var(--border); color: var(--text); cursor: pointer;
+  }
+  .canonical-picker-option:last-child { border-bottom: none; }
+  .canonical-picker-option:hover { background: var(--panel-2); }
+  .canonical-picker-create { color: var(--cyan-text); font-style: italic; }
 
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(6,10,20,0.7); backdrop-filter: blur(2px);

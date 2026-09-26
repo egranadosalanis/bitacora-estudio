@@ -168,6 +168,19 @@
     <h2 class="news-heading" id="news-heading">🚀 Novedades en Clever</h2>
     <p class="news-date">Actualización · septiembre 2026</p>
     <section class="news-item">
+      <div class="news-icon">🎓</div>
+      <div>
+        <div class="news-title">Universidad, carrera y asignaturas ya se buscan, no se escriben</div>
+        <ul>
+          <li>Al añadir una asignatura la buscas en el listado de tu carrera en vez de escribirla a mano, para poder comparar tus datos con los de otros estudiantes de forma fiable.</li>
+          <li>Si no aparece, se guarda como <strong>pendiente de revisión</strong> y ya puedes usarla — no te bloquea.</li>
+          <li>Si es una asignatura de Erasmus, márcala como tal: cuenta igual en tus horas, pero nunca entra en la revisión.</li>
+          <li>Al entrar por primera vez tras esta actualización te pediremos vincular tu universidad, carrera y las asignaturas que ya tenías — un paso obligatorio, pero corto.</li>
+          <li>Tu historial y tus minutos registrados no se pierden ni se alteran en ningún momento.</li>
+        </ul>
+      </div>
+    </section>
+    <section class="news-item">
       <div class="news-icon">⏱️</div>
       <div>
         <div class="news-title">El registro ahora suma, siempre desde 0</div>
