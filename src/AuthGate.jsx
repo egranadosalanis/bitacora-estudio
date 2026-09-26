@@ -444,8 +444,8 @@ function NormalizationGate({ userId, status, initialUniversidadQuery, initialCar
                 {subs.map((s) => {
                   const choice = choices[s.id];
                   return (
-                    <div key={s.id} className="field-row" style={{ alignItems: "flex-start", gap: 10 }}>
-                      <div style={{ minWidth: 130 }}>
+                    <div key={s.id} className="norm-gate-row">
+                      <div className="norm-gate-label">
                         <div>{s.name}</div>
                         <div className="gauge-sub">{s.credits} créditos</div>
                       </div>

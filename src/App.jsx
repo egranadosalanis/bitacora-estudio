@@ -2876,7 +2876,7 @@ export const CSS = `
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
 
-  .field-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .field-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
   .field-label { font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; flex: 1; }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; margin-right: 6px; }
   .input-field {
@@ -3031,6 +3031,18 @@ export const CSS = `
   .canonical-picker-option:hover { background: var(--panel-2); }
   .canonical-picker-create { color: var(--cyan-text); font-style: italic; }
   .canonical-picker-hint-inline { color: var(--text-dim); font-size: 11.5px; }
+
+  /* Filas de la pantalla de migración (NormalizationGate): en móvil no
+     caben la etiqueta + el buscador + el botón en una sola línea, así que
+     se envuelven y el buscador pasa a ocupar toda la anchura disponible en
+     vez de forzar un min-width que desborda la tarjeta. */
+  .norm-gate-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .norm-gate-label { flex: 1 1 130px; min-width: 130px; }
+  @media (max-width: 520px) {
+    .norm-gate-label,
+    .norm-gate-row .canonical-picker,
+    .norm-gate-row > .gauge-sub { flex: 1 1 100%; min-width: 0; }
+  }
 
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(6,10,20,0.7); backdrop-filter: blur(2px);
