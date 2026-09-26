@@ -28,3 +28,6 @@ export const buscarNormalizacion = (tipo, query, parentId) =>
 
 export const postNormalizacionAccion = (payload) =>
   authedFetch("normalizacion-accion", { method: "POST", body: JSON.stringify(payload) });
+
+export const fetchAsignaturaEstadisticas = (asignaturaCanonicaId) =>
+  authedFetch(`asignatura-estadisticas?${new URLSearchParams({ asignaturaCanonicaId })}`);

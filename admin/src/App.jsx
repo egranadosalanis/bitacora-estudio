@@ -4,6 +4,7 @@ import Login from "./Login.jsx";
 import Overview from "./Overview.jsx";
 import UsersView from "./UsersView.jsx";
 import NormalizationQueue from "./NormalizationQueue.jsx";
+import AsignaturaStats from "./AsignaturaStats.jsx";
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = comprobando
@@ -60,12 +61,16 @@ export default function App() {
         <button className={`tab ${tab === "normalizacion" ? "active" : ""}`} onClick={() => setTab("normalizacion")}>
           Normalización
         </button>
+        <button className={`tab ${tab === "asignaturas" ? "active" : ""}`} onClick={() => setTab("asignaturas")}>
+          Asignaturas
+        </button>
       </div>
 
       <div className="content">
         {tab === "overview" && <Overview />}
         {tab === "users" && <UsersView />}
         {tab === "normalizacion" && <NormalizationQueue />}
+        {tab === "asignaturas" && <AsignaturaStats />}
       </div>
     </div>
   );

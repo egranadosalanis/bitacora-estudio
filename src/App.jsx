@@ -1179,6 +1179,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
   const [approvingId, setApprovingId] = useState(null);
   const [cursoToDeleteId, setCursoToDeleteId] = useState(null);
   const [reviewingId, setReviewingId] = useState(null);
+  const cursoNameById = new Map(cursos.map((c) => [c.id, c.name]));
 
   function selectCanonicalAsignatura(row) {
     setNewSubject((v) => ({
@@ -1306,8 +1307,18 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
                       <input
                         className="input-field input-inline"
                         value={s.name}
+                        disabled={s.vinculadaValida}
+                        title={s.vinculadaValida ? "Vinculada al catálogo — usa \"Cambiar\" para editarla" : undefined}
                         onChange={(e) => onUpdateSubject(s.id, { name: e.target.value })}
                       />
+                      {s.vinculadaValida && reviewingId !== s.id && (
+                        <div className="gauge-sub">
+                          Vinculada al catálogo.{" "}
+                          <button type="button" className="btn-ghost btn-small" onClick={() => setReviewingId(s.id)}>
+                            Cambiar
+                          </button>
+                        </div>
+                      )}
                       {!hasOwnSources && (
                         <select
                           className="input-field input-inline merge-select"
@@ -1316,7 +1327,9 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
                         >
                           <option value="">No combinar (cuenta por separado)</option>
                           {mergeOptions.map((o) => (
-                            <option key={o.id} value={o.id}>Combinada con: {o.name}</option>
+                            <option key={o.id} value={o.id}>
+                              Combinada con: {o.name} ({cursoNameById.get(o.originCursoId) ?? "sin curso"})
+                            </option>
                           ))}
                         </select>
                       )}

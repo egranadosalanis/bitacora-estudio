@@ -12,9 +12,17 @@ function rowToCurso(c) {
 }
 
 function rowToSubject(s) {
+  const canonicalEstado = s.asignaturas_canonicas?.estado ?? null;
+  // Una vez vinculada a una canónica válida (no Erasmus, no rechazada), el
+  // nombre que se ve en toda la app pasa a ser el oficial del catálogo, no
+  // lo que el usuario tecleó — para eso sirve la vinculación: que todos los
+  // que cursan lo mismo aparezcan con el mismo nombre y se puedan comparar.
+  const vinculadaValida = Boolean(s.asignatura_canonica_id) && !s.es_erasmus && canonicalEstado !== "rechazada";
+  const nombreCanonico = s.asignaturas_canonicas?.nombre_oficial ?? null;
   return {
     id: s.id,
-    name: s.nombre,
+    name: vinculadaValida && nombreCanonico ? nombreCanonico : s.nombre,
+    nombreLibre: s.nombre,
     credits: s.creditos,
     target: s.target,
     color: s.color,
@@ -23,7 +31,8 @@ function rowToSubject(s) {
     originCursoId: s.origin_curso_id,
     asignaturaCanonicaId: s.asignatura_canonica_id,
     esErasmus: s.es_erasmus,
-    canonicalEstado: s.asignaturas_canonicas?.estado ?? null,
+    canonicalEstado,
+    vinculadaValida,
     frozen: s.estado === "aprobada"
       ? { nota: s.frozen_nota, cursosNecesarios: s.frozen_cursos_necesarios, fechaAprobacion: s.frozen_fecha_aprobacion }
       : null,
@@ -72,7 +81,7 @@ async function fetchAllEntradas(userId) {
 export async function loadUserData(userId) {
   const [cursosRes, asigRes, entradas] = await Promise.all([
     supabase.from("cursos").select("*").eq("user_id", userId),
-    supabase.from("asignaturas").select("*, asignaturas_canonicas(estado)").eq("user_id", userId),
+    supabase.from("asignaturas").select("*, asignaturas_canonicas(estado, nombre_oficial)").eq("user_id", userId),
     fetchAllEntradas(userId),
   ]);
   if (cursosRes.error) throw cursosRes.error;

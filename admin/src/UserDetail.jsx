@@ -46,7 +46,7 @@ function AsignaturasChart({ asignaturas }) {
       <BarChart data={top} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }}>
         <CartesianGrid stroke="var(--gridline)" horizontal={false} />
         <XAxis type="number" hide />
-        <YAxis type="category" dataKey="nombre" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} axisLine={false} tickLine={false} width={130} />
+        <YAxis type="category" dataKey="nombreMostrado" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} axisLine={false} tickLine={false} width={130} />
         <Tooltip content={<ChartTooltip formatter={(v) => formatMinutes(v)} />} cursor={{ fill: "var(--surface-2)" }} />
         <Bar dataKey="minutosTotal" fill="var(--series-1)" radius={[0, 4, 4, 0]} maxBarSize={16} />
       </BarChart>
@@ -76,7 +76,7 @@ function RegistrosList({ asignaturas, registros }) {
         <label>Asignatura</label>
         <select value={asignaturaId} onChange={(e) => setAsignaturaId(e.target.value)}>
           {asignaturas.map((a) => (
-            <option key={a.id} value={a.id}>{a.nombre}</option>
+            <option key={a.id} value={a.id}>{a.nombreMostrado}</option>
           ))}
         </select>
       </div>
