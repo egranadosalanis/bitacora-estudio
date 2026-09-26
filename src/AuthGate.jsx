@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
-import { deleteAccountData } from "./supabaseData.js";
-import App, { CSS } from "./App.jsx";
+import {
+  deleteAccountData, getNormalizationStatus, linkProfileToCanonical, linkAsignaturaToCanonical, markAsignaturaErasmus,
+} from "./supabaseData.js";
+import App, { CSS, CanonicalUniversidadPicker, CanonicalCarreraPicker, CanonicalAsignaturaPicker } from "./App.jsx";
 
 const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
 
@@ -241,17 +243,21 @@ function SetNewPassword() {
 }
 
 function CompleteProfileForm({ onSubmit }) {
-  const [universidad, setUniversidad] = useState("");
-  const [carrera, setCarrera] = useState("");
+  const [universidad, setUniversidad] = useState(null);
+  const [carrera, setCarrera] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
+    if (!universidad || !carrera) return;
     setError(null);
     setLoading(true);
     try {
-      await onSubmit({ universidad: universidad.trim(), carrera: carrera.trim() });
+      await onSubmit({
+        universidadId: universidad.id, universidadNombre: universidad.nombre,
+        carreraId: carrera.id, carreraNombre: carrera.nombre,
+      });
     } catch (err) {
       setError(err.message || String(err));
       setLoading(false);
@@ -265,38 +271,153 @@ function CompleteProfileForm({ onSubmit }) {
         <div className="panel-title">Antes de empezar</div>
         <p className="panel-subtitle">
           Cuéntanos dónde estudias — nos sirve para poder compararte más adelante con otros
-          estudiantes de tu misma universidad y carrera.
+          estudiantes de tu misma universidad y carrera. Si no la encuentras en la lista, puedes
+          escribirla y quedará pendiente de revisión sin bloquearte.
         </p>
         <form onSubmit={submit}>
           <div className="field-row">
             <label className="field-label">Universidad</label>
-            <input
-              className="input-field"
-              type="text"
-              required
-              value={universidad}
-              onChange={(e) => setUniversidad(e.target.value)}
-              placeholder="Ej. Universidad Politécnica de Madrid"
-            />
+            <CanonicalUniversidadPicker onSelect={(row) => { setUniversidad(row); setCarrera(null); }} />
           </div>
           <div className="field-row">
             <label className="field-label">Carrera</label>
-            <input
-              className="input-field"
-              type="text"
-              required
-              value={carrera}
-              onChange={(e) => setCarrera(e.target.value)}
-              placeholder="Ej. Ingeniería Aeroespacial"
-            />
+            <CanonicalCarreraPicker universidadId={universidad?.id} onSelect={setCarrera} />
           </div>
           {error && <div className="auth-error">{error}</div>}
           <div className="btn-row">
-            <button className="btn-primary" type="submit" disabled={loading}>
+            <button className="btn-primary" type="submit" disabled={loading || !universidad || !carrera}>
               {loading ? "…" : "Continuar"}
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/** Pantalla obligatoria y sin botón de cerrar: se muestra una vez por
+ * usuario, la primera vez que entra tras la actualización de
+ * normalización, y bloquea el resto de la app hasta vincular (o
+ * marcar Erasmus) TODAS sus asignaturas, de TODOS sus cursos — no
+ * solo el curso activo. `status` viene de getNormalizationStatus() y
+ * se recalcula en vivo después de cada acción: no hay ningún flag
+ * guardado que se pueda falsificar para saltarse el paso. */
+function NormalizationGate({ userId, status, initialUniversidadQuery, initialCarreraQuery, onStatusChange }) {
+  const [universidadSel, setUniversidadSel] = useState(null);
+  const [carreraSel, setCarreraSel] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState(null);
+  const [initialTotal, setInitialTotal] = useState(
+    status.profileLinked && status.pendingSubjects.length > 0 ? status.pendingSubjects.length : null
+  );
+
+  useEffect(() => {
+    if (status.profileLinked && initialTotal == null && status.pendingSubjects.length > 0) {
+      setInitialTotal(status.pendingSubjects.length);
+    }
+  }, [status, initialTotal]);
+
+  const resolvedCount = Math.max(0, (initialTotal ?? status.pendingSubjects.length) - status.pendingSubjects.length);
+
+  async function refresh() {
+    const next = await getNormalizationStatus(userId);
+    onStatusChange(next);
+  }
+
+  async function withBusy(id, action) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await action();
+      await refresh();
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const confirmProfileLink = () =>
+    withBusy("profile", () => linkProfileToCanonical(userId, { universidadId: universidadSel.id, carreraId: carreraSel.id }));
+
+  const subjectsByCurso = new Map();
+  status.pendingSubjects.forEach((s) => {
+    const key = s.cursoName || "Sin curso";
+    if (!subjectsByCurso.has(key)) subjectsByCurso.set(key, []);
+    subjectsByCurso.get(key).push(s);
+  });
+
+  return (
+    <div className="app-shell app-loading">
+      <style>{CSS}</style>
+      <div className="panel auth-card" style={{ maxWidth: 560 }}>
+        <div className="panel-title">Antes de continuar</div>
+        <p className="panel-subtitle">
+          Hemos pasado a un listado compartido de universidades, carreras y asignaturas para poder comparar tus
+          datos con los de otros estudiantes de forma fiable. Este paso es obligatorio, pero corto — no volverá
+          a pedirse.
+        </p>
+
+        {!status.profileLinked && (
+          <div style={{ marginBottom: 18 }}>
+            <div className="field-row">
+              <label className="field-label">Universidad</label>
+              <CanonicalUniversidadPicker
+                initialQuery={initialUniversidadQuery}
+                onSelect={(row) => { setUniversidadSel(row); setCarreraSel(null); }}
+              />
+            </div>
+            <div className="field-row">
+              <label className="field-label">Carrera</label>
+              <CanonicalCarreraPicker universidadId={universidadSel?.id} initialQuery={initialCarreraQuery} onSelect={setCarreraSel} />
+            </div>
+            <div className="btn-row">
+              <button
+                className="btn-primary"
+                disabled={!universidadSel || !carreraSel || busyId === "profile"}
+                onClick={confirmProfileLink}
+              >
+                {busyId === "profile" ? "…" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {status.profileLinked && status.pendingSubjects.length > 0 && (
+          <div>
+            <p className="panel-subtitle">
+              {resolvedCount} de {initialTotal ?? status.pendingSubjects.length} asignatura(s) resueltas — de todos tus cursos, no solo el actual.
+            </p>
+            {Array.from(subjectsByCurso.entries()).map(([cursoName, subs]) => (
+              <div key={cursoName} style={{ marginBottom: 16 }}>
+                <div className="panel-title" style={{ fontSize: 13 }}>{cursoName}</div>
+                {subs.map((s) => (
+                  <div key={s.id} className="field-row" style={{ alignItems: "flex-start", gap: 10 }}>
+                    <div style={{ minWidth: 130 }}>
+                      <div>{s.name}</div>
+                      <div className="gauge-sub">{s.credits} créditos</div>
+                    </div>
+                    <CanonicalAsignaturaPicker
+                      carreraId={status.carreraCanonicaId}
+                      initialQuery={s.name}
+                      onSelect={(row) => withBusy(s.id, () => linkAsignaturaToCanonical(userId, s.id, row.id))}
+                    />
+                    <button
+                      type="button"
+                      className="btn-ghost btn-small"
+                      disabled={busyId === s.id}
+                      onClick={() => withBusy(s.id, () => markAsignaturaErasmus(userId, s.id, true))}
+                    >
+                      Es Erasmus
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && <div className="auth-error">{error}</div>}
       </div>
     </div>
   );
@@ -316,6 +437,8 @@ export default function AuthGate() {
   const [session, setSession] = useState(undefined);
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState(null);
+  // undefined = comprobando; luego el objeto de getNormalizationStatus().
+  const [normStatus, setNormStatus] = useState(undefined);
   // Se activa cuando el enlace de "recuperar contraseña" del email trae un
   // token de recuperación — Supabase abre una sesión temporal solo para
   // poder elegir la contraseña nueva, no para entrar en la app todavía.
@@ -365,10 +488,27 @@ export default function AuthGate() {
     return () => { cancelled = true; };
   }, [session]);
 
-  async function completeProfile({ universidad, carrera }) {
+  // Solo se comprueba el estado de normalización una vez que el usuario ya
+  // pasó la pantalla de "Antes de empezar" (tiene universidad/carrera).
+  useEffect(() => {
+    if (!profile || !profile.universidad || !profile.carrera) {
+      setNormStatus(undefined);
+      return;
+    }
+    let cancelled = false;
+    getNormalizationStatus(profile.id)
+      .then((s) => { if (!cancelled) setNormStatus(s); })
+      .catch((err) => { if (!cancelled) setProfileError(err.message || String(err)); });
+    return () => { cancelled = true; };
+  }, [profile]);
+
+  async function completeProfile({ universidadId, universidadNombre, carreraId, carreraNombre }) {
     const { data, error } = await supabase
       .from("profiles")
-      .update({ universidad, carrera })
+      .update({
+        universidad: universidadNombre, carrera: carreraNombre,
+        universidad_canonica_id: universidadId, carrera_canonica_id: carreraId,
+      })
       .eq("id", session.user.id)
       .select()
       .single();
@@ -407,6 +547,18 @@ export default function AuthGate() {
   }
   if (!profile) return <LoadingScreen text="Cargando perfil…" />;
   if (!profile.universidad || !profile.carrera) return <CompleteProfileForm onSubmit={completeProfile} />;
+  if (normStatus === undefined) return <LoadingScreen text="Comprobando tu universidad y asignaturas…" />;
+  if (!normStatus.done) {
+    return (
+      <NormalizationGate
+        userId={session.user.id}
+        status={normStatus}
+        initialUniversidadQuery={profile.universidad}
+        initialCarreraQuery={profile.carrera}
+        onStatusChange={setNormStatus}
+      />
+    );
+  }
 
   return (
     <App
