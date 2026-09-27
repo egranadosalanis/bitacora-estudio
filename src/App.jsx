@@ -1711,6 +1711,24 @@ const CLASIF_COLUMNS = [
   { key: "nota", label: "Nota" },
 ];
 
+// Cuántas filas entran en la tarjeta para compartir — no hace falta enseñar
+// la clasificación entera, con el top se entiende perfectamente.
+const SHARE_CARD_MAX_ROWS = 10;
+
+const CLASIF_SHARE_FORMAT = {
+  horasPorCredito: (r) => `${r.horasPorCredito.toFixed(2)} h/cr`,
+  horasTotales: (r) => `${r.horasTotales.toFixed(1)} h`,
+  cursosNecesarios: (r) => `${r.cursosNecesarios || 0} curso${r.cursosNecesarios === 1 ? "" : "s"}`,
+  nota: (r) => (r.nota ? String(+r.nota.toFixed(1)) : "—"),
+};
+
+const CLASIF_SHARE_LABEL = {
+  horasPorCredito: "horas por crédito",
+  horasTotales: "horas totales",
+  cursosNecesarios: "cursos necesarios",
+  nota: "nota",
+};
+
 function ClasificacionDetail({ subject, subjects, entries }) {
   const f = subject.frozen;
   const c = computeClassification(subject, entries, subjects);
@@ -1787,6 +1805,37 @@ function ShareIcon() {
   );
 }
 
+/** Tarjeta autocontenida (ancho fijo, fondo propio) que se renderiza fuera
+ * de la pantalla solo para capturarla como imagen — nunca la tabla real,
+ * que es larga y se recorta al hacerle una foto. Muestra como mucho
+ * SHARE_CARD_MAX_ROWS filas, con el valor de la columna por la que esté
+ * ordenada la tabla en ese momento. */
+function ClassificationShareCard({ ref, items, sortKey }) {
+  const format = CLASIF_SHARE_FORMAT[sortKey] || CLASIF_SHARE_FORMAT.horasPorCredito;
+  const label = CLASIF_SHARE_LABEL[sortKey] || CLASIF_SHARE_LABEL.horasPorCredito;
+  return (
+    <div ref={ref} className="share-card">
+      <div className="share-card-header">
+        <img src="/icon-192.png" alt="" width="30" height="30" className="share-card-logo" />
+        <span className="share-card-brand">Clever</span>
+      </div>
+      <div className="share-card-title">Mi clasificación</div>
+      <div className="share-card-subtitle">Top {items.length} · por {label}</div>
+      <div className="share-card-list">
+        {items.map((r, i) => (
+          <div className="share-card-row" key={r.id}>
+            <span className={`share-card-rank${i < 3 ? ` share-card-rank-${i + 1}` : ""}`}>{i + 1}</span>
+            <span className="share-card-dot" style={{ background: r.color }} />
+            <span className="share-card-name">{r.name}</span>
+            <span className="share-card-value">{format(r)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="share-card-footer">Bitácora de vuelo — Clever</div>
+    </div>
+  );
+}
+
 function ClasificacionTab({ subjects, entries }) {
   const [sortKey, setSortKey] = useState("horasPorCredito");
   const [sortDir, setSortDir] = useState("desc");
@@ -1820,6 +1869,8 @@ function ClasificacionTab({ subjects, entries }) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("desc"); }
   }
+
+  const shareRows = useMemo(() => rows.slice(0, SHARE_CARD_MAX_ROWS), [rows]);
 
   async function handleShare() {
     if (sharing || !shareCardRef.current) return;
@@ -1863,33 +1914,38 @@ function ClasificacionTab({ subjects, entries }) {
         </div>
         <div className="panel-subtitle">Cifras absolutas, sin normalizar — la forma más objetiva de comparar cuánto costó cada asignatura. Toca una fila para ver la ficha completa.</div>
         {shareError && <div className="auth-error" style={{ marginBottom: 10 }}>{shareError}</div>}
-        <div ref={shareCardRef} className="share-card">
-          <div className="share-card-brand">📊 Clasificación histórica — Clever</div>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {CLASIF_COLUMNS.map((c) => (
-                    <th key={c.key} className="sortable-th" onClick={() => toggleSort(c.key)}>
-                      {c.label}{sortKey === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="clickable-row" onClick={() => setDetailId(r.id)}>
-                    <td><span className="dot" style={{ background: r.color }} />{r.name}</td>
-                    <td className="mono">{r.horasPorCredito.toFixed(2)}</td>
-                    <td className="mono">{r.horasTotales.toFixed(1)}</td>
-                    <td className="mono">{r.cursosNecesarios || "—"}</td>
-                    <td className="mono">{r.nota || "—"}</td>
-                  </tr>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                {CLASIF_COLUMNS.map((c) => (
+                  <th key={c.key} className="sortable-th" onClick={() => toggleSort(c.key)}>
+                    {c.label}{sortKey === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                  </th>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="clickable-row" onClick={() => setDetailId(r.id)}>
+                  <td><span className="dot" style={{ background: r.color }} />{r.name}</td>
+                  <td className="mono">{r.horasPorCredito.toFixed(2)}</td>
+                  <td className="mono">{r.horasTotales.toFixed(1)}</td>
+                  <td className="mono">{r.cursosNecesarios || "—"}</td>
+                  <td className="mono">{r.nota || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </div>
+
+      {/* Fuera de la pantalla (nunca visible): solo existe para poder
+          capturarla como imagen al pulsar "Compartir". Tamaño fijo y con
+          su propio fondo, así la foto sale siempre completa y no como un
+          recorte de la tabla real (que puede ser larga y muy ancha). */}
+      <div className="share-card-offscreen" aria-hidden="true">
+        <ClassificationShareCard ref={shareCardRef} items={shareRows} sortKey={sortKey} />
       </div>
 
       {detailSubject && (
@@ -3136,7 +3192,46 @@ export const CSS = `
   .gauge-target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); box-shadow: 0 0 4px rgba(255,255,255,0.6); }
   .gauge-sub { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
 
-  .share-card-brand { font-size: 12px; color: var(--text-dim); font-family: ui-monospace, monospace; margin-bottom: 10px; }
+  /* Tarjeta para compartir la Clasificación (ver ClassificationShareCard):
+     ancho fijo y fondo propio con degradado — pensada solo para hacerle
+     una foto, nunca para enseñarse en pantalla. */
+  .share-card-offscreen { position: fixed; top: 0; left: -10000px; pointer-events: none; }
+  .share-card {
+    width: 420px; box-sizing: border-box; padding: 30px 26px 22px; border-radius: 28px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #F4F7FC;
+    background:
+      radial-gradient(120% 120% at 10% -10%, rgba(79,216,234,0.38), transparent 55%),
+      radial-gradient(120% 120% at 105% 115%, rgba(167,139,250,0.4), transparent 55%),
+      linear-gradient(165deg, #0A0E1B 0%, #101830 55%, #180F28 100%);
+  }
+  .share-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+  .share-card-logo { border-radius: 8px; display: block; }
+  .share-card-brand { font-size: 15px; font-weight: 700; letter-spacing: 0.01em; }
+  .share-card-title { font-size: 25px; font-weight: 800; line-height: 1.2; margin-bottom: 4px; }
+  .share-card-subtitle {
+    font-size: 12px; font-weight: 600; color: rgba(244,247,252,0.6); text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 22px;
+  }
+  .share-card-list { display: flex; flex-direction: column; gap: 13px; }
+  .share-card-row { display: flex; align-items: center; gap: 12px; }
+  .share-card-rank {
+    width: 26px; height: 26px; flex: none; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 11.5px; font-weight: 800; background: rgba(244,247,252,0.12);
+    color: rgba(244,247,252,0.7);
+  }
+  .share-card-rank-1 { background: linear-gradient(135deg, #4FD8EA, #2FB9CC); color: #04222A; }
+  .share-card-rank-2 { background: linear-gradient(135deg, #A78BFA, #7C5CE0); color: #1B1030; }
+  .share-card-rank-3 { background: linear-gradient(135deg, #F5A623, #D98A12); color: #2A1900; }
+  .share-card-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; }
+  .share-card-name {
+    flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .share-card-value { flex: none; font-size: 13px; font-weight: 700; font-family: ui-monospace, monospace; color: #4FD8EA; }
+  .share-card-footer {
+    margin-top: 26px; padding-top: 14px; border-top: 1px solid rgba(244,247,252,0.14);
+    font-size: 11px; color: rgba(244,247,252,0.5); text-align: center; letter-spacing: 0.03em;
+  }
 
   .table-wrap { overflow-x: auto; }
   .data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
