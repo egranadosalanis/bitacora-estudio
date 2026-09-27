@@ -3197,7 +3197,7 @@ export const CSS = `
      una foto, nunca para enseñarse en pantalla. */
   .share-card-offscreen { position: fixed; top: 0; left: -10000px; pointer-events: none; }
   .share-card {
-    width: 420px; box-sizing: border-box; padding: 30px 26px 22px; border-radius: 28px;
+    width: 420px; box-sizing: border-box; padding: 30px 26px 22px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #F4F7FC;
     background:
       radial-gradient(120% 120% at 10% -10%, rgba(79,216,234,0.38), transparent 55%),
