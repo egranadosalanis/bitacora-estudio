@@ -100,6 +100,43 @@ function RegistrosList({ asignaturas, registros }) {
   );
 }
 
+function HistoricoCompleto({ asignaturas, registros }) {
+  const [visibleCount, setVisibleCount] = useState(30);
+
+  const nombrePorAsignatura = useMemo(() => {
+    const m = new Map();
+    asignaturas.forEach((a) => m.set(a.id, a.nombreMostrado));
+    return m;
+  }, [asignaturas]);
+
+  const rows = useMemo(
+    () => [...registros].sort((a, b) => (a.fecha < b.fecha ? 1 : -1)),
+    [registros]
+  );
+
+  if (rows.length === 0) {
+    return <div className="muted" style={{ fontSize: 13 }}>Sin registros de estudio todavía.</div>;
+  }
+
+  return (
+    <>
+      {rows.slice(0, visibleCount).map((r, i) => (
+        <div className="list-row" key={`${r.fecha}-${r.asignatura_id}-${i}`}>
+          <span className="list-row-name">
+            {formatDate(r.fecha)} · {nombrePorAsignatura.get(r.asignatura_id) || "Asignatura eliminada"}
+          </span>
+          <span className="list-row-value">{formatMinutes(r.minutos)}</span>
+        </div>
+      ))}
+      {visibleCount < rows.length && (
+        <button className="btn" style={{ marginTop: 10 }} onClick={() => setVisibleCount((n) => n + 30)}>
+          Cargar más
+        </button>
+      )}
+    </>
+  );
+}
+
 export default function UserDetail({ userId, onBack }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -168,6 +205,11 @@ export default function UserDetail({ userId, onBack }) {
                 <AsignaturasChart asignaturas={data.asignaturas} />
               </div>
             </div>
+          </div>
+
+          <div className="section-title">Histórico completo</div>
+          <div className="panel">
+            <HistoricoCompleto asignaturas={data.asignaturas} registros={data.registros} />
           </div>
 
           <div className="section-title">Cursos</div>

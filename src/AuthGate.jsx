@@ -503,6 +503,23 @@ function LoadingScreen({ text }) {
   );
 }
 
+/** Se muestra en vez de la app entera mientras `app_settings.maintenance_mode`
+ * está activado desde el panel de admin — bloquea a todo el mundo por igual,
+ * haya o no sesión iniciada, mientras se trabaja en actualizaciones. */
+function MaintenanceScreen({ message }) {
+  return (
+    <div className="app-shell app-loading">
+      <style>{CSS}</style>
+      <div className="panel auth-card">
+        <div className="panel-title">En mantenimiento</div>
+        <p className="panel-subtitle">
+          {message || "Estamos actualizando la app. Vuelve a intentarlo en unos minutos."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function AuthGate() {
   // undefined = comprobando si hay sesión guardada; null = sin sesión
   const [session, setSession] = useState(undefined);
@@ -514,6 +531,9 @@ export default function AuthGate() {
   // token de recuperación — Supabase abre una sesión temporal solo para
   // poder elegir la contraseña nueva, no para entrar en la app todavía.
   const [passwordRecovery, setPasswordRecovery] = useState(false);
+  // undefined = comprobando; null = no hay mantenimiento activo; si no,
+  // el { enabled, message } guardado en app_settings.
+  const [maintenance, setMaintenance] = useState(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
@@ -522,6 +542,19 @@ export default function AuthGate() {
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "maintenance_mode")
+      .single()
+      .then(({ data, error }) => setMaintenance(!error && data?.value?.enabled ? data.value : null))
+      // Si la tabla no existe todavía (proyecto sin migrar) u otro error de
+      // red, se sigue como si no hubiera mantenimiento, en vez de bloquear
+      // la app a todo el mundo por un fallo de lectura.
+      .catch(() => setMaintenance(null));
   }, []);
 
   useEffect(() => {
@@ -599,7 +632,8 @@ export default function AuthGate() {
     await supabase.auth.signOut();
   }
 
-  if (session === undefined) return <LoadingScreen text="Cargando…" />;
+  if (session === undefined || maintenance === undefined) return <LoadingScreen text="Cargando…" />;
+  if (maintenance) return <MaintenanceScreen message={maintenance.message} />;
   if (passwordRecovery) return <SetNewPassword />;
   if (!session) return <AuthForm />;
   if (profileError) {

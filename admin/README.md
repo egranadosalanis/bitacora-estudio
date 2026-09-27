@@ -87,11 +87,35 @@ Cualquier otro proveedor con soporte de funciones serverless en `/api`
 - **Usuarios**: tabla buscable y ordenable con plan, universidad, cursos,
   asignaturas, minutos totales y última actividad. Al hacer clic en una fila
   se abre el detalle: evolución de sus minutos de estudio, asignaturas por
-  minutos, y lista de cursos.
+  minutos, registros por asignatura, un **histórico completo** (todos los
+  registros del usuario, de todas las asignaturas, ordenados por fecha) y
+  lista de cursos.
+
+## Acceso
+
+- Email + contraseña, como siempre.
+- **Huella (passkey)**: una vez dentro con email/contraseña, el botón
+  "🔒 Activar huella" (arriba a la derecha) registra una passkey en ese
+  dispositivo; a partir de ahí, en la pantalla de login aparece "Entrar con
+  huella" en ese mismo dispositivo. Solo aparece en navegadores con soporte
+  WebAuthn.
+- La sesión se guarda en el navegador (`persistSession`), así que no hace
+  falta volver a iniciar sesión cada vez que abres el panel.
+
+## Suspender la app
+
+El botón "Suspender app" (arriba a la derecha) bloquea el acceso a la app
+**principal** (no a este panel) para todo el mundo, útil mientras se hace
+una actualización o migración de datos. Se guarda en la tabla
+`app_settings` de Supabase y lo lee la app principal en cada carga — vuelve
+a pulsar el botón ("🔴 App suspendida — reanudar") para reactivarla. No hace
+falta redesplegar nada.
 
 ## Notas
 
-- Solo lectura: el panel no modifica datos de los usuarios.
+- Solo lectura sobre los datos de los usuarios (perfiles, cursos,
+  asignaturas, registros): el panel no los modifica. La única escritura es
+  el interruptor de mantenimiento de arriba.
 - Si en algún momento quieres dar acceso a alguien más, añade su email a
   `ADMIN_EMAIL` como lista separada por comas y ajusta la comprobación en
   `api/_lib/requireAdmin.js`.
