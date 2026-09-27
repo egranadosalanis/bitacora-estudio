@@ -93,14 +93,15 @@ Cualquier otro proveedor con soporte de funciones serverless en `/api`
 
 ## Acceso
 
-- Email + contraseña, como siempre.
-- **Huella (passkey)**: una vez dentro con email/contraseña, el botón
-  "🔒 Activar huella" (arriba a la derecha) registra una passkey en ese
-  dispositivo; a partir de ahí, en la pantalla de login aparece "Entrar con
-  huella" en ese mismo dispositivo. Solo aparece en navegadores con soporte
-  WebAuthn.
+- Email + contraseña.
 - La sesión se guarda en el navegador (`persistSession`), así que no hace
   falta volver a iniciar sesión cada vez que abres el panel.
+
+(Se probó login con huella/passkey, pero Supabase Auth usa un único RP ID
+de WebAuthn por proyecto, ligado al dominio de la app principal —
+`appclever.vercel.app` — así que no puede usarse también desde el dominio
+del panel de admin sin cambiar esa configuración en Supabase. Se descartó
+para no complicar el acceso.)
 
 ## Suspender la app
 
