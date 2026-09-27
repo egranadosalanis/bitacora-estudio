@@ -7,5 +7,5 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // de todos los usuarios pasan siempre por /api, que usa la service_role key
 // en el servidor.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, experimental: { passkey: true } },
+  auth: { persistSession: true, autoRefreshToken: true },
 });
