@@ -2267,14 +2267,13 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
-  // Se fija una sola vez, al llegar los primeros datos: si en ese momento
-  // el usuario no tiene ninguna asignatura (cuenta recién creada), se le
-  // obliga a dar de alta al menos una antes de entrar en la app. Al fijarse
-  // solo una vez no reaparece a mitad de sesión si luego borra todas.
-  const [showSubjectGate, setShowSubjectGate] = useState(null);
-  useEffect(() => {
-    if (data && showSubjectGate === null) setShowSubjectGate(data.subjects.length === 0);
-  }, [data, showSubjectGate]);
+  // Empieza en false en cada entrada nueva a la app (recarga, login, volver
+  // a abrir la pestaña...): si en ese momento la cuenta no tiene ninguna
+  // asignatura —sea porque acaba de registrarse o porque las ha ido
+  // borrando todas en algún momento— se la obliga a dar de alta al menos
+  // una antes de continuar. Una vez confirmado no vuelve a saltar dentro
+  // de la misma sesión aunque borre esa asignatura después.
+  const [subjectGateConfirmed, setSubjectGateConfirmed] = useState(false);
   const [theme, setTheme] = useState(
     () => (typeof window !== "undefined" && window.localStorage.getItem("clever_theme")) || "dark"
   );
@@ -2625,7 +2624,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     );
   }
 
-  if (showSubjectGate) {
+  if (data.subjects.length === 0 && !subjectGateConfirmed) {
     return (
       <SelectSubjectsGate
         curso={curso}
@@ -2634,7 +2633,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
         cloudError={cloudError}
         onAddSubject={handleAddSubject}
         onDeleteSubject={handleDeleteSubject}
-        onContinue={() => setShowSubjectGate(false)}
+        onContinue={() => setSubjectGateConfirmed(true)}
         onSignOut={onSignOut}
         email={session.user.email}
       />
