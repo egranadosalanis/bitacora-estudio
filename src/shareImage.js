@@ -10,7 +10,9 @@
 async function nodeToPngBlob(node) {
   const { default: html2canvas } = await import("html2canvas-pro");
   const canvas = await html2canvas(node, {
-    backgroundColor: getComputedStyle(node).backgroundColor || "#0B1220",
+    // El propio nodo pinta su fondo (sólido o degradado) por completo:
+    // dejar el lienzo base transparente evita rellenos de color de más.
+    backgroundColor: null,
     scale: Math.min(2, window.devicePixelRatio || 1),
   });
   return new Promise((resolve, reject) => {
