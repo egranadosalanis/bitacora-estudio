@@ -130,6 +130,16 @@ input {
   cursor: default;
 }
 
+.btn-danger {
+  background: rgba(230, 103, 103, 0.15);
+  border: 1px solid rgba(230, 103, 103, 0.45);
+  color: #e66767;
+}
+
+.btn-danger:hover {
+  background: rgba(230, 103, 103, 0.25);
+}
+
 .tabs {
   display: flex;
   gap: 4px;
@@ -190,6 +200,23 @@ input {
   color: var(--text-muted);
   font-size: 13px;
   margin-bottom: 20px;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 16px 0;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 .field {

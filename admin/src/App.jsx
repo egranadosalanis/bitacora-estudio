@@ -5,6 +5,86 @@ import Overview from "./Overview.jsx";
 import UsersView from "./UsersView.jsx";
 import NormalizationQueue from "./NormalizationQueue.jsx";
 import AsignaturaStats from "./AsignaturaStats.jsx";
+import { fetchMaintenance, setMaintenance as postMaintenance } from "./api.js";
+
+const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
+
+function PasskeyButton({ userId }) {
+  const storageKey = `bitacora_admin_passkey_registered:${userId}`;
+  const [registered, setRegistered] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem(storageKey) === "1"
+  );
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  if (!supportsPasskey || registered) return null;
+
+  async function activar() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const { error } = await supabase.auth.registerPasskey();
+      if (error) throw error;
+      window.localStorage.setItem(storageKey, "1");
+      setRegistered(true);
+    } catch (err) {
+      setMsg(err.message || String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button className="btn" onClick={activar} disabled={busy} title="Activar huella en este dispositivo">
+        {busy ? "Activando…" : "🔒 Activar huella"}
+      </button>
+      {msg && <div className="error-box" style={{ margin: 0 }}>{msg}</div>}
+    </>
+  );
+}
+
+function MaintenanceToggle() {
+  const [state, setState] = useState(undefined); // undefined = cargando
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchMaintenance().then(setState).catch((err) => setError(err.message));
+  }, []);
+
+  async function toggle() {
+    if (!state) return;
+    const next = !state.enabled;
+    if (next && !window.confirm("¿Suspender la app para todos los usuarios? Nadie podrá entrar hasta que la reactives.")) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await postMaintenance(next, state.message || "");
+      setState(updated);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error) return <span className="error-box" style={{ margin: 0 }}>{error}</span>;
+  if (!state) return null;
+
+  return (
+    <button
+      className={`btn ${state.enabled ? "btn-danger" : ""}`}
+      onClick={toggle}
+      disabled={busy}
+      title={state.enabled ? "La app está suspendida: nadie puede acceder" : "Suspender la app para todos los usuarios"}
+    >
+      {busy ? "…" : state.enabled ? "🔴 App suspendida — reanudar" : "Suspender app"}
+    </button>
+  );
+}
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = comprobando
@@ -40,6 +120,8 @@ export default function App() {
         </div>
         <div className="topbar-right">
           <span className="user-email">{session.user.email}</span>
+          <MaintenanceToggle />
+          <PasskeyButton userId={session.user.id} />
           <button
             className="btn"
             onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}

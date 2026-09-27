@@ -31,3 +31,8 @@ export const postNormalizacionAccion = (payload) =>
 
 export const fetchAsignaturaEstadisticas = (asignaturaCanonicaId) =>
   authedFetch(`asignatura-estadisticas?${new URLSearchParams({ asignaturaCanonicaId })}`);
+
+export const fetchMaintenance = () => authedFetch("maintenance");
+
+export const setMaintenance = (enabled, message = "") =>
+  authedFetch("maintenance", { method: "POST", body: JSON.stringify({ enabled, message }) });

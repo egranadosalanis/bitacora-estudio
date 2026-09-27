@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { supabase } from "./supabaseClient.js";
 
+const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,6 +14,14 @@ export default function Login() {
     setError(null);
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    if (err) setError(err.message);
+    setLoading(false);
+  }
+
+  async function loginWithPasskey() {
+    setError(null);
+    setLoading(true);
+    const { error: err } = await supabase.auth.signInWithPasskey();
     if (err) setError(err.message);
     setLoading(false);
   }
@@ -49,6 +59,20 @@ export default function Login() {
             {loading ? "Entrando…" : "Entrar"}
           </button>
         </form>
+        {supportsPasskey && (
+          <>
+            <div className="login-divider">o</div>
+            <button
+              type="button"
+              className="btn"
+              style={{ width: "100%" }}
+              disabled={loading}
+              onClick={loginWithPasskey}
+            >
+              🔒 Entrar con huella
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
