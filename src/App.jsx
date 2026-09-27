@@ -1991,6 +1991,113 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
   );
 }
 
+/** Pantalla obligatoria para estudiantes nuevos: antes de entrar en la app
+ * hay que dar de alta al menos una asignatura del curso que se acaba de
+ * crear. Reutiliza el mismo buscador canónico que la pestaña Asignaturas.
+ * No tiene botón para saltársela — "Continuar" solo se activa con ≥ 1
+ * asignatura añadida. */
+function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject, onDeleteSubject, onContinue, onSignOut, email }) {
+  const carreraCanonicaId = profile?.carrera_canonica_id ?? null;
+  const [newSubject, setNewSubject] = useState({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: 0 });
+  const [adding, setAdding] = useState(false);
+
+  function selectCanonicalAsignatura(row) {
+    setNewSubject((v) => ({
+      ...v,
+      name: row.nombre_oficial,
+      credits: row.creditos != null ? String(row.creditos) : v.credits,
+      asignaturaCanonicaId: row.id,
+    }));
+  }
+
+  function toggleErasmus(checked) {
+    setNewSubject((v) => ({ ...v, esErasmus: checked, name: "", asignaturaCanonicaId: null, resetKey: v.resetKey + 1 }));
+  }
+
+  async function addSubject() {
+    if (!newSubject.name.trim() || !newSubject.credits) return;
+    setAdding(true);
+    try {
+      await onAddSubject({
+        name: newSubject.name.trim(),
+        credits: parseFloat(newSubject.credits),
+        asignaturaCanonicaId: newSubject.esErasmus ? null : newSubject.asignaturaCanonicaId,
+        esErasmus: newSubject.esErasmus,
+      });
+      setNewSubject({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: newSubject.resetKey + 1 });
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <div className="app-shell app-loading">
+      <style>{CSS}</style>
+      <div className="panel auth-card" style={{ maxWidth: 560 }}>
+        <div className="panel-title">Añade tus asignaturas</div>
+        <p className="panel-subtitle">
+          Antes de empezar, añade al menos una asignatura de <strong>{curso.name}</strong> — puedes añadir el resto
+          ahora o más adelante desde la pestaña Asignaturas.
+        </p>
+
+        {subjects.length > 0 && (
+          <div className="field-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+            {subjects.map((s) => (
+              <div key={s.id} className="norm-gate-row">
+                <div className="norm-gate-label">
+                  <span className="dot" style={{ background: s.color }} />
+                  {s.name}
+                </div>
+                <button type="button" className="btn-ghost btn-small" onClick={() => onDeleteSubject(s.id)}>
+                  Quitar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="panel-subtitle" style={{ marginTop: subjects.length > 0 ? 14 : 0 }}>
+          {carreraCanonicaId
+            ? "Busca la asignatura en el listado de tu carrera. Si no aparece, se guarda como pendiente de revisión y puedes usarla ya."
+            : "Vincula tu universidad y carrera desde la pantalla de inicio para poder buscar asignaturas."}
+        </div>
+        <div className="btn-row" style={{ alignItems: "flex-start" }}>
+          {newSubject.esErasmus ? (
+            <input
+              className="input-field"
+              placeholder="Nombre de la asignatura (Erasmus)"
+              value={newSubject.name}
+              onChange={(e) => setNewSubject((v) => ({ ...v, name: e.target.value }))}
+            />
+          ) : (
+            <CanonicalAsignaturaPicker key={newSubject.resetKey} carreraId={carreraCanonicaId} onSelect={selectCanonicalAsignatura} />
+          )}
+          <input
+            className="input-field input-num" type="number" min="0" step="0.5" placeholder="Créditos"
+            value={newSubject.credits}
+            onChange={(e) => setNewSubject((v) => ({ ...v, credits: e.target.value }))}
+          />
+          <label className="report-check" style={{ margin: 0 }}>
+            <input type="checkbox" checked={newSubject.esErasmus} onChange={(e) => toggleErasmus(e.target.checked)} />
+            ¿Es Erasmus?
+          </label>
+          <button className="btn-primary" onClick={addSubject} disabled={!newSubject.name.trim() || !newSubject.credits || adding}>
+            {adding ? "…" : "Añadir asignatura"}
+          </button>
+        </div>
+        {cloudError && <div className="auth-error">{cloudError}</div>}
+
+        <div className="btn-row" style={{ marginTop: 18 }}>
+          <button className="btn-primary" disabled={subjects.length === 0} onClick={onContinue}>
+            Continuar {subjects.length === 0 && "(añade al menos 1 asignatura)"}
+          </button>
+          <button className="btn-ghost" onClick={onSignOut}>Cerrar sesión ({email})</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  REPORTAR UN PROBLEMA y NOVEDADES                                    */
 /* ------------------------------------------------------------------ */
@@ -2160,6 +2267,14 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
+  // Se fija una sola vez, al llegar los primeros datos: si en ese momento
+  // el usuario no tiene ninguna asignatura (cuenta recién creada), se le
+  // obliga a dar de alta al menos una antes de entrar en la app. Al fijarse
+  // solo una vez no reaparece a mitad de sesión si luego borra todas.
+  const [showSubjectGate, setShowSubjectGate] = useState(null);
+  useEffect(() => {
+    if (data && showSubjectGate === null) setShowSubjectGate(data.subjects.length === 0);
+  }, [data, showSubjectGate]);
   const [theme, setTheme] = useState(
     () => (typeof window !== "undefined" && window.localStorage.getItem("clever_theme")) || "dark"
   );
@@ -2507,6 +2622,22 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
         <style>{CSS}</style>
         <div className="mono" style={{ color: "#8291AC" }}>Cargando bitácora…</div>
       </div>
+    );
+  }
+
+  if (showSubjectGate) {
+    return (
+      <SelectSubjectsGate
+        curso={curso}
+        profile={profile}
+        subjects={data.subjects}
+        cloudError={cloudError}
+        onAddSubject={handleAddSubject}
+        onDeleteSubject={handleDeleteSubject}
+        onContinue={() => setShowSubjectGate(false)}
+        onSignOut={onSignOut}
+        email={session.user.email}
+      />
     );
   }
 
