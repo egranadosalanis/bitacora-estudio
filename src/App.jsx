@@ -1778,10 +1778,22 @@ function ClasificacionDetail({ subject, subjects, entries }) {
   );
 }
 
+/** El icono clásico de "compartir" (tres nodos unidos por dos líneas). */
+function ShareIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L7.04 9.81C6.5 9.31 5.79 9 5 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" />
+    </svg>
+  );
+}
+
 function ClasificacionTab({ subjects, entries }) {
   const [sortKey, setSortKey] = useState("horasPorCredito");
   const [sortDir, setSortDir] = useState("desc");
   const [detailId, setDetailId] = useState(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState(null);
+  const shareCardRef = useRef(null);
 
   const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen);
 
@@ -1809,6 +1821,25 @@ function ClasificacionTab({ subjects, entries }) {
     else { setSortKey(key); setSortDir("desc"); }
   }
 
+  async function handleShare() {
+    if (sharing || !shareCardRef.current) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const { shareNodeAsImage } = await import("./shareImage.js");
+      await shareNodeAsImage(shareCardRef.current, {
+        fileName: "clever-clasificacion.png",
+        title: "Mi clasificación — Clever",
+        text: "Así va mi clasificación histórica en Clever 📊",
+      });
+    } catch (e) {
+      // Si el usuario cancela la hoja de compartir nativa no es un error.
+      if (!(e && e.name === "AbortError")) setShareError(String((e && e.message) || e));
+    } finally {
+      setSharing(false);
+    }
+  }
+
   const detailSubject = detailId ? subjects.find((s) => s.id === detailId) : null;
 
   if (approved.length === 0) {
@@ -1818,31 +1849,46 @@ function ClasificacionTab({ subjects, entries }) {
   return (
     <div>
       <div className="panel">
-        <div className="panel-title">Clasificación histórica</div>
+        <div className="panel-title-row">
+          <div className="panel-title" style={{ marginBottom: 0 }}>Clasificación histórica</div>
+          <button
+            type="button"
+            className="btn-ghost btn-small share-btn"
+            onClick={handleShare}
+            disabled={sharing}
+            title="Compartir tu clasificación como imagen"
+          >
+            <ShareIcon /> {sharing ? "Generando…" : "Compartir"}
+          </button>
+        </div>
         <div className="panel-subtitle">Cifras absolutas, sin normalizar — la forma más objetiva de comparar cuánto costó cada asignatura. Toca una fila para ver la ficha completa.</div>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                {CLASIF_COLUMNS.map((c) => (
-                  <th key={c.key} className="sortable-th" onClick={() => toggleSort(c.key)}>
-                    {c.label}{sortKey === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="clickable-row" onClick={() => setDetailId(r.id)}>
-                  <td><span className="dot" style={{ background: r.color }} />{r.name}</td>
-                  <td className="mono">{r.horasPorCredito.toFixed(2)}</td>
-                  <td className="mono">{r.horasTotales.toFixed(1)}</td>
-                  <td className="mono">{r.cursosNecesarios || "—"}</td>
-                  <td className="mono">{r.nota || "—"}</td>
+        {shareError && <div className="auth-error" style={{ marginBottom: 10 }}>{shareError}</div>}
+        <div ref={shareCardRef} className="share-card">
+          <div className="share-card-brand">📊 Clasificación histórica — Clever</div>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {CLASIF_COLUMNS.map((c) => (
+                    <th key={c.key} className="sortable-th" onClick={() => toggleSort(c.key)}>
+                      {c.label}{sortKey === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id} className="clickable-row" onClick={() => setDetailId(r.id)}>
+                    <td><span className="dot" style={{ background: r.color }} />{r.name}</td>
+                    <td className="mono">{r.horasPorCredito.toFixed(2)}</td>
+                    <td className="mono">{r.horasTotales.toFixed(1)}</td>
+                    <td className="mono">{r.cursosNecesarios || "—"}</td>
+                    <td className="mono">{r.nota || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1966,7 +2012,7 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
         <div className="panel-subtitle">Antes de empezar, crea tu primer curso académico (solo un rango de fechas).</div>
         <div className="field-row">
           <label className="field-label">Nombre</label>
-          <input className="input-field" placeholder="Ej. 2025-2026" value={newCurso.name} onChange={(e) => updateName(e.target.value)} />
+          <input className="input-field" placeholder="Ej. 2026-2027" value={newCurso.name} onChange={(e) => updateName(e.target.value)} />
         </div>
         <div className="field-row">
           <label className="field-label">Inicio</label>
@@ -1983,6 +2029,113 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
             onClick={() => onCreate(newCurso.name.trim(), newCurso.startDate, newCurso.endDate)}
           >
             Crear curso
+          </button>
+          <button className="btn-ghost" onClick={onSignOut}>Cerrar sesión ({email})</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Pantalla obligatoria para estudiantes nuevos: antes de entrar en la app
+ * hay que dar de alta al menos una asignatura del curso que se acaba de
+ * crear. Reutiliza el mismo buscador canónico que la pestaña Asignaturas.
+ * No tiene botón para saltársela — "Continuar" solo se activa con ≥ 1
+ * asignatura añadida. */
+function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject, onDeleteSubject, onContinue, onSignOut, email }) {
+  const carreraCanonicaId = profile?.carrera_canonica_id ?? null;
+  const [newSubject, setNewSubject] = useState({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: 0 });
+  const [adding, setAdding] = useState(false);
+
+  function selectCanonicalAsignatura(row) {
+    setNewSubject((v) => ({
+      ...v,
+      name: row.nombre_oficial,
+      credits: row.creditos != null ? String(row.creditos) : v.credits,
+      asignaturaCanonicaId: row.id,
+    }));
+  }
+
+  function toggleErasmus(checked) {
+    setNewSubject((v) => ({ ...v, esErasmus: checked, name: "", asignaturaCanonicaId: null, resetKey: v.resetKey + 1 }));
+  }
+
+  async function addSubject() {
+    if (!newSubject.name.trim() || !newSubject.credits) return;
+    setAdding(true);
+    try {
+      await onAddSubject({
+        name: newSubject.name.trim(),
+        credits: parseFloat(newSubject.credits),
+        asignaturaCanonicaId: newSubject.esErasmus ? null : newSubject.asignaturaCanonicaId,
+        esErasmus: newSubject.esErasmus,
+      });
+      setNewSubject({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: newSubject.resetKey + 1 });
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <div className="app-shell app-loading">
+      <style>{CSS}</style>
+      <div className="panel auth-card" style={{ maxWidth: 560 }}>
+        <div className="panel-title">Añade tus asignaturas</div>
+        <p className="panel-subtitle">
+          Antes de empezar, añade al menos una asignatura de <strong>{curso.name}</strong> — puedes añadir el resto
+          ahora o más adelante desde la pestaña Asignaturas.
+        </p>
+
+        {subjects.length > 0 && (
+          <div className="field-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+            {subjects.map((s) => (
+              <div key={s.id} className="norm-gate-row">
+                <div className="norm-gate-label">
+                  <span className="dot" style={{ background: s.color }} />
+                  {s.name}
+                </div>
+                <button type="button" className="btn-ghost btn-small" onClick={() => onDeleteSubject(s.id)}>
+                  Quitar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="panel-subtitle" style={{ marginTop: subjects.length > 0 ? 14 : 0 }}>
+          {carreraCanonicaId
+            ? "Busca la asignatura en el listado de tu carrera. Si no aparece, se guarda como pendiente de revisión y puedes usarla ya."
+            : "Vincula tu universidad y carrera desde la pantalla de inicio para poder buscar asignaturas."}
+        </div>
+        <div className="btn-row" style={{ alignItems: "flex-start" }}>
+          {newSubject.esErasmus ? (
+            <input
+              className="input-field"
+              placeholder="Nombre de la asignatura (Erasmus)"
+              value={newSubject.name}
+              onChange={(e) => setNewSubject((v) => ({ ...v, name: e.target.value }))}
+            />
+          ) : (
+            <CanonicalAsignaturaPicker key={newSubject.resetKey} carreraId={carreraCanonicaId} onSelect={selectCanonicalAsignatura} />
+          )}
+          <input
+            className="input-field input-num" type="number" min="0" step="0.5" placeholder="Créditos"
+            value={newSubject.credits}
+            onChange={(e) => setNewSubject((v) => ({ ...v, credits: e.target.value }))}
+          />
+          <label className="report-check" style={{ margin: 0 }}>
+            <input type="checkbox" checked={newSubject.esErasmus} onChange={(e) => toggleErasmus(e.target.checked)} />
+            ¿Es Erasmus?
+          </label>
+          <button className="btn-primary" onClick={addSubject} disabled={!newSubject.name.trim() || !newSubject.credits || adding}>
+            {adding ? "…" : "Añadir asignatura"}
+          </button>
+        </div>
+        {cloudError && <div className="auth-error">{cloudError}</div>}
+
+        <div className="btn-row" style={{ marginTop: 18 }}>
+          <button className="btn-primary" disabled={subjects.length === 0} onClick={onContinue}>
+            Continuar {subjects.length === 0 && "(añade al menos 1 asignatura)"}
           </button>
           <button className="btn-ghost" onClick={onSignOut}>Cerrar sesión ({email})</button>
         </div>
@@ -2160,6 +2313,13 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
+  // Empieza en false en cada entrada nueva a la app (recarga, login, volver
+  // a abrir la pestaña...): si en ese momento la cuenta no tiene ninguna
+  // asignatura —sea porque acaba de registrarse o porque las ha ido
+  // borrando todas en algún momento— se la obliga a dar de alta al menos
+  // una antes de continuar. Una vez confirmado no vuelve a saltar dentro
+  // de la misma sesión aunque borre esa asignatura después.
+  const [subjectGateConfirmed, setSubjectGateConfirmed] = useState(false);
   const [theme, setTheme] = useState(
     () => (typeof window !== "undefined" && window.localStorage.getItem("clever_theme")) || "dark"
   );
@@ -2507,6 +2667,22 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
         <style>{CSS}</style>
         <div className="mono" style={{ color: "#8291AC" }}>Cargando bitácora…</div>
       </div>
+    );
+  }
+
+  if (data.subjects.length === 0 && !subjectGateConfirmed) {
+    return (
+      <SelectSubjectsGate
+        curso={curso}
+        profile={profile}
+        subjects={data.subjects}
+        cloudError={cloudError}
+        onAddSubject={handleAddSubject}
+        onDeleteSubject={handleDeleteSubject}
+        onContinue={() => setSubjectGateConfirmed(true)}
+        onSignOut={onSignOut}
+        email={session.user.email}
+      />
     );
   }
 
@@ -2914,6 +3090,7 @@ export const CSS = `
   .btn-ghost:hover { color: var(--red); border-color: rgba(255,92,92,0.4); }
   .btn-primary:disabled, .btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
   .btn-small { padding: 6px 10px; font-size: 12px; }
+  .share-btn { display: inline-flex; align-items: center; gap: 6px; }
   .btn-danger {
     background: var(--red); color: #2A0E0E; border: none; border-radius: 8px; padding: 10px 18px;
     font-weight: 700; font-size: 13px; cursor: pointer;
@@ -2958,6 +3135,8 @@ export const CSS = `
   .gauge-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.06); }
   .gauge-target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); box-shadow: 0 0 4px rgba(255,255,255,0.6); }
   .gauge-sub { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+  .share-card-brand { font-size: 12px; color: var(--text-dim); font-family: ui-monospace, monospace; margin-bottom: 10px; }
 
   .table-wrap { overflow-x: auto; }
   .data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
