@@ -2098,7 +2098,7 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
  * crear. Reutiliza el mismo buscador canónico que la pestaña Asignaturas.
  * No tiene botón para saltársela — "Continuar" solo se activa con ≥ 1
  * asignatura añadida. */
-function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject, onDeleteSubject, onContinue, onSignOut, email }) {
+function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject, onDeleteSubject, onContinue }) {
   const carreraCanonicaId = profile?.carrera_canonica_id ?? null;
   const [newSubject, setNewSubject] = useState({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: 0 });
   const [adding, setAdding] = useState(false);
@@ -2193,7 +2193,6 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
           <button className="btn-primary" disabled={subjects.length === 0} onClick={onContinue}>
             Continuar {subjects.length === 0 && "(añade al menos 1 asignatura)"}
           </button>
-          <button className="btn-ghost" onClick={onSignOut}>Cerrar sesión ({email})</button>
         </div>
       </div>
     </div>
@@ -2736,8 +2735,6 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
         onAddSubject={handleAddSubject}
         onDeleteSubject={handleDeleteSubject}
         onContinue={() => setSubjectGateConfirmed(true)}
-        onSignOut={onSignOut}
-        email={session.user.email}
       />
     );
   }
