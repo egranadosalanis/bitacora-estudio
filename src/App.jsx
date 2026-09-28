@@ -2288,7 +2288,7 @@ function BugReportModal({ onClose, userId, tab }) {
 // NEWS_MAX_SHOWS entradas a la app (por cuenta y dispositivo), salvo que
 // el usuario marque "No volver a mostrar". Para anunciar otra novedad en
 // el futuro basta con cambiar NEWS_VERSION y el contenido.
-const NEWS_VERSION = "2026-09-normalizacion";
+const NEWS_VERSION = "2026-09-premium-gratis";
 const NEWS_MAX_SHOWS = 3;
 const newsCountedThisLoad = new Set(); // evita contar dos veces la misma carga
 
@@ -2314,28 +2314,14 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
     <Modal title="🚀 Novedades en Clever" onClose={() => onClose(dontShow)} wide>
       <div className="news">
         <section className="news-item">
-          <div className="news-icon">🎓</div>
+          <div className="news-icon">🎉</div>
           <div>
-            <div className="news-title">Universidad, carrera y asignaturas ya se buscan, no se escriben</div>
+            <div className="news-title">Ya eres un usuario Premium</div>
             <ul className="news-list">
-              <li>Al añadir una asignatura la buscas en el listado de tu carrera en vez de escribirla a mano — así podemos comparar tus datos con los de otros estudiantes de forma fiable.</li>
-              <li>Si no aparece, se guarda como <strong>pendiente de revisión</strong> y ya puedes usarla: no te bloquea.</li>
-              <li>Si es una asignatura de Erasmus, márcala como tal: cuenta igual en tus horas, pero nunca entra en la revisión.</li>
-              <li>Al entrar por primera vez tras esta actualización te pediremos vincular tu universidad, carrera y las asignaturas que ya tenías — es un paso obligatorio, pero corto.</li>
-              <li>Tu historial y tus minutos registrados no se pierden ni se alteran en ningún momento.</li>
-            </ul>
-          </div>
-        </section>
-        <section className="news-item">
-          <div className="news-icon">⏱️</div>
-          <div>
-            <div className="news-title">El registro ahora suma, siempre desde 0</div>
-            <ul className="news-list">
-              <li><strong>Registro de vuelo</strong> sirve para <em>añadir</em> minutos: escribe (o mide con el contador) lo que acabas de estudiar y pulsa Guardar. Se suma a lo que ya tenías ese día y el formulario vuelve a 0.</li>
-              <li>Cada vez que guardas se crea una <strong>sesión</strong>. En <strong>Registros de hoy</strong> ves el total de cada asignatura; tócala para desplegar sus sesiones y corregir o borrar cualquiera.</li>
-              <li><strong>Últimos registros</strong> sigue mostrando el total de cada asignatura por día, como siempre.</li>
-              <li>Móvil y ordenador ya no se pisan: puedes guardar desde los dos y todo se suma. Al volver a la app se actualiza sola.</li>
-              <li>El <strong>máximo en una sesión</strong> del Panel ahora mide cada sesión por separado.</li>
+              <li>Por haberte unido a Clever este curso <strong>2026-2027</strong>, tienes el plan <strong>Premium activado gratis</strong> — no tienes que hacer nada ni pagar nada.</li>
+              <li><strong>Clasificación histórica:</strong> compara el esfuerzo (horas por crédito) entre todas tus asignaturas aprobadas, y comparte tu top con una foto.</li>
+              <li><strong>Exportar a Excel:</strong> descarga el registro diario, el resumen y las gráficas de tu curso en un .xlsx.</li>
+              <li>Te hemos mandado también un correo confirmándolo — si no lo ves, revisa spam.</li>
             </ul>
           </div>
         </section>
