@@ -161,6 +161,21 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Interruptor de seguridad (misma tabla que maintenance_mode): empieza
+  // apagado, así desplegar la función no manda nada a nadie todavía. Solo
+  // se enciende a mano, con una fila en app_settings, cuando el dueño ya
+  // ha revisado el correo (con el modo preview de arriba) y da el visto
+  // bueno. Si la fila no existe todavía (antes de aplicar la migración
+  // 012), se trata como apagado.
+  const { data: promoSetting } = await admin
+    .from("app_settings")
+    .select("value")
+    .eq("key", "premium_promo_enabled")
+    .single();
+  if (!promoSetting?.value?.enabled) {
+    return jsonResponse({ granted: false, reason: "promo_disabled" });
+  }
+
   if (Date.now() >= PROMO_CUTOFF) {
     return jsonResponse({ granted: false, reason: "promo_ended" });
   }
