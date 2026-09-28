@@ -16,6 +16,7 @@ import {
   createUniversidadPendiente, createCarreraPendiente, createAsignaturaPendiente,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
+import RangosTab from "./RangosTab.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  COMPONENTES DE UI GENERICOS                                        */
@@ -2288,7 +2289,7 @@ function BugReportModal({ onClose, userId, tab }) {
 // NEWS_MAX_SHOWS entradas a la app (por cuenta y dispositivo), salvo que
 // el usuario marque "No volver a mostrar". Para anunciar otra novedad en
 // el futuro basta con cambiar NEWS_VERSION y el contenido.
-const NEWS_VERSION = "2026-09-premium-gratis";
+const NEWS_VERSION = "2026-09-rangos";
 const NEWS_MAX_SHOWS = 3;
 const newsCountedThisLoad = new Set(); // evita contar dos veces la misma carga
 
@@ -2322,6 +2323,17 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
               <li><strong>Clasificación histórica:</strong> compara el esfuerzo (horas por crédito) entre todas tus asignaturas aprobadas, y comparte tu top con una foto.</li>
               <li><strong>Exportar a Excel:</strong> descarga el registro diario, el resumen y las gráficas de tu curso en un .xlsx.</li>
               <li>Te hemos mandado también un correo confirmándolo — si no lo ves, revisa spam.</li>
+            </ul>
+          </div>
+        </section>
+        <section className="news-item">
+          <div className="news-icon">🛫</div>
+          <div>
+            <div className="news-title">Nueva pestaña: Rangos</div>
+            <ul className="news-list">
+              <li>Ya puedes ver tu <strong>rango de la season</strong> según tus h/crédito, tu <strong>racha</strong> de días seguidos estudiando y el <strong>historial</strong> de temporadas pasadas.</li>
+              <li>Las seasons duran un cuatrimestre cada una: <strong>Season 1</strong> de septiembre a febrero y <strong>Season 2</strong> de febrero a julio — son las mismas fechas para todo el mundo, como en un videojuego.</li>
+              <li>Al terminar una season, su rango final queda guardado para siempre en el Historial y el rango vuelve a cero para la nueva.</li>
             </ul>
           </div>
         </section>
@@ -2863,6 +2875,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
 
       <nav className="tab-bar">
         <Tab id="bitacora" active={tab === "bitacora"} onClick={setTab}>Bitácora</Tab>
+        <Tab id="rangos" active={tab === "rangos"} onClick={setTab}>Rangos</Tab>
         <Tab id="panel" active={tab === "panel"} onClick={setTab}>Panel</Tab>
         <Tab id="trayectoria" active={tab === "trayectoria"} onClick={setTab}>Trayectoria</Tab>
         <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
@@ -2883,6 +2896,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             curso={curso}
           />
         )}
+        {tab === "rangos" && <RangosTab subjects={data.subjects} entries={data.entries} logs={data.logs} />}
         {tab === "panel" && <PanelTab stats={stats} />}
         {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={cursoEntries} stats={stats} curso={curso} />}
         {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
@@ -3315,4 +3329,112 @@ export const CSS = `
   .modal-close { background: transparent; border: none; color: var(--text-dim); font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; }
   .modal-close:hover { color: var(--red); }
   .modal-body { padding: 18px 20px; }
+
+  /* --------------------------------------------------------------- */
+  /*  PESTAÑA RANGOS — estética propia (siempre oscura, tipo "rank      */
+  /*  card" de videojuego), aislada bajo .rt-wrap para no chocar con    */
+  /*  el resto de clases de la app.                                     */
+  /* --------------------------------------------------------------- */
+  .rt-wrap {
+    --rt-app-a:#0b1424; --rt-app-b:#08101d;
+    --rt-surface:#111a2e; --rt-surface-2:#0f1830; --rt-surface-3:#0d1628;
+    --rt-border:#1c2843; --rt-border-strong:#23406f;
+    --rt-text:#e9eff9; --rt-text-dim:#93a2c2; --rt-text-faint:#68779c;
+    --rt-accent:#4fd8ee; --rt-accent-ink:#06222c; --rt-accent-dim:#1f6f80;
+    --rt-good:#34d399; --rt-good-ink:#0f2a2a; --rt-good-bd:#1f6b52;
+    --rt-warn:#fbbf24; --rt-warn-ink:#2a2210; --rt-warn-bd:#7a5a12;
+    --rt-lock-ink:#0f1730; --rt-lock-bd:#26324f; --rt-lock-tx:#6b7a99;
+    color-scheme: dark;
+  }
+  .rt-mono { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .rt-eyebrow { font-size: 10.5px; letter-spacing: 1.6px; color: var(--rt-text-faint); text-transform: uppercase; }
+  .rt-pill { display: inline-block; font-size: 11px; padding: 3px 10px; border-radius: 999px; border: 1px solid; letter-spacing: .4px; font-family: "IBM Plex Mono", monospace; }
+  .rt-p-ok { color: var(--rt-good); border-color: var(--rt-good-bd); background: var(--rt-good-ink); }
+  .rt-p-cur { color: var(--rt-accent); border-color: var(--rt-accent-dim); background: #0d2a36; }
+  .rt-p-lock { color: var(--rt-lock-tx); border-color: var(--rt-lock-bd); background: var(--rt-lock-ink); }
+  .rt-p-live { color: var(--rt-warn); border-color: var(--rt-warn-bd); background: var(--rt-warn-ink); }
+
+  .rt-seg { display: inline-flex; gap: 2px; background: var(--rt-surface-3); border: 1px solid var(--rt-border); border-radius: 10px; padding: 4px; margin-bottom: 16px; }
+  .rt-seg button { border: none; background: transparent; color: var(--rt-text-dim); font-size: 12.5px; padding: 8px 16px; border-radius: 7px; font-family: "IBM Plex Mono", monospace; cursor: pointer; }
+  .rt-seg button.rt-on { background: var(--rt-accent); color: var(--rt-accent-ink); font-weight: 600; }
+
+  .rt-card { background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: 16px; padding: 16px; margin-bottom: 12px; color: var(--rt-text); }
+  .rt-panel-actions { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+
+  .rt-hero {
+    position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--rt-border); min-height: 340px;
+    margin-bottom: 12px; background: #0a0f1a; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  }
+  .rt-hero .rt-sc { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .94; }
+  .rt-hero .rt-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,10,18,.08) 0%, rgba(6,10,18,.05) 40%, rgba(6,10,18,.55) 72%, rgba(6,10,18,.88) 100%); }
+  .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #d7e3f5; text-shadow: 0 1px 6px rgba(0,0,0,.9); z-index: 2; margin: 0; }
+  .rt-hero .rt-prevtag { position: absolute; top: 12px; right: 14px; z-index: 2; }
+  .rt-herocard { position: relative; z-index: 2; text-align: center; padding: 16px 16px 20px; width: 100%; }
+  .rt-emwrap { position: relative; z-index: 2; display: flex; justify-content: center; margin-bottom: 2px; }
+  .rt-emwrap img { width: 104px; height: auto; }
+  .rt-rname { font-family: "Manrope", sans-serif; font-size: 25px; font-weight: 700; line-height: 1.12; margin-top: 4px; color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.8); }
+  .rt-rquip { font-size: 12.5px; color: #dbe6f5; margin-top: 5px; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
+
+  .rt-stats { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+  .rt-stat { background: var(--rt-surface-2); border: 1px solid var(--rt-border); border-radius: 12px; padding: 11px 12px; }
+  .rt-stat p:first-child { font-size: 10.5px; color: var(--rt-text-faint); letter-spacing: .7px; text-transform: uppercase; font-family: "IBM Plex Mono", monospace; margin: 0; }
+  .rt-stat p:last-child { font-size: 19px; color: var(--rt-accent); margin-top: 3px; font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+
+  .rt-track { height: 10px; border-radius: 5px; background: var(--rt-surface-3); border: 1px solid var(--rt-border); overflow: hidden; margin-top: 10px; }
+  .rt-track i { display: block; height: 100%; background: var(--rt-accent); border-radius: 5px; }
+  .rt-progrow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .rt-proglabel { font-size: 14px; font-weight: 600; font-family: "Manrope", sans-serif; margin: 0; color: var(--rt-text); }
+  .rt-progval { font-size: 12px; color: var(--rt-accent); margin: 0; }
+  .rt-proghelp { font-size: 12px; color: var(--rt-text-dim); margin: 8px 0 0; }
+
+  .rt-lrow {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--rt-border); border-radius: 12px;
+    background: var(--rt-surface-2); margin-bottom: 8px; cursor: pointer; width: 100%; text-align: left; color: inherit; font: inherit;
+  }
+  .rt-lrow.rt-cur { border-color: var(--rt-accent); background: #0d2230; }
+  .rt-lrow.rt-sel:not(.rt-cur) { border-color: var(--rt-border-strong); }
+  .rt-emw img { width: 38px; height: auto; display: block; }
+  .rt-nm { flex: 1; min-width: 0; }
+  .rt-nm p:first-child { font-size: 14.5px; font-weight: 600; font-family: "Manrope", sans-serif; margin: 0; color: var(--rt-text); }
+  .rt-nm p:last-child { font-size: 11.5px; color: var(--rt-text-dim); margin-top: 2px; }
+  .rt-th { font-size: 11.5px; color: var(--rt-text-dim); text-align: right; white-space: nowrap; font-family: "IBM Plex Mono", monospace; }
+  .rt-lrow.rt-lock .rt-emw img { filter: grayscale(1); opacity: .4; }
+
+  .rt-scene {
+    position: relative; overflow: hidden; border-radius: 16px; border: 1px solid var(--rt-border); height: 280px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 12px; background: #0a0f1a;
+  }
+  .rt-scene .rt-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .72; }
+  .rt-scene .rt-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 70px; background: linear-gradient(180deg, rgba(6,10,20,0), rgba(6,10,20,.62)); }
+  .rt-scene .rt-top { position: absolute; left: 0; right: 0; top: 0; height: 56px; background: linear-gradient(180deg, rgba(6,10,20,.5), rgba(6,10,20,0)); }
+  .rt-fg { position: relative; z-index: 2; text-align: center; padding: 16px; }
+  .rt-bignum { font-family: "IBM Plex Mono", monospace; font-size: 90px; font-weight: 700; line-height: 1; color: #fff; text-shadow: 0 2px 26px rgba(0,0,0,.92), 0 0 6px rgba(0,0,0,.8); font-variant-numeric: tabular-nums; margin: 0; }
+  .rt-scene .rt-cap { font-size: 12.5px; letter-spacing: 3px; text-transform: uppercase; color: #fff; margin-top: 4px; text-shadow: 0 1px 10px rgba(0,0,0,.95); font-family: "IBM Plex Mono", monospace; }
+  .rt-scene .rt-tiertag { position: absolute; top: 12px; left: 12px; z-index: 3; background: rgba(6,20,32,.72); }
+  .rt-scene .rt-qline { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; z-index: 3; font-size: 12.5px; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.95); margin: 0; }
+
+  .rt-hgrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+  .rt-hc { background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: 16px; padding: 14px 10px 12px; text-align: center; position: relative; }
+  .rt-hc-live { border-style: dashed; border-color: var(--rt-warn-bd); }
+  .rt-hc img { width: 76px; height: auto; margin: 0 auto; }
+  .rt-hc .rt-sn { font-size: 10px; color: var(--rt-text-faint); letter-spacing: .6px; margin-top: 6px; font-family: "IBM Plex Mono", monospace; }
+  .rt-hc .rt-rn { font-size: 13.5px; font-weight: 700; margin-top: 4px; line-height: 1.2; font-family: "Manrope", sans-serif; color: var(--rt-text); }
+  .rt-hc .rt-hv { font-size: 11.5px; color: var(--rt-accent); margin-top: 4px; font-family: "IBM Plex Mono", monospace; }
+  .rt-shr { position: absolute; top: 8px; right: 8px; border: 1px solid var(--rt-border); background: var(--rt-surface-3); color: var(--rt-text-dim); width: 26px; height: 26px; border-radius: 8px; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .rt-shr:hover { color: var(--rt-accent); border-color: var(--rt-accent-dim); }
+  .rt-bestrow { display: flex; align-items: center; gap: 14px; }
+
+  /* Tarjetas fuera de pantalla, solo para capturarlas como imagen al
+     compartir (ver shareImage.js) — ancho fijo, nunca visibles. */
+  .rt-share-offscreen { position: fixed; top: 0; left: -10000px; pointer-events: none; }
+  .rt-hero-share, .rt-scene-share { width: 420px; min-height: 280px; height: 420px; }
+  .rt-share-stat { font-size: 15px; color: var(--rt-accent); margin-top: 8px; }
+  .rt-share-brand {
+    position: absolute; top: 12px; right: 14px; z-index: 3; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+    color: rgba(255,255,255,.85); text-shadow: 0 1px 6px rgba(0,0,0,.9); font-family: "IBM Plex Mono", monospace;
+  }
+
+  @media (max-width: 480px) {
+    .rt-hgrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
 `;
