@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   computeStats, getCurrentSeason, computeSeasonRango, getSeasonHistory,
   RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS,
-  STREAK_TIERS, streakTierForDays, hm, addDays,
+  STREAK_TIERS, streakTierForDays, hm, addDays, APP_SHARE_URL,
 } from "./domain.js";
 
 /* ------------------------------------------------------------------ */
@@ -121,7 +121,7 @@ function RangoView({ subjects, entries, logs }) {
   const lo = RANK_THRESHOLDS[cur];
   const hi = isMax ? null : RANK_THRESHOLDS[cur + 1];
   const progressPct = isMax ? 100 : Math.max(0, Math.min(100, ((rango.hoursPerCredit - lo) / (hi - lo)) * 100));
-  const horasFaltantes = isMax || rango.creditosTotales <= 0 ? 0 : Math.max(0, (hi - rango.hoursPerCredit) * rango.creditosTotales);
+  const hCreditoFaltante = isMax ? 0 : Math.max(0, hi - rango.hoursPerCredit);
   const seasonEndDisplay = fmtShortDate(addDays(season.endDate, 1));
 
   async function handleShare() {
@@ -133,7 +133,7 @@ function RangoView({ subjects, entries, logs }) {
       await shareNodeAsImage(shareRef.current, {
         fileName: "clever-rango.png",
         title: "Mi rango — Clever",
-        text: `Este season voy de ${RANK_NAMES[cur]} en Clever ✈️`,
+        text: `Este season voy de ${RANK_NAMES[cur]} en Clever ✈️\n${APP_SHARE_URL}`,
       });
     } catch (e) {
       if (!(e && e.name === "AbortError")) setShareError(String((e && e.message) || e));
@@ -193,7 +193,7 @@ function RangoView({ subjects, entries, logs }) {
         <p className="rt-proghelp">
           {isMax
             ? "No hay rango más alto — sigue estudiando para mantenerlo."
-            : `Te faltan ~${Math.round(horasFaltantes)} h de estudio en esta season.`}
+            : `Te faltan ${fmtNum(hCreditoFaltante)} h/crédito para el siguiente rango.`}
         </p>
         <p className="rt-proghelp">
           La season actual termina el día {seasonEndDisplay}{!live ? " (esta season ya ha terminado)" : ""}.
@@ -253,7 +253,7 @@ function RachaView({ subjects, entries, logs }) {
       await shareNodeAsImage(shareRef.current, {
         fileName: "clever-racha.png",
         title: "Mi racha — Clever",
-        text: `Llevo ${days} días seguidos estudiando en Clever 🔥`,
+        text: `Llevo ${days} días seguidos estudiando en Clever 🔥\n${APP_SHARE_URL}`,
       });
     } catch (e) {
       if (!(e && e.name === "AbortError")) setShareError(String((e && e.message) || e));
@@ -323,7 +323,7 @@ function HistorialTile({ entry }) {
       await shareNodeAsImage(ref.current, {
         fileName: "clever-season.png",
         title: `${entry.season.label} — Clever`,
-        text: `Terminé la ${entry.season.label} como ${RANK_NAMES[entry.tier]} en Clever ✈️`,
+        text: `Terminé la ${entry.season.label} como ${RANK_NAMES[entry.tier]} en Clever ✈️\n${APP_SHARE_URL}`,
       });
     } catch {
       // Cancelar la hoja de compartir nativa no es un error.
