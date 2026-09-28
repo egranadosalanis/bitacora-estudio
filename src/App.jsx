@@ -8,6 +8,7 @@ import {
   buildDefaultData, migrateData, applyHistoricalImport, computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
+  APP_SHARE_URL,
 } from "./domain.js";
 import {
   loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
@@ -1882,7 +1883,7 @@ function ClasificacionTab({ subjects, entries }) {
       await shareNodeAsImage(shareCardRef.current, {
         fileName: "clever-clasificacion.png",
         title: "Mi clasificación — Clever",
-        text: "Así va mi clasificación histórica en Clever 📊",
+        text: `Así va mi clasificación histórica en Clever 📊\n${APP_SHARE_URL}`,
       });
     } catch (e) {
       // Si el usuario cancela la hoja de compartir nativa no es un error.
