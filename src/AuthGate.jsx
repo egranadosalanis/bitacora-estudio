@@ -592,6 +592,27 @@ export default function AuthGate() {
     return () => { cancelled = true; };
   }, [session]);
 
+  // Promoción "premium por unirte este curso": se intenta en cuanto hay
+  // perfil, en cualquier inicio de sesión (incluida una sesión recordada
+  // que se retoma al abrir la app). Es un "fire and forget" — si falla
+  // (sin conexión, función no desplegada todavía...) no bloquea nada, se
+  // reintentará en el próximo inicio de sesión. La propia función es
+  // idempotente: si ya es premium, no hace nada.
+  useEffect(() => {
+    if (!profile || profile.plan !== "free") return;
+    let cancelled = false;
+    supabase.functions
+      .invoke("grant-premium")
+      .then(({ data }) => {
+        if (!cancelled && data?.granted) setProfile((p) => (p ? { ...p, plan: "premium_historico" } : p));
+      })
+      .catch(() => {
+        // Sin red, función no desplegada, etc. — se reintenta solo en el
+        // próximo inicio de sesión gracias a las dependencias del efecto.
+      });
+    return () => { cancelled = true; };
+  }, [profile?.id, profile?.plan]);
+
   // Solo se comprueba el estado de normalización una vez que el usuario ya
   // pasó la pantalla de "Antes de empezar" (tiene universidad/carrera).
   useEffect(() => {
