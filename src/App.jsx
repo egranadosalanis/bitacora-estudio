@@ -310,11 +310,32 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
 
   useEffect(() => { setVisibleCount(20); }, [historySubjectId]);
 
+  // Si la asignatura del contador desaparece de la lista (aprobada, borrada,
+  // o simplemente porque `loggableSubjects` se recalculó de golpe tras un
+  // refresco de datos —p. ej. al volver de vincularla a una canónica— y por
+  // un instante no la incluye), NUNCA se reasigna sola a otra en silencio:
+  // eso metería los minutos acumulados en la asignatura equivocada al pulsar
+  // "Fin". Si había tiempo acumulado o el contador seguía en marcha, se
+  // pausa (sin perder ese tiempo) y se obliga a elegir asignatura a mano;
+  // solo se autoselecciona la primera cuando de verdad no había nada que
+  // perder (arranque, o contador a 00:00).
   useEffect(() => {
-    if (!timerSubjectId || !loggableSubjects.some((s) => s.id === timerSubjectId)) {
-      setTimerSubjectId(loggableSubjects[0]?.id ?? null);
+    const stillValid = timerSubjectId && loggableSubjects.some((s) => s.id === timerSubjectId);
+    if (stillValid) return;
+    const hasPendingTime = timerRunning || timerAccumulatedMs > 0;
+    if (hasPendingTime) {
+      if (timerRunning) pauseTimer();
+      if (timerSubjectId) {
+        setTimerSubjectId(null);
+        setFormMsg({
+          type: "error",
+          text: "La asignatura del contador ya no está disponible. Se ha pausado sin perder el tiempo acumulado — elige otra asignatura para continuar.",
+        });
+      }
+      return;
     }
-  }, [loggableSubjects, timerSubjectId]);
+    setTimerSubjectId(loggableSubjects[0]?.id ?? null);
+  }, [loggableSubjects, timerSubjectId, timerRunning, timerAccumulatedMs]);
 
   useEffect(() => {
     if (!timerRunning) return;
@@ -524,6 +545,12 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
                     onChange={(e) => setTimerSubjectId(e.target.value)}
                     disabled={timerRunning}
                   >
+                    {/* Sin esta opción vacía, un <select> nativo sin ninguna opción
+                        cuyo value coincida con "" (timerSubjectId a null) cae solo en
+                        la primera asignatura de la lista — pareciendo seleccionada sin
+                        estarlo de verdad, justo el hueco que puede acabar guardando el
+                        contador en la asignatura equivocada. */}
+                    {!timerSubjectId && <option value="">— Elige asignatura —</option>}
                     {loggableSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
@@ -536,7 +563,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
                   ) : (
                     <button className="btn-ghost" onClick={pauseTimer}>Pausar</button>
                   )}
-                  <button className="btn-primary" onClick={finishTimer} disabled={timerElapsedMs < 1000}>
+                  <button className="btn-primary" onClick={finishTimer} disabled={timerElapsedMs < 1000 || !timerSubjectId}>
                     Fin — meter en el registro
                   </button>
                   {timerElapsedMs >= 1000 && (
