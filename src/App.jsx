@@ -3331,12 +3331,14 @@ export const CSS = `
   .modal-body { padding: 18px 20px; }
 
   /* --------------------------------------------------------------- */
-  /*  PESTAÑA RANGOS — estética propia (siempre oscura, tipo "rank      */
-  /*  card" de videojuego), aislada bajo .rt-wrap para no chocar con    */
-  /*  el resto de clases de la app.                                     */
+  /*  PESTAÑA RANGOS — sigue el tema claro/oscuro de la app (variables  */
+  /*  --rt-* propias, aisladas bajo .rt-wrap para no chocar con el      */
+  /*  resto de clases). El hero de Rango y la escena de Racha (fotos    */
+  /*  con degradado) se quedan siempre oscuros a propósito, igual que   */
+  /*  la tarjeta para compartir de Clasificación (.share-card) — son    */
+  /*  fotos con texto blanco encima, no "chrome" de la interfaz.        */
   /* --------------------------------------------------------------- */
   .rt-wrap {
-    --rt-app-a:#0b1424; --rt-app-b:#08101d;
     --rt-surface:#111a2e; --rt-surface-2:#0f1830; --rt-surface-3:#0d1628;
     --rt-border:#1c2843; --rt-border-strong:#23406f;
     --rt-text:#e9eff9; --rt-text-dim:#93a2c2; --rt-text-faint:#68779c;
@@ -3344,13 +3346,25 @@ export const CSS = `
     --rt-good:#34d399; --rt-good-ink:#0f2a2a; --rt-good-bd:#1f6b52;
     --rt-warn:#fbbf24; --rt-warn-ink:#2a2210; --rt-warn-bd:#7a5a12;
     --rt-lock-ink:#0f1730; --rt-lock-bd:#26324f; --rt-lock-tx:#6b7a99;
+    --rt-cur-bg:#0d2a36; --rt-cur-row-bg:#0d2230;
     color-scheme: dark;
+  }
+  [data-theme="light"] .rt-wrap {
+    --rt-surface:#F5F7FA; --rt-surface-2:#EBEEF3; --rt-surface-3:#EDF1F6;
+    --rt-border:#DBE1EA; --rt-border-strong:#B9C4D6;
+    --rt-text:#12161F; --rt-text-dim:#5B6472; --rt-text-faint:#7A8496;
+    --rt-accent:#0E8FA6; --rt-accent-ink:#FFFFFF; --rt-accent-dim:#8FD3DE;
+    --rt-good:#1F9D74; --rt-good-ink:#E3FBF1; --rt-good-bd:#8FE1C4;
+    --rt-warn:#B67B0A; --rt-warn-ink:#FFF3DA; --rt-warn-bd:#F0CE8B;
+    --rt-lock-ink:#EEF1F6; --rt-lock-bd:#C7D0DE; --rt-lock-tx:#7C879C;
+    --rt-cur-bg:#E3F7FA; --rt-cur-row-bg:#E3F7FA;
+    color-scheme: light;
   }
   .rt-mono { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   .rt-eyebrow { font-size: 10.5px; letter-spacing: 1.6px; color: var(--rt-text-faint); text-transform: uppercase; }
   .rt-pill { display: inline-block; font-size: 11px; padding: 3px 10px; border-radius: 999px; border: 1px solid; letter-spacing: .4px; font-family: "IBM Plex Mono", monospace; }
   .rt-p-ok { color: var(--rt-good); border-color: var(--rt-good-bd); background: var(--rt-good-ink); }
-  .rt-p-cur { color: var(--rt-accent); border-color: var(--rt-accent-dim); background: #0d2a36; }
+  .rt-p-cur { color: var(--rt-accent); border-color: var(--rt-accent-dim); background: var(--rt-cur-bg); }
   .rt-p-lock { color: var(--rt-lock-tx); border-color: var(--rt-lock-bd); background: var(--rt-lock-ink); }
   .rt-p-live { color: var(--rt-warn); border-color: var(--rt-warn-bd); background: var(--rt-warn-ink); }
 
@@ -3391,7 +3405,7 @@ export const CSS = `
     display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--rt-border); border-radius: 12px;
     background: var(--rt-surface-2); margin-bottom: 8px; cursor: pointer; width: 100%; text-align: left; color: inherit; font: inherit;
   }
-  .rt-lrow.rt-cur { border-color: var(--rt-accent); background: #0d2230; }
+  .rt-lrow.rt-cur { border-color: var(--rt-accent); background: var(--rt-cur-row-bg); }
   .rt-lrow.rt-sel:not(.rt-cur) { border-color: var(--rt-border-strong); }
   .rt-emw img { width: 38px; height: auto; display: block; }
   .rt-nm { flex: 1; min-width: 0; }
