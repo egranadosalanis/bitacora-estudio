@@ -3424,7 +3424,7 @@ export const CSS = `
   .rt-fg { position: relative; z-index: 2; text-align: center; padding: 16px; }
   .rt-bignum { font-family: "IBM Plex Mono", monospace; font-size: 90px; font-weight: 700; line-height: 1; color: #fff; text-shadow: 0 2px 26px rgba(0,0,0,.92), 0 0 6px rgba(0,0,0,.8); font-variant-numeric: tabular-nums; margin: 0; }
   .rt-scene .rt-cap { font-size: 12.5px; letter-spacing: 3px; text-transform: uppercase; color: #fff; margin-top: 4px; text-shadow: 0 1px 10px rgba(0,0,0,.95); font-family: "IBM Plex Mono", monospace; }
-  .rt-scene .rt-tiertag { position: absolute; top: 12px; left: 12px; z-index: 3; background: rgba(6,20,32,.72); }
+  .rt-scene .rt-tiertag { position: absolute; top: 12px; left: 12px; z-index: 3; background: rgba(6,20,32,.72); color: #fff; border-color: rgba(255,255,255,.35); }
   .rt-scene .rt-qline { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; z-index: 3; font-size: 12.5px; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.95); margin: 0; }
 
   .rt-hgrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
