@@ -7,13 +7,20 @@
 /*  perezosa porque solo hace falta al pulsar "Compartir".              */
 /* ------------------------------------------------------------------ */
 
+// Fija (no depende de window.devicePixelRatio): estas tarjetas las ve casi
+// siempre OTRA persona, no quien las genera, así que la calidad tiene que
+// alcanzar para una pantalla de alta densidad ajena, no para la propia. A
+// 420px de ancho de tarjeta, x3 da ~1260px — nítido incluso a pantalla
+// completa en un story de Instagram/WhatsApp (que rondan 1080px).
+const SHARE_IMAGE_SCALE = 3;
+
 async function nodeToPngBlob(node) {
   const { default: html2canvas } = await import("html2canvas-pro");
   const canvas = await html2canvas(node, {
     // El propio nodo pinta su fondo (sólido o degradado) por completo:
     // dejar el lienzo base transparente evita rellenos de color de más.
     backgroundColor: null,
-    scale: Math.min(2, window.devicePixelRatio || 1),
+    scale: SHARE_IMAGE_SCALE,
   });
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("No se pudo generar la imagen."))), "image/png");
