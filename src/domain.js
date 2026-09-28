@@ -661,6 +661,122 @@ export const HISTORICAL_IMPORT_VERSION = 1;
  * - añade los cursos académicos 2022-2023, 2023-2024 y 2024-2025.
  * Idempotente: si ya se aplicó, devuelve `data` sin tocar.
  */
+/* ------------------------------------------------------------------ */
+/*  RANGOS — seasons, rango (h/crédito) y racha                        */
+/*                                                                      */
+/*  Las seasons son fechas fijas, iguales para todos los usuarios       */
+/*  (como en Rocket League) — las fija quien mantiene la app, no cada   */
+/*  usuario. Cada año natural aporta dos: Season 1 (septiembre-enero)   */
+/*  y Season 2 (febrero-julio); agosto queda fuera de temporada. Para   */
+/*  mover a mano la fecha de alguna season concreta (p. ej. si un año   */
+/*  el curso empieza más tarde), basta con editar su entrada en SEASONS */
+/*  o añadir excepciones sueltas a buildSeasons — no hace falta tocar   */
+/*  nada más: el resto de esta pestaña solo lee este array.             */
+/* ------------------------------------------------------------------ */
+
+function buildSeasons(firstYear, lastYear) {
+  const seasons = [];
+  for (let y = firstYear; y <= lastYear; y++) {
+    const academicYear = `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
+    seasons.push({
+      id: `${y}-S1`, number: 1, academicYear,
+      label: `Season 1 · ${academicYear}`,
+      startDate: `${y}-09-01`, endDate: `${y + 1}-01-31`,
+    });
+    seasons.push({
+      id: `${y}-S2`, number: 2, academicYear,
+      label: `Season 2 · ${academicYear}`,
+      startDate: `${y + 1}-02-01`, endDate: `${y + 1}-07-31`,
+    });
+  }
+  return seasons;
+}
+
+/** Todas las seasons conocidas, ordenadas cronológicamente. */
+export const SEASONS = buildSeasons(2020, 2035);
+
+/** La season que contiene hoy; si hoy cae en agosto (fuera de temporada),
+ * se toma la última season ya terminada como "actual" (se sigue mostrando
+ * su resultado final hasta que empiece la siguiente) y `live` sale false. */
+export function getCurrentSeason(today = isoToday()) {
+  const live = SEASONS.find((s) => today >= s.startDate && today <= s.endDate);
+  if (live) return { season: live, live: true };
+  const past = [...SEASONS].filter((s) => s.endDate < today).sort((a, b) => (a.endDate < b.endDate ? 1 : -1));
+  return { season: past[0] || SEASONS[0], live: false };
+}
+
+export const RANK_NAMES = [
+  "Becario de Ryanair", "Piloto de Cessna alquilada", "Copiloto con café", "Capitán de Iberia",
+  "Piloto de caza", "Astronauta de la NASA", "Dios del cielo",
+];
+export const RANK_QUIPS = [
+  "Sí, te hacen pagar por la maleta.", "Despegas, aterrizas y rezas.", "Ya tocas botones que importan.",
+  "Galones nuevos y cero huelgas.", "Vas a un Mach que da miedo.", "La gravedad ya es opcional.",
+  "Los pájaros te piden permiso.",
+];
+// h/crédito mínimas de cada rango (el último, "Dios del cielo", no tiene techo).
+export const RANK_THRESHOLDS = [0, 2, 5, 9.5, 16, 25, 35];
+
+export function rankTierForHoursPerCredit(hpc) {
+  let k = 0;
+  for (let i = 0; i < RANK_THRESHOLDS.length; i++) if (hpc >= RANK_THRESHOLDS[i]) k = i;
+  return k;
+}
+
+/** Cifras de rango de una season concreta, calculadas siempre al vuelo a
+ * partir de los registros reales (sin "cerrar" nada): h/crédito = minutos
+ * totales estudiados en la season (todas las asignaturas, apruebes o no) /
+ * 60 / créditos de las asignaturas con actividad esa season. */
+export function computeSeasonRango(subjects, entries, logs, season) {
+  const activeSubjects = subjectsWithActivityInRange(subjects, entries, season.startDate, season.endDate);
+  const seasonEntries = entriesInRange(entries, season.startDate, season.endDate);
+  let minutosTotales = 0;
+  Object.values(seasonEntries).forEach((bySubject) => {
+    Object.values(bySubject).forEach((m) => { minutosTotales += m || 0; });
+  });
+  const creditosTotales = activeSubjects.reduce((a, s) => a + (s.credits || 0), 0);
+  const hoursPerCredit = creditosTotales > 0 ? minutosTotales / 60 / creditosTotales : 0;
+  let mejorSesion = 0;
+  (logs || []).forEach((l) => {
+    if (l.date >= season.startDate && l.date <= season.endDate && l.minutes > mejorSesion) mejorSesion = l.minutes;
+  });
+  return {
+    season, minutosTotales, hoursPerCredit, mejorSesion, creditosTotales,
+    numAsignaturas: activeSubjects.length,
+    tier: rankTierForHoursPerCredit(hoursPerCredit),
+  };
+}
+
+/** Historial de todas las seasons (pasadas + la actual) con actividad real,
+ * de la más a la menos reciente — para la pestaña Historial y para hallar
+ * el mejor rango alcanzado nunca. */
+export function getSeasonHistory(subjects, entries, logs) {
+  const { season: current, live } = getCurrentSeason();
+  return SEASONS
+    .filter((s) => s.startDate <= current.endDate)
+    .map((s) => computeSeasonRango(subjects, entries, logs, s))
+    .filter((r) => r.minutosTotales > 0)
+    .map((r) => ({ ...r, isCurrent: r.season.id === current.id, live: r.season.id === current.id && live }))
+    .sort((a, b) => (a.season.startDate < b.season.startDate ? 1 : -1));
+}
+
+// Hitos de racha (días consecutivos estudiando): el primero (0 días) cubre
+// también el estado "todavía sin racha viva".
+export const STREAK_TIERS = [
+  { days: 0, name: "Aviones de papel", quip: "Doblando folios en clase.", img: "streak-0" },
+  { days: 3, name: "Aeromodelismo", quip: "Pegamento, cartón y paciencia.", img: "streak-1" },
+  { days: 5, name: "Vuelo real", quip: "Ya despegas de verdad.", img: "streak-2" },
+  { days: 7, name: "Cazas", quip: "Postcombustión activada.", img: "streak-3" },
+  { days: 9, name: "Guerra espacial", quip: "Ya no hay gravedad que te frene.", img: "streak-4" },
+  { days: 12, name: "Alienígena supremo", quip: "Sujetas la Tierra con una mano.", img: "streak-5" },
+];
+
+export function streakTierForDays(days) {
+  let k = 0;
+  for (let i = 0; i < STREAK_TIERS.length; i++) if (days >= STREAK_TIERS[i].days) k = i;
+  return k;
+}
+
 export function applyHistoricalImport(data) {
   if (!data || data.historicalImportV1) return data;
 
