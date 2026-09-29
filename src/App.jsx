@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import {
-  PALETTE, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
+  PALETTE, SUBJECT_COLORS, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   buildDefaultData, migrateData, applyHistoricalImport, computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
@@ -17,7 +17,7 @@ import {
   createUniversidadPendiente, createCarreraPendiente, createAsignaturaPendiente,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
-import RangosTab from "./RangosTab.jsx";
+import RangosTab, { prefetchRangosImages } from "./RangosTab.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  COMPONENTES DE UI GENERICOS                                        */
@@ -957,7 +957,20 @@ function PanelTab({ stats }) {
             unit=" h/cr"
             target={s.target}
             color={s.color}
-            sub={`${s.pct.toFixed(1)} % del esfuerzo total · ${hm(s.total)} · ${s.daysActive} días activos${s.daysSince != null ? ` · última vez hace ${s.daysSince} d` : ""}`}
+            sub={(() => {
+              const base = `${s.pct.toFixed(1)} % del esfuerzo total · ${hm(s.total)} · ${s.daysActive} días activos${s.daysSince != null ? ` · última vez hace ${s.daysSince} d` : ""}`;
+              if (s.target == null) return base;
+              const faltan = s.target * s.credits * 60 - s.total;
+              return (
+                <>
+                  {base}
+                  <br />
+                  <span style={{ color: faltan > 0 ? "var(--amber)" : "var(--green)" }}>
+                    {faltan > 0 ? `Faltan ${hm(faltan)} para llegar a la referencia` : "Referencia alcanzada"}
+                  </span>
+                </>
+              );
+            })()}
           />
         ))}
       </div>
@@ -1001,6 +1014,38 @@ function PanelTab({ stats }) {
   );
 }
 
+function ColorPicker({ color, onChange }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="color-picker">
+      <button
+        type="button"
+        className="color-swatch color-swatch-current"
+        style={{ background: color }}
+        aria-label="Cambiar color de la asignatura"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      />
+      {open && (
+        <span className="color-options" role="listbox" aria-label="Colores">
+          {SUBJECT_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="option"
+              aria-selected={c.toLowerCase() === (color || "").toLowerCase()}
+              aria-label={c}
+              className={`color-swatch ${c.toLowerCase() === (color || "").toLowerCase() ? "color-swatch-on" : ""}`}
+              style={{ background: c }}
+              onClick={() => { onChange(c); setOpen(false); }}
+            />
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function HoursPerCreditTooltip({ active, payload }) {
   if (!active || !payload || !payload.length) return null;
   const p = payload[0].payload;
@@ -1022,6 +1067,13 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
   const cuatrimestreSplit = curso ? `${curso.endDate.slice(0, 4)}-02-01` : null;
   const [range, setRange] = useState(isTerminado ? "1c" : 90);
   const [trayView, setTrayView] = useState("acumulado");
+  const [hiddenIds, setHiddenIds] = useState(() => new Set());
+  const toggleSubject = (id) => setHiddenIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const visibleSubjects = cursoSubjects.filter((s) => !hiddenIds.has(s.id));
 
   useEffect(() => {
     setRange(isTerminado ? "1c" : 90);
@@ -1042,7 +1094,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
 
   const areaData = chartDates.map((d) => {
     const row = { date: formatShort(d) };
-    cursoSubjects.forEach((s) => { row[s.name] = (entries[d] && entries[d][s.id]) || 0; });
+    visibleSubjects.forEach((s) => { row[s.name] = (entries[d] && entries[d][s.id]) || 0; });
     return row;
   });
 
@@ -1095,14 +1147,32 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
             )}
           </div>
         </div>
+        <div className="tray-legend">
+          {cursoSubjects.map((s) => {
+            const hidden = hiddenIds.has(s.id);
+            return (
+              <div key={s.id} className={`tray-legend-item ${hidden ? "tray-legend-off" : ""}`}>
+                <span className="dot" style={{ background: s.color }} />
+                <span className="tray-legend-name">{s.name}</span>
+                <button
+                  type="button"
+                  className="tray-legend-btn"
+                  aria-pressed={!hidden}
+                  onClick={() => toggleSubject(s.id)}
+                >
+                  {hidden ? "Mostrar" : "Ocultar"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={areaData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
             <XAxis dataKey="date" stroke="#8291AC" fontSize={11} minTickGap={30} />
             <YAxis stroke="#8291AC" fontSize={11} />
             <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} />
-            <Legend wrapperStyle={{ fontSize: 11, color: "#8291AC" }} />
-            {cursoSubjects.map((s) => (
+            {visibleSubjects.map((s) => (
               <Area key={s.id} type="monotone" dataKey={s.name} stackId="1" stroke={s.color} fill={s.color} fillOpacity={0.55} />
             ))}
           </AreaChart>
@@ -1522,7 +1592,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
                 return (
                   <tr key={s.id}>
                     <td>
-                      <span className="dot" style={{ background: s.color }} />
+                      <ColorPicker color={s.color} onChange={(c) => onUpdateSubject(s.id, { color: c })} />
                       <input
                         className="input-field input-inline"
                         value={s.name}
@@ -2570,6 +2640,11 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
 }
 
 export default function App({ session, profile, onSignOut, onDeleteAccount } = {}) {
+  useEffect(() => {
+    // Precarga (ociosa) de las imágenes de Rangos para que la pestaña abra al instante.
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 2000));
+    idle(() => prefetchRangosImages());
+  }, []);
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("bitacora");
   const [cloudError, setCloudError] = useState(null);
@@ -3442,6 +3517,20 @@ export const CSS = `
 
   .field-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
   .field-label { font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; flex: 1; }
+  .recharts-wrapper, .recharts-wrapper *, .recharts-surface { outline: none !important; -webkit-tap-highlight-color: transparent; }
+  .recharts-wrapper *:focus, .recharts-wrapper *:focus-visible { outline: none !important; }
+  .tray-legend { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-bottom: 10px; }
+  .tray-legend-item { display: flex; align-items: center; gap: 4px; max-width: 100%; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 12px; }
+  .tray-legend-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .tray-legend-off .tray-legend-name, .tray-legend-off .dot { opacity: .4; }
+  .tray-legend-btn { flex-shrink: 0; background: transparent; border: 1px solid var(--border); color: var(--text-dim); border-radius: 999px; font-size: 10.5px; padding: 4px 9px; cursor: pointer; margin-left: 4px; }
+  .tray-legend-btn:hover { color: var(--text); border-color: var(--cyan); }
+  .color-picker { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-right: 6px; vertical-align: middle; }
+  .color-options { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0; }
+  .color-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+  .color-swatch-current { border-color: var(--border); }
+  .color-swatch-on { border-color: var(--text); }
+  @media (pointer: coarse) { .color-swatch { width: 30px; height: 30px; } }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; margin-right: 6px; }
   .input-field {
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px;

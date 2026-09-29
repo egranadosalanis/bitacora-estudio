@@ -4,6 +4,8 @@
 /* ------------------------------------------------------------------ */
 
 export const PALETTE = ["#4FD8EA", "#F5A623", "#3DDC84", "#A78BFA", "#FB923C", "#2DD4BF", "#FF8FB3", "#8DA3F0"];
+// Colores elegibles por el usuario: la paleta base más tonos que encajan con la estética oscura/neón de la app.
+export const SUBJECT_COLORS = [...PALETTE, "#FF5C5C", "#FACC15", "#38BDF8", "#C084FC", "#A3E635", "#F472B6", "#E879F9", "#94A3B8"];
 
 // Enlace a la landing de Clever (no directo a la app) — es al que se manda a
 // gente nueva, con el mensaje de venta y el botón "Empieza ahora", así que es

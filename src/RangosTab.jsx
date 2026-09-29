@@ -53,10 +53,17 @@ function LockIcon() {
   );
 }
 
+export function prefetchRangosImages() {
+  const urls = [];
+  for (let i = 0; i < 7; i++) urls.push(`/rangos/rank-badges/badge-${i}.webp`, `/rangos/rank-bg/rank-${i}.webp`);
+  for (let i = 0; i < 6; i++) urls.push(`/rangos/streak-bg/streak-${i}.webp`);
+  urls.forEach((u) => { const im = new Image(); im.decoding = "async"; im.src = u; });
+}
+
 function RankEmblem({ tier, size }) {
   return (
     <img
-      src={`/rangos/rank-badges/badge-${tier}.png`}
+      src={`/rangos/rank-badges/badge-${tier}.webp`}
       width={size}
       alt={`Emblema ${RANK_NAMES[tier]}`}
       style={{ filter: "drop-shadow(0 4px 12px rgba(79,216,234,0.33))" }}
@@ -94,7 +101,7 @@ function RangoShareCard({ shareRef, rango, season }) {
   const { tier, hoursPerCredit } = rango;
   return (
     <div ref={shareRef} className="rt-hero rt-hero-share">
-      <img className="rt-sc" src={`/rangos/rank-bg/rank-${tier}.jpg`} alt="" />
+      <img className="rt-sc" decoding="async" src={`/rangos/rank-bg/rank-${tier}.webp`} alt="" />
       <div className="rt-tint" />
       <p className="rt-season rt-mono">{season.label.toUpperCase()}</p>
       <div className="rt-herocard">
@@ -151,7 +158,7 @@ function RangoView({ subjects, entries, logs }) {
   return (
     <div>
       <div className="rt-hero">
-        <img className="rt-sc" src={`/rangos/rank-bg/rank-${previewTier}.jpg`} alt="" />
+        <img className="rt-sc" decoding="async" src={`/rangos/rank-bg/rank-${previewTier}.webp`} alt="" />
         <div className="rt-tint" />
         <p className="rt-season rt-mono">{season.label.toUpperCase()}</p>
         {previewTier !== cur && (
@@ -220,7 +227,7 @@ function RachaShareCard({ shareRef, days, tier }) {
   const t = STREAK_TIERS[tier];
   return (
     <div ref={shareRef} className="rt-scene rt-scene-share">
-      <img className="rt-bg" src={`/rangos/streak-bg/${t.img}.jpg`} alt="" />
+      <img className="rt-bg" decoding="async" src={`/rangos/streak-bg/${t.img}.webp`} alt="" />
       <div className="rt-top" /><div className="rt-fade" />
       <span className="rt-pill rt-mono rt-tiertag">{t.name.toUpperCase()}</span>
       <div className="rt-fg">
@@ -266,7 +273,7 @@ function RachaView({ subjects, entries, logs }) {
     <div>
       <div className="rt-scene">
         <span className="rt-pill rt-mono rt-tiertag">{t.name.toUpperCase()}</span>
-        <img className="rt-bg" src={`/rangos/streak-bg/${t.img}.jpg`} alt="" />
+        <img className="rt-bg" decoding="async" src={`/rangos/streak-bg/${t.img}.webp`} alt="" />
         <div className="rt-top" /><div className="rt-fade" />
         <div className="rt-fg">
           <p className="rt-bignum" style={{ fontSize: `${Math.min(96, 62 + Math.min(days, 20) * 1.7)}px` }}>{days}</p>
