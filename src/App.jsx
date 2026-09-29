@@ -334,7 +334,12 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
       }
       return;
     }
-    setTimerSubjectId(loggableSubjects[0]?.id ?? null);
+    // Forma funcional: al montar, el efecto que recupera el borrador (más
+    // arriba) y este se ejecutan en el mismo commit. Con un valor directo,
+    // este pisaba la asignatura recuperada con la primera de la lista
+    // (cierre obsoleto con timerSubjectId a null) — y el contador restaurado
+    // acababa guardando sus minutos en esa primera asignatura.
+    setTimerSubjectId((cur) => (cur && loggableSubjects.some((s) => s.id === cur) ? cur : loggableSubjects[0]?.id ?? null));
   }, [loggableSubjects, timerSubjectId, timerRunning, timerAccumulatedMs]);
 
   useEffect(() => {
