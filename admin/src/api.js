@@ -36,3 +36,9 @@ export const fetchMaintenance = () => authedFetch("maintenance");
 
 export const setMaintenance = (enabled, message = "") =>
   authedFetch("maintenance", { method: "POST", body: JSON.stringify({ enabled, message }) });
+
+export const fetchCarrerasCatalogo = () => authedFetch("asignaturas-admin?vista=carreras");
+export const fetchAsignaturasDeCarrera = (id) => authedFetch(`asignaturas-admin?${new URLSearchParams({ vista: "carrera", id })}`);
+export const fetchFichaAsignatura = (id) => authedFetch(`asignaturas-admin?${new URLSearchParams({ vista: "asignatura", id })}`);
+export const postMarcaAsignatura = (id, campo, valor) =>
+  authedFetch("asignaturas-admin", { method: "POST", body: JSON.stringify({ id, campo, valor }) });

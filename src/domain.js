@@ -398,7 +398,8 @@ export function computeStats(subjects, entries, logs) {
         if (m > maxDay) { maxDay = m; maxDayDate = d; }
       }
     });
-    const hoursPerCredit = sub.credits > 0 ? total / 60 / sub.credits : 0;
+    // Sin créditos: sus minutos cuentan como esfuerzo, pero no hay ratio.
+    const hoursPerCredit = !sub.sinCreditos && sub.credits > 0 ? total / 60 / sub.credits : 0;
     const pct = globalTotal > 0 ? (total / globalTotal) * 100 : 0;
     const avgActiveDay = daysActive > 0 ? total / daysActive : 0;
     const daysSince = last ? daysBetween(last, today) : null;
@@ -715,13 +716,17 @@ export function rankTierForHoursPerCredit(hpc) {
  * asignaturas casi sin tocar diluyan la media arrastrando el total hacia
  * abajo por sus créditos. */
 export function computeSeasonRango(subjects, entries, logs, season) {
-  const activeSubjects = subjectsWithActivityInRange(subjects, entries, season.startDate, season.endDate);
+  // Las asignaturas sin créditos (marca del admin) no cuentan en Rangos:
+  // ni sus minutos ni sus créditos.
+  const contables = subjects.filter((s) => !s.sinCreditos);
+  const contablesIds = new Set(contables.map((s) => s.id));
+  const activeSubjects = subjectsWithActivityInRange(contables, entries, season.startDate, season.endDate);
   const seasonEntries = entriesInRange(entries, season.startDate, season.endDate);
   const minutosPorAsignatura = {};
   let minutosTotales = 0;
   Object.values(seasonEntries).forEach((bySubject) => {
     Object.entries(bySubject).forEach(([subjectId, m]) => {
-      if (!m) return;
+      if (!m || !contablesIds.has(subjectId)) return;
       minutosTotales += m;
       minutosPorAsignatura[subjectId] = (minutosPorAsignatura[subjectId] || 0) + m;
     });
@@ -733,6 +738,7 @@ export function computeSeasonRango(subjects, entries, logs, season) {
   }, 0);
   let mejorSesion = 0;
   (logs || []).forEach((l) => {
+    if (!contablesIds.has(l.subjectId)) return;
     if (l.date >= season.startDate && l.date <= season.endDate && l.minutes > mejorSesion) mejorSesion = l.minutes;
   });
   return {

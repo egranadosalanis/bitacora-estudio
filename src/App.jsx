@@ -68,6 +68,151 @@ function Tab({ id, active, onClick, children }) {
   );
 }
 
+/** true en pantallas de móvil (mismo corte que el CSS: 640 px). */
+function useIsMobile() {
+  const query = "(max-width: 640px)";
+  const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return mobile;
+}
+
+/* Iconos de trazo (grosor 1,8), sin emojis, para la navegación móvil. */
+const NAV_ICON_PATHS = {
+  bitacora: <><path d="M6 3h11a2 2 0 0 1 2 2v16H8a2 2 0 0 1-2-2z" /><path d="M6 19a2 2 0 0 1 2-2h11" /></>,
+  trayectoria: <><path d="M3 17l6-6 4 4 8-9" /><path d="M15 6h6v6" /></>,
+  panel: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>,
+  rangos: <path d="M6 11l6-6 6 6M6 19l6-6 6 6" />,
+  mas: <><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></>,
+  desgaste: <path d="M3 12h4l3-7 4 14 3-7h4" />,
+  clasificacion: <><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4" /></>,
+  social: <><circle cx="9" cy="8" r="3" /><path d="M3 20a6 6 0 0 1 12 0" /><circle cx="17" cy="9" r="2.5" /><path d="M16 14a5 5 0 0 1 6 5" /></>,
+  asignaturas: <><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></>,
+  excel: <path d="M12 4v11M8 11l4 4 4-4M5 20h14" />,
+  novedades: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />,
+  reportar: <path d="M5 21V4M5 4h11l-2 4 2 4H5" />,
+  flecha: <path d="M9 6l6 6-6 6" />,
+  volver: <path d="M15 6l-6 6 6 6" />,
+};
+
+function NavIcon({ name, size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {NAV_ICON_PATHS[name]}
+    </svg>
+  );
+}
+
+const BOTTOM_TABS = [
+  { id: "bitacora", label: "Bitácora" },
+  { id: "trayectoria", label: "Trayect." },
+  { id: "panel", label: "Panel" },
+  { id: "rangos", label: "Rangos" },
+];
+
+/** Barra inferior fija del móvil: 4 secciones + "Más". */
+function BottomNav({ tab, moreOpen, newsDot, onSelect, onMore }) {
+  const masActive = moreOpen || !BOTTOM_TABS.some((t) => t.id === tab);
+  return (
+    <nav className="bottom-nav" aria-label="Navegación principal">
+      {BOTTOM_TABS.map((t) => {
+        const active = !moreOpen && tab === t.id;
+        return (
+          <button key={t.id} className={`bn-item ${active ? "bn-active" : ""}`} onClick={() => onSelect(t.id)} aria-current={active ? "page" : undefined}>
+            <span className="bn-icon"><NavIcon name={t.id} /></span>
+            <span className="bn-label">{t.label}</span>
+          </button>
+        );
+      })}
+      <button className={`bn-item ${masActive ? "bn-active" : ""}`} onClick={onMore} aria-expanded={moreOpen}>
+        <span className="bn-icon">
+          <NavIcon name="mas" />
+          {newsDot && <span className="bn-dot" />}
+        </span>
+        <span className="bn-label">Más</span>
+      </button>
+    </nav>
+  );
+}
+
+function MoreRow({ icon, children, pill, dot, disabled, title, onClick }) {
+  return (
+    <button className="more-row" onClick={onClick} disabled={disabled} title={title}>
+      <span className="more-row-icon"><NavIcon name={icon} size={20} /></span>
+      <span className="more-row-text">{children}</span>
+      {pill && <span className="pronto-pill">PRONTO</span>}
+      {dot && <span className="bn-dot bn-dot-inline" />}
+      <span className="more-row-arrow"><NavIcon name="flecha" size={18} /></span>
+    </button>
+  );
+}
+
+/** Panel "Más" (móvil): sube desde abajo con Secciones y Herramientas. */
+function MoreSheet({ onClose, onGo, newsDot, isPremium, exportBusy, onExport, onNews, onReport }) {
+  return (
+    <div className="more-overlay" onClick={onClose}>
+      <div className="more-sheet" role="dialog" aria-label="Más" onClick={(e) => e.stopPropagation()}>
+        <div className="more-handle" />
+        <div className="more-section">SECCIONES</div>
+        <MoreRow icon="desgaste" onClick={() => onGo("desgaste")}>Desgaste</MoreRow>
+        <MoreRow icon="clasificacion" onClick={() => onGo("clasificacion")}>Clasificación</MoreRow>
+        <MoreRow icon="social" pill onClick={() => onGo("social")}>Social</MoreRow>
+        <div className="more-divider" />
+        <div className="more-section">HERRAMIENTAS</div>
+        <MoreRow icon="asignaturas" onClick={() => onGo("asignaturas")}>Mis asignaturas</MoreRow>
+        <MoreRow
+          icon="excel" onClick={onExport} disabled={!isPremium || exportBusy}
+          title={isPremium ? undefined : "Exportar a Excel está disponible en los planes de pago"}
+        >
+          {exportBusy ? "Generando…" : "Exportar a Excel"}
+        </MoreRow>
+        <MoreRow icon="novedades" dot={newsDot} onClick={onNews}>Novedades</MoreRow>
+        <MoreRow icon="reportar" onClick={onReport}>Reportar un problema</MoreRow>
+      </div>
+    </div>
+  );
+}
+
+/** Social: por ahora solo un aviso "Próximamente" con vista previa sin cifras. */
+function SocialTab({ onBack }) {
+  return (
+    <div className="social-wrap">
+      <div className="social-head">
+        {onBack && (
+          <button className="social-back" onClick={onBack} aria-label="Volver a Más"><NavIcon name="volver" /></button>
+        )}
+        <h2 className="social-title">Social</h2>
+        <span className="pronto-pill pronto-pill-big">PRÓXIMAMENTE</span>
+      </div>
+      <div className="panel social-card">
+        <svg width="160" height="120" viewBox="0 0 160 120" fill="none" aria-hidden="true">
+          <ellipse cx="80" cy="60" rx="70" ry="26" stroke="#24406b" strokeWidth="1.5" transform="rotate(-18 80 60)" />
+          <ellipse cx="80" cy="60" rx="46" ry="16" stroke="#2a4f7f" strokeWidth="1.5" transform="rotate(-18 80 60)" />
+          <circle cx="80" cy="60" r="10" fill="#4dd8ee" />
+          <circle cx="141" cy="42" r="6" fill="#f472b6" />
+          <circle cx="24" cy="80" r="5" fill="#fbbf24" />
+          <circle cx="112" cy="72" r="4" fill="#8a93f0" />
+        </svg>
+        <p className="social-text">Compara tus estadísticas con las de otros usuarios y descubre las asignaturas más difíciles de tu carrera.</p>
+      </div>
+      <div className="social-preview" aria-hidden="true">
+        <div className="social-preview-label">VISTA PREVIA</div>
+        {[[120, 78, 58], [150, 46, 64], [96, 88, 70]].map(([w, a, b], i) => (
+          <div key={i} className="social-bars">
+            <div className="sb sb-title" style={{ width: w }} />
+            <div className="sb sb-cyan" style={{ width: `${a}%` }} />
+            <div className="sb sb-dim" style={{ width: `${b}%` }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const ESTADO_LABELS = { en_curso: "En curso", suspendida: "Suspendida", aprobada: "Aprobada" };
 
 function EstadoBadge({ estado }) {
@@ -495,22 +640,38 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
   }
 
   // "Registros de hoy": un total por asignatura del día viewDate, cada uno
-  // con las sesiones (entradas) que lo componen, de la más antigua a la última.
+  // con las sesiones (entradas) que lo componen, de la más reciente a la más
+  // antigua; los grupos, con la asignatura de la sesión más reciente arriba.
   const viewDayGroups = cursoSubjects
     .map((subject) => {
       const sessions = logs
         .filter((l) => l.date === viewDate && l.subjectId === subject.id)
-        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
       return { subject, sessions, total: sessions.reduce((acc, l) => acc + l.minutes, 0) };
     })
-    .filter((g) => g.sessions.length > 0);
+    .filter((g) => g.sessions.length > 0)
+    .sort((a, b) => (a.sessions[0].createdAt < b.sessions[0].createdAt ? 1 : a.sessions[0].createdAt > b.sessions[0].createdAt ? -1 : 0));
   const viewDayTotal = viewDayGroups.reduce((acc, g) => acc + g.total, 0);
   const viewDayLabel = viewDate === todayIso ? "Registros de hoy" : `Registros del ${formatShort(viewDate)}`;
 
   // "Últimos registros": total por día y asignatura (como siempre).
   const historySubject = historySubjectId !== HISTORY_ALL ? cursoSubjects.find((s) => s.id === historySubjectId) : null;
+  // En el histórico de todas las asignaturas, dentro de cada día va arriba la
+  // asignatura con la sesión más reciente (los días ya bajan de más nuevo a más viejo).
   const history = historySubjectId === HISTORY_ALL
-    ? getAllEntriesFlat(cursoSubjects, entries, "desc")
+    ? (() => {
+        const ultimaSesion = new Map();
+        logs.forEach((l) => {
+          const k = `${l.date}|${l.subjectId}`;
+          if (!ultimaSesion.has(k) || l.createdAt > ultimaSesion.get(k)) ultimaSesion.set(k, l.createdAt);
+        });
+        return getAllEntriesFlat(cursoSubjects, entries, "desc").sort((a, b) => {
+          if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+          const ua = ultimaSesion.get(`${a.date}|${a.subjectId}`) || "";
+          const ub = ultimaSesion.get(`${b.date}|${b.subjectId}`) || "";
+          return ua < ub ? 1 : ua > ub ? -1 : 0;
+        });
+      })()
     : (historySubject ? getSubjectEntries(entries, historySubject.id, "desc") : []);
 
   function openDayInView(day, subjectId) {
@@ -754,7 +915,8 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
 /* ------------------------------------------------------------------ */
 
 function PanelTab({ stats }) {
-  const maxHoursPerCredit = Math.max(0.5, ...stats.perSubject.map((s) => s.hoursPerCredit), ...stats.perSubject.map((s) => s.target || 0)) * 1.15;
+  const conRatio = stats.perSubject.filter((s) => !s.sinCreditos);
+  const maxHoursPerCredit = Math.max(0.5, ...conRatio.map((s) => s.hoursPerCredit), ...conRatio.map((s) => s.target || 0)) * 1.15;
   const maxSessionSub = stats.perSubject.find((s) => s.id === stats.maxSession.subjectId) || null;
 
   return (
@@ -786,7 +948,7 @@ function PanelTab({ stats }) {
       <div className="panel">
         <div className="panel-title">Instrumentos de esfuerzo — horas por crédito</div>
         <div className="panel-subtitle">La marca vertical indica tu referencia (editable en Asignaturas). Compárala con cursos anteriores para saber si tienes que meterle caña.</div>
-        {stats.perSubject.map((s) => (
+        {conRatio.map((s) => (
           <Gauge
             key={s.id}
             label={s.name}
@@ -821,10 +983,10 @@ function PanelTab({ stats }) {
                 <tr key={s.id}>
                   <td><span className="dot" style={{ background: s.color }} />{s.name}</td>
                   <td><EstadoBadge estado={s.estado} /></td>
-                  <td className="mono">{s.credits}</td>
+                  <td className="mono">{s.sinCreditos ? "—" : s.credits}</td>
                   <td className="mono">{hm(s.total)}</td>
                   <td className="mono">{s.pct.toFixed(1)}%</td>
-                  <td className="mono">{s.hoursPerCredit.toFixed(2)}</td>
+                  <td className="mono">{s.sinCreditos ? "sin créditos" : s.hoursPerCredit.toFixed(2)}</td>
                   <td className="mono">{hm(s.avgActiveDay)}</td>
                   <td className="mono" style={{ color: s.daysSince > 7 ? "#FF5C5C" : s.daysSince > 3 ? "#F5A623" : "#8291AC" }}>
                     {s.daysSince != null ? `${s.daysSince} d` : "—"}
@@ -901,7 +1063,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
 
   const pieData = stats.perSubject.filter((s) => s.total > 0).map((s) => ({ name: s.name, value: s.total, color: s.color }));
 
-  const barData = stats.perSubject.map((s) => ({
+  const barData = stats.perSubject.filter((s) => !s.sinCreditos).map((s) => ({
     name: s.name.length > 12 ? s.name.slice(0, 12) + "…" : s.name,
     fullName: s.name,
     horasPorCredito: +s.hoursPerCredit.toFixed(2),
@@ -1878,7 +2040,7 @@ function ClasificacionTab({ subjects, entries }) {
   const [shareError, setShareError] = useState(null);
   const shareCardRef = useRef(null);
 
-  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen);
+  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen && !s.sinCreditos);
 
   const rows = useMemo(() => {
     const list = approved.map((s) => {
@@ -2240,8 +2402,8 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
 const SUPPORT_EMAIL = "cleverapp2026@gmail.com";
 
 const TAB_LABELS = {
-  bitacora: "Bitácora", panel: "Panel", trayectoria: "Trayectoria", desgaste: "Desgaste",
-  clasificacion: "Clasificación", asignaturas: "Asignaturas",
+  bitacora: "Bitácora", rangos: "Rangos", panel: "Panel", trayectoria: "Trayectoria", desgaste: "Desgaste",
+  clasificacion: "Clasificación", social: "Social", asignaturas: "Asignaturas",
 };
 
 /** Prepara un correo a SUPPORT_EMAIL con la descripción del usuario y,
@@ -2322,7 +2484,7 @@ function BugReportModal({ onClose, userId, tab }) {
 // NEWS_MAX_SHOWS entradas a la app (por cuenta y dispositivo), salvo que
 // el usuario marque "No volver a mostrar". Para anunciar otra novedad en
 // el futuro basta con cambiar NEWS_VERSION y el contenido.
-const NEWS_VERSION = "2026-09-rangos";
+const NEWS_VERSION = "2026-09-navegacion";
 const NEWS_MAX_SHOWS = 3;
 const newsCountedThisLoad = new Set(); // evita contar dos veces la misma carga
 
@@ -2347,6 +2509,18 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
   return (
     <Modal title="🚀 Novedades en Clever" onClose={() => onClose(dontShow)} wide>
       <div className="news">
+        <section className="news-item">
+          <div className="news-icon">🧭</div>
+          <div>
+            <div className="news-title">Nuevo orden y navegación móvil</div>
+            <ul className="news-list">
+              <li>Las secciones van ahora en este orden: <strong>Bitácora, Trayectoria, Panel, Rangos, Desgaste, Clasificación, Social y Asignaturas</strong>.</li>
+              <li>En el móvil hay una <strong>barra inferior</strong> con Bitácora, Trayectoria, Panel, Rangos y <strong>Más</strong>; el menú de cuenta ahora está en el círculo con tu inicial.</li>
+              <li>Nueva sección <strong>Social</strong> (próximamente): compararás tus estadísticas con las de otros usuarios.</li>
+              <li>Los registros ahora salen de <strong>más reciente a más antiguo</strong>.</li>
+            </ul>
+          </div>
+        </section>
         <section className="news-item">
           <div className="news-icon">🎉</div>
           <div>
@@ -2430,6 +2604,9 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [reportOpen, setReportOpen] = useState(false);
   // null = cerrado; "auto" = abierto solo al entrar; "manual" = desde el menú
   const [newsOpen, setNewsOpen] = useState(null);
+  const isMobile = useIsMobile();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [newsSeen, setNewsSeen] = useState(() => Boolean(readNewsState(session.user.id).seen));
 
   useEffect(() => {
     const userIdForNews = session.user.id;
@@ -2442,7 +2619,8 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   }, [session.user.id]);
 
   function closeNews(dontShowAgain) {
-    if (dontShowAgain) writeNewsState(session.user.id, { ...readNewsState(session.user.id), dismissed: true });
+    writeNewsState(session.user.id, { ...readNewsState(session.user.id), seen: true, ...(dontShowAgain ? { dismissed: true } : {}) });
+    setNewsSeen(true);
     setNewsOpen(null);
   }
   const menuRef = useRef(null);
@@ -2796,12 +2974,12 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           </select>
           <div className="account-menu" ref={menuRef}>
             <button
-              className="btn-ghost btn-small menu-trigger"
+              className={isMobile ? `profile-btn ${menuOpen ? "profile-btn-open" : ""}` : "btn-ghost btn-small menu-trigger"}
               onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Menú de cuenta"
+              aria-label={isMobile ? "Perfil" : "Menú de cuenta"}
               aria-expanded={menuOpen}
             >
-              ☰
+              {isMobile ? (session.user.email || "?").charAt(0).toUpperCase() : "☰"}
             </button>
             {menuOpen && (
               <div className="account-dropdown">
@@ -2820,27 +2998,40 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
                     {passkeyMsg}
                   </div>
                 )}
-                <button
+                {!isMobile && <button
                   className="account-dropdown-row"
                   onClick={() => { setMenuOpen(false); handleExportExcel(); }}
                   disabled={!isPremium || exportBusy}
                   title={isPremium ? `Descarga un Excel del curso ${curso?.name ?? "actual"}: registro diario, resumen con fórmulas y gráficas` : "Exportar a Excel está disponible en los planes de pago"}
                 >
                   📊 {exportBusy ? "Generando…" : "Exportar a Excel"}
-                </button>
+                </button>}
                 {exportError && <div className="account-dropdown-note account-dropdown-note-error">⚠ {exportError}</div>}
-                <button
-                  className="account-dropdown-row"
-                  onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-                >
-                  {theme === "dark" ? "☀️ Modo claro" : "🌙 Modo oscuro"}
-                </button>
-                <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setNewsOpen("manual"); }}>
-                  🚀 Novedades
-                </button>
-                <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setReportOpen(true); }}>
-                  🐞 Reportar un problema
-                </button>
+                {isMobile ? (
+                  <div className="account-dropdown-row account-dropdown-switch">
+                    <span>Modo oscuro</span>
+                    <button
+                      type="button" role="switch" aria-checked={theme === "dark"} aria-label="Modo oscuro"
+                      className={`switch ${theme === "dark" ? "switch-on" : ""}`}
+                      onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                    ><span className="switch-knob" /></button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      className="account-dropdown-row"
+                      onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                    >
+                      {theme === "dark" ? "☀️ Modo claro" : "🌙 Modo oscuro"}
+                    </button>
+                    <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setNewsOpen("manual"); }}>
+                      🚀 Novedades
+                    </button>
+                    <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setReportOpen(true); }}>
+                      🐞 Reportar un problema
+                    </button>
+                  </>
+                )}
                 <button className="account-dropdown-row" onClick={onSignOut}>Cerrar sesión</button>
                 <div className="account-dropdown-divider" />
                 <button
@@ -2906,15 +3097,20 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
         </div>
       )}
 
-      <nav className="tab-bar">
-        <Tab id="bitacora" active={tab === "bitacora"} onClick={setTab}>Bitácora</Tab>
-        <Tab id="rangos" active={tab === "rangos"} onClick={setTab}>Rangos</Tab>
-        <Tab id="panel" active={tab === "panel"} onClick={setTab}>Panel</Tab>
-        <Tab id="trayectoria" active={tab === "trayectoria"} onClick={setTab}>Trayectoria</Tab>
-        <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
-        <Tab id="clasificacion" active={tab === "clasificacion"} onClick={setTab}>Clasificación</Tab>
-        <Tab id="asignaturas" active={tab === "asignaturas"} onClick={setTab}>Asignaturas</Tab>
-      </nav>
+      {!isMobile && (
+        <nav className="tab-bar">
+          <Tab id="bitacora" active={tab === "bitacora"} onClick={setTab}>Bitácora</Tab>
+          <Tab id="trayectoria" active={tab === "trayectoria"} onClick={setTab}>Trayectoria</Tab>
+          <Tab id="panel" active={tab === "panel"} onClick={setTab}>Panel</Tab>
+          <Tab id="rangos" active={tab === "rangos"} onClick={setTab}>Rangos</Tab>
+          <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
+          <Tab id="clasificacion" active={tab === "clasificacion"} onClick={setTab}>Clasificación</Tab>
+          <Tab id="social" active={tab === "social"} onClick={setTab}>
+            Social <span className="pronto-pill pronto-pill-tab">PRONTO</span>
+          </Tab>
+          <Tab id="asignaturas" active={tab === "asignaturas"} onClick={setTab}>Asignaturas</Tab>
+        </nav>
+      )}
 
       <main className="app-main">
         {tab === "bitacora" && (
@@ -2938,6 +3134,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             ? <ClasificacionTab subjects={data.subjects} entries={data.entries} />
             : <PremiumLocked feature="la Clasificación histórica" />
         )}
+        {tab === "social" && <SocialTab onBack={isMobile ? () => setMoreOpen(true) : null} />}
         {tab === "asignaturas" && (
           <AsignaturasTab
             subjects={data.subjects}
@@ -2958,6 +3155,30 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           />
         )}
       </main>
+
+      {isMobile && (
+        <>
+          <BottomNav
+            tab={tab}
+            moreOpen={moreOpen}
+            newsDot={!newsSeen}
+            onSelect={(id) => { setMoreOpen(false); setTab(id); }}
+            onMore={() => setMoreOpen((v) => !v)}
+          />
+          {moreOpen && (
+            <MoreSheet
+              onClose={() => setMoreOpen(false)}
+              onGo={(id) => { setMoreOpen(false); setTab(id); }}
+              newsDot={!newsSeen}
+              isPremium={isPremium}
+              exportBusy={exportBusy}
+              onExport={() => { setMoreOpen(false); handleExportExcel(); }}
+              onNews={() => { setMoreOpen(false); setNewsOpen("manual"); }}
+              onReport={() => { setMoreOpen(false); setReportOpen(true); }}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -3126,6 +3347,87 @@ export const CSS = `
   .tab-btn-active { color: var(--bg); background: var(--cyan); border-color: var(--cyan); font-weight: 700; }
 
   .app-main { max-width: 1080px; margin: 0 auto; }
+
+  /* ---- Social (próximamente) ---- */
+  .pronto-pill {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--cyan); color: var(--cyan);
+    font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  }
+  .pronto-pill-tab { margin-left: 6px; padding: 1px 6px; font-size: 9px; }
+  .tab-btn-active .pronto-pill-tab { color: var(--bg); border-color: var(--bg); }
+  .pronto-pill-big { padding: 5px 10px; font-size: 11px; }
+  .social-wrap { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
+  .social-head { display: flex; align-items: center; gap: 12px; }
+  .social-title { flex: 1; margin: 0; font-size: 26px; font-weight: 700; }
+  .social-back { width: 44px; height: 44px; margin-left: -10px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-dim); cursor: pointer; }
+  .social-card { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 24px 20px; }
+  .social-text { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text-dim); }
+  .social-preview { border: 1px dashed var(--border); border-radius: 20px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; filter: blur(0.5px); }
+  .social-preview-label { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--text-dim); }
+  .social-bars { display: flex; flex-direction: column; gap: 6px; }
+  .sb { height: 10px; border-radius: 5px; }
+  .sb-title { background: var(--border); }
+  .sb-cyan { background: var(--cyan); opacity: 0.55; }
+  .sb-dim { background: var(--panel-2); }
+
+  /* ---- Navegación móvil: barra inferior, panel "Más" y perfil ---- */
+  .bottom-nav, .more-overlay { display: none; }
+  .profile-btn {
+    width: 44px; height: 44px; border-radius: 22px; padding: 0; cursor: pointer; font-size: 17px; font-weight: 700;
+    background: #12314a; color: var(--cyan); border: 1px solid #24406b;
+  }
+  .profile-btn-open { border: 2px solid var(--cyan); }
+  .account-dropdown-switch { display: flex; align-items: center; justify-content: space-between; cursor: default; }
+  .switch { position: relative; width: 48px; height: 28px; padding: 0; border: 0; border-radius: 14px; background: var(--border); cursor: pointer; }
+  .switch-on { background: var(--cyan); }
+  .switch-knob { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 11px; background: #06121f; transition: left 0.15s ease; }
+  .switch-on .switch-knob { left: 23px; }
+  @media (max-width: 640px) {
+    .app-shell { padding-bottom: 100px; }
+    .app-header { flex-wrap: nowrap; gap: 10px; padding-bottom: 12px; }
+    .app-header .header-right { width: auto; flex-wrap: nowrap; gap: 8px; }
+    .brand { flex: 1; }
+    .brand-name { font-size: 24px; }
+    .brand-sub { font-size: 10px; letter-spacing: 0.1em; }
+    .brand-sub-line { display: none; }
+    .curso-select { height: 44px; font-size: 13px; padding: 0 8px; border-radius: 12px; }
+    .account-dropdown { position: fixed; top: 76px; right: 12px; width: 300px; max-width: calc(100vw - 24px); }
+    .account-dropdown-row { min-height: 44px; font-size: 16px; }
+
+    .bottom-nav {
+      display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; height: 76px; box-sizing: border-box;
+      padding: 6px 4px 14px; background: var(--panel); border-top: 1px solid var(--border);
+    }
+    .bn-item {
+      flex: 1 1 0; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0;
+    }
+    .bn-icon { position: relative; width: 52px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; }
+    .bn-label { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .bn-active { color: var(--cyan); }
+    .bn-active .bn-icon { background: #12314a; }
+    .bn-active .bn-label { font-weight: 600; }
+    .bn-dot { position: absolute; top: 2px; right: 10px; width: 8px; height: 8px; border-radius: 4px; background: var(--cyan); border: 2px solid var(--panel); box-sizing: content-box; }
+    .bn-dot-inline { position: static; border: 0; width: 8px; height: 8px; }
+
+    .more-overlay { display: block; position: fixed; inset: 0; bottom: 76px; z-index: 35; background: rgba(0,0,0,0.72); }
+    .more-sheet {
+      position: absolute; left: 12px; right: 12px; bottom: 12px; box-sizing: border-box; padding: 10px 8px 8px;
+      border-radius: 22px; background: var(--panel); border: 1px solid var(--border); display: flex; flex-direction: column;
+      max-height: 100%; overflow-y: auto;
+    }
+    .more-handle { align-self: center; width: 36px; height: 4px; border-radius: 2px; background: var(--border); margin-bottom: 8px; }
+    .more-section { padding: 0 12px 6px; font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--text-dim); }
+    .more-divider { margin: 8px 12px 0; border-top: 1px solid var(--border); padding-bottom: 10px; }
+    .more-row {
+      min-height: 56px; padding: 0 12px; display: flex; align-items: center; gap: 14px; border-radius: 14px;
+      background: none; border: none; color: var(--text); font-size: 16px; text-align: left; cursor: pointer; width: 100%;
+    }
+    .more-row:disabled { opacity: 0.5; cursor: not-allowed; }
+    .more-row-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--panel-2); display: flex; align-items: center; justify-content: center; color: var(--cyan); flex-shrink: 0; }
+    .more-row-text { flex: 1; }
+    .more-row-arrow { color: var(--text-dim); display: flex; }
+  }
 
   .panel {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
