@@ -495,22 +495,38 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
   }
 
   // "Registros de hoy": un total por asignatura del día viewDate, cada uno
-  // con las sesiones (entradas) que lo componen, de la más antigua a la última.
+  // con las sesiones (entradas) que lo componen, de la más reciente a la más
+  // antigua; los grupos, con la asignatura de la sesión más reciente arriba.
   const viewDayGroups = cursoSubjects
     .map((subject) => {
       const sessions = logs
         .filter((l) => l.date === viewDate && l.subjectId === subject.id)
-        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
       return { subject, sessions, total: sessions.reduce((acc, l) => acc + l.minutes, 0) };
     })
-    .filter((g) => g.sessions.length > 0);
+    .filter((g) => g.sessions.length > 0)
+    .sort((a, b) => (a.sessions[0].createdAt < b.sessions[0].createdAt ? 1 : a.sessions[0].createdAt > b.sessions[0].createdAt ? -1 : 0));
   const viewDayTotal = viewDayGroups.reduce((acc, g) => acc + g.total, 0);
   const viewDayLabel = viewDate === todayIso ? "Registros de hoy" : `Registros del ${formatShort(viewDate)}`;
 
   // "Últimos registros": total por día y asignatura (como siempre).
   const historySubject = historySubjectId !== HISTORY_ALL ? cursoSubjects.find((s) => s.id === historySubjectId) : null;
+  // En el histórico de todas las asignaturas, dentro de cada día va arriba la
+  // asignatura con la sesión más reciente (los días ya bajan de más nuevo a más viejo).
   const history = historySubjectId === HISTORY_ALL
-    ? getAllEntriesFlat(cursoSubjects, entries, "desc")
+    ? (() => {
+        const ultimaSesion = new Map();
+        logs.forEach((l) => {
+          const k = `${l.date}|${l.subjectId}`;
+          if (!ultimaSesion.has(k) || l.createdAt > ultimaSesion.get(k)) ultimaSesion.set(k, l.createdAt);
+        });
+        return getAllEntriesFlat(cursoSubjects, entries, "desc").sort((a, b) => {
+          if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+          const ua = ultimaSesion.get(`${a.date}|${a.subjectId}`) || "";
+          const ub = ultimaSesion.get(`${b.date}|${b.subjectId}`) || "";
+          return ua < ub ? 1 : ua > ub ? -1 : 0;
+        });
+      })()
     : (historySubject ? getSubjectEntries(entries, historySubject.id, "desc") : []);
 
   function openDayInView(day, subjectId) {
@@ -754,7 +770,8 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
 /* ------------------------------------------------------------------ */
 
 function PanelTab({ stats }) {
-  const maxHoursPerCredit = Math.max(0.5, ...stats.perSubject.map((s) => s.hoursPerCredit), ...stats.perSubject.map((s) => s.target || 0)) * 1.15;
+  const conRatio = stats.perSubject.filter((s) => !s.sinCreditos);
+  const maxHoursPerCredit = Math.max(0.5, ...conRatio.map((s) => s.hoursPerCredit), ...conRatio.map((s) => s.target || 0)) * 1.15;
   const maxSessionSub = stats.perSubject.find((s) => s.id === stats.maxSession.subjectId) || null;
 
   return (
@@ -786,7 +803,7 @@ function PanelTab({ stats }) {
       <div className="panel">
         <div className="panel-title">Instrumentos de esfuerzo — horas por crédito</div>
         <div className="panel-subtitle">La marca vertical indica tu referencia (editable en Asignaturas). Compárala con cursos anteriores para saber si tienes que meterle caña.</div>
-        {stats.perSubject.map((s) => (
+        {conRatio.map((s) => (
           <Gauge
             key={s.id}
             label={s.name}
@@ -821,10 +838,10 @@ function PanelTab({ stats }) {
                 <tr key={s.id}>
                   <td><span className="dot" style={{ background: s.color }} />{s.name}</td>
                   <td><EstadoBadge estado={s.estado} /></td>
-                  <td className="mono">{s.credits}</td>
+                  <td className="mono">{s.sinCreditos ? "—" : s.credits}</td>
                   <td className="mono">{hm(s.total)}</td>
                   <td className="mono">{s.pct.toFixed(1)}%</td>
-                  <td className="mono">{s.hoursPerCredit.toFixed(2)}</td>
+                  <td className="mono">{s.sinCreditos ? "sin créditos" : s.hoursPerCredit.toFixed(2)}</td>
                   <td className="mono">{hm(s.avgActiveDay)}</td>
                   <td className="mono" style={{ color: s.daysSince > 7 ? "#FF5C5C" : s.daysSince > 3 ? "#F5A623" : "#8291AC" }}>
                     {s.daysSince != null ? `${s.daysSince} d` : "—"}
@@ -901,7 +918,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
 
   const pieData = stats.perSubject.filter((s) => s.total > 0).map((s) => ({ name: s.name, value: s.total, color: s.color }));
 
-  const barData = stats.perSubject.map((s) => ({
+  const barData = stats.perSubject.filter((s) => !s.sinCreditos).map((s) => ({
     name: s.name.length > 12 ? s.name.slice(0, 12) + "…" : s.name,
     fullName: s.name,
     horasPorCredito: +s.hoursPerCredit.toFixed(2),
@@ -1878,7 +1895,7 @@ function ClasificacionTab({ subjects, entries }) {
   const [shareError, setShareError] = useState(null);
   const shareCardRef = useRef(null);
 
-  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen);
+  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen && !s.sinCreditos);
 
   const rows = useMemo(() => {
     const list = approved.map((s) => {

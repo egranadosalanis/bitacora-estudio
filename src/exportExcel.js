@@ -207,7 +207,7 @@ function buildResumenSheet(workbook, { subjects, stats, globalEntries, numDates 
 
     r.getCell(1).value = s.name;
     r.getCell(2).value = ESTADO_LABELS[s.estado] || s.estado;
-    r.getCell(3).value = s.credits;
+    r.getCell(3).value = s.sinCreditos ? null : s.credits;
 
     r.getCell(4).value = numDates > 0
       ? { formula: `SUM('Registro diario'!${rangeRow})/60`, result: +(stat.total / 60).toFixed(2) }
@@ -221,7 +221,9 @@ function buildResumenSheet(workbook, { subjects, stats, globalEntries, numDates 
       : 0;
     r.getCell(5).numFmt = "0.00";
 
-    r.getCell(6).value = { formula: `IF(C${row}=0,0,D${row}/C${row})`, result: +stat.hoursPerCredit.toFixed(2) };
+    r.getCell(6).value = s.sinCreditos
+      ? "sin créditos"
+      : { formula: `IF(C${row}=0,0,D${row}/C${row})`, result: +stat.hoursPerCredit.toFixed(2) };
     r.getCell(6).numFmt = "0.00";
 
     r.getCell(7).value = { formula: `IF($D$${firstRow + subjects.length}=0,0,D${row}/$D$${firstRow + subjects.length})`, result: +(stat.pct / 100).toFixed(4) };
@@ -246,7 +248,7 @@ function buildResumenSheet(workbook, { subjects, stats, globalEntries, numDates 
   const tr = sheet.getRow(totalRow);
   tr.getCell(1).value = "Total";
   tr.getCell(1).font = { bold: true };
-  tr.getCell(3).value = { formula: `SUM(C${firstRow}:C${totalRow - 1})`, result: subjects.reduce((a, s) => a + (s.credits || 0), 0) };
+  tr.getCell(3).value = { formula: `SUM(C${firstRow}:C${totalRow - 1})`, result: subjects.reduce((a, s) => a + (s.sinCreditos ? 0 : s.credits || 0), 0) };
   tr.getCell(4).value = { formula: `SUM(D${firstRow}:D${totalRow - 1})`, result: +(stats.globalTotal / 60).toFixed(2) };
   tr.getCell(4).numFmt = "0.00";
   tr.getCell(7).value = { formula: `SUM(G${firstRow}:G${totalRow - 1})`, result: 1 };
@@ -270,7 +272,7 @@ async function buildGraficosSheet(workbook, ChartJS, { stats, dates }) {
   const sheet = workbook.addWorksheet("Gráficos");
   sheet.columns = [{ width: 14 }];
 
-  const withCredits = stats.perSubject.filter((s) => s.credits > 0);
+  const withCredits = stats.perSubject.filter((s) => s.credits > 0 && !s.sinCreditos);
   const withHours = stats.perSubject.filter((s) => s.total > 0);
 
   let nextRow = 1;

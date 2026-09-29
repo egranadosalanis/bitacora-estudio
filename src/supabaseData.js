@@ -31,6 +31,8 @@ function rowToSubject(s) {
     originCursoId: s.origin_curso_id,
     asignaturaCanonicaId: s.asignatura_canonica_id,
     esErasmus: s.es_erasmus,
+    // Marca puesta por el admin en la canónica: se lee en directo, no se copia.
+    sinCreditos: s.asignaturas_canonicas?.no_credits === true,
     canonicalEstado,
     vinculadaValida,
     frozen: s.estado === "aprobada"
@@ -81,7 +83,7 @@ async function fetchAllEntradas(userId) {
 export async function loadUserData(userId) {
   const [cursosRes, asigRes, entradas] = await Promise.all([
     supabase.from("cursos").select("*").eq("user_id", userId),
-    supabase.from("asignaturas").select("*, asignaturas_canonicas(estado, nombre_oficial)").eq("user_id", userId),
+    supabase.from("asignaturas").select("*, asignaturas_canonicas(estado, nombre_oficial, no_credits)").eq("user_id", userId),
     fetchAllEntradas(userId),
   ]);
   if (cursosRes.error) throw cursosRes.error;

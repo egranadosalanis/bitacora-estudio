@@ -137,7 +137,7 @@ function HistoricoCompleto({ asignaturas, registros }) {
   );
 }
 
-export default function UserDetail({ userId, onBack }) {
+export default function UserDetail({ userId, onBack, backLabel = "Volver a usuarios" }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -151,7 +151,7 @@ export default function UserDetail({ userId, onBack }) {
 
   return (
     <>
-      <button className="btn back-btn" onClick={onBack}>← Volver a usuarios</button>
+      <button className="btn back-btn" onClick={onBack}>← {backLabel}</button>
 
       <div className="drawer-header">
         <div>
