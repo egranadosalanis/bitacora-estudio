@@ -1084,16 +1084,7 @@ function DetalleAprobado({ canonicaId, username }) {
 
   if (error) return <div className="auth-error">{error}</div>;
   if (!data) return <div className="sc-hint">Cargando…</div>;
-  const eq = data.equivalentes ?? [];
-  const line = (a, tag) => (
-    <tr key={`${tag}-${a.nombre}`}>
-      <td><span className="sc-det-tag">{tag}</span> {a.nombre}</td>
-      <td>{fmtNum(a.horas_por_credito)}</td>
-      <td>{a.nota == null ? "—" : fmtNum(a.nota, 1)}</td>
-      <td>{a.desgaste_maximo == null ? "—" : fmtNum(a.desgaste_maximo)}</td>
-      <td>{a.cursos_necesarios ?? "—"}</td>
-    </tr>
-  );
+  const filas = data.filas ?? [];
   return (
     <div className="sc-detail">
       <table className="sc-table">
@@ -1101,13 +1092,21 @@ function DetalleAprobado({ canonicaId, username }) {
           <tr><th>Asignatura</th><th>H/cr</th><th>Nota</th><th>Desgaste</th><th>Cursos</th></tr>
         </thead>
         <tbody>
-          {line(data.principal, "Aprobada")}
-          {eq.map((a) => line(a, "Erasmus"))}
+          {filas.map((a) => (
+            <tr key={a.tipo}>
+              <td>{a.tipo === "erasmus" && <span className="sc-det-tag">Erasmus</span>} {a.nombre}</td>
+              <td>{a.horas_por_credito == null ? "—" : fmtNum(a.horas_por_credito)}</td>
+              <td>{a.nota == null ? "—" : fmtNum(a.nota, 1)}</td>
+              <td>{a.desgaste_maximo == null ? "—" : fmtNum(a.desgaste_maximo)}</td>
+              <td>{a.cursos_necesarios ?? "—"}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
-      {eq.length > 0 && (
+      {filas.length > 1 && (
         <p className="sc-hint" style={{ margin: "8px 0 0" }}>
-          Las horas de la de Erasmus se suman a la asignatura aprobada: {fmtNum(data.horas_por_credito_total)} h/cr en total.
+          Las horas de Erasmus se suman a la asignatura: {fmtNum(data.horas_por_credito_total)} h/cr en total. La nota de
+          Erasmus no entra en las estadísticas de la comunidad.
         </p>
       )}
     </div>
