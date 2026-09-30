@@ -1,0 +1,6 @@
+-- Deshace 023: borra las universidades sembradas que no tengan carreras ni alias asociados.
+delete from public.universidades_canonicas u
+where u.origen = 'seed'
+  and u.nombre in ('Universidad Pablo de Olavide', 'Universidad de Huelva', 'Universidad de Granada', 'Universidad de Cádiz', 'Universidad de Almería', 'Universidad de Jaén', 'Universidad de Córdoba', 'Universidad Loyola Andalucía (Campus Sevilla)', 'Universidad Loyola Andalucía (Campus Córdoba)', 'Universidad de Málaga', 'Universidad de Cantabria', 'Universidad Internacional Menéndez Pelayo', 'Universidad Europea del Atlántico', 'Universidad de Zaragoza', 'Universidad San Jorge', 'Universitat de Barcelona', 'Universitat Autònoma de Barcelona', 'Universitat Politècnica de Catalunya', 'Universitat Pompeu Fabra', 'Universitat Ramon Llull', 'Universitat Oberta de Catalunya', 'Universitat Internacional de Catalunya', 'Universitat Abat Oliba CEU', 'Universitat de València', 'Universitat Politècnica de València', 'Universidad Católica de Valencia San Vicente Mártir', 'Universidad Europea de Valencia', 'Universidad CEU Cardenal Herrera', 'Universidad Internacional de Valencia')
+  and not exists (select 1 from public.carreras_canonicas c where c.universidad_id = u.id)
+  and not exists (select 1 from public.universidades_alias a where a.universidad_id = u.id);

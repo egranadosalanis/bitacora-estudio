@@ -50,6 +50,7 @@ export function buildFriendModel(resumen) {
     numSubjects: Number(resumen.n_asignaturas) || 0,
     hpcTotal: resumen.horas_por_credito == null ? null : Number(resumen.horas_por_credito),
     subjects,
+    logs,
     ...summarizeStudy(subjects, entries, logs),
   };
 }
