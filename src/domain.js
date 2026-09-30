@@ -704,7 +704,7 @@ export const RANK_QUIPS = [
   "Los pájaros te piden permiso.",
 ];
 // h/crédito mínimas de cada rango (el último, "Dios del cielo", no tiene techo).
-export const RANK_THRESHOLDS = [0, 2, 5, 9.5, 16, 25, 45];
+export const RANK_THRESHOLDS = [0, 5, 10, 15, 21, 32, 50];
 
 export function rankTierForHoursPerCredit(hpc) {
   let k = 0;
