@@ -749,11 +749,13 @@ export function rankTierForPoints(points) {
 
 /** Cifras de rango de una season concreta, calculadas siempre al vuelo a
  * partir de los registros reales (sin "cerrar" nada): los puntos son las
- * horas estudiadas dentro de la season, de todas las asignaturas (1 punto =
- * 1 hora), así todos suman lo mismo por cada hora que estudian. */
+ * horas estudiadas dentro de la season (1 punto = 1 hora), así todos suman
+ * lo mismo por cada hora que estudian. Las de Erasmus cuentan; las
+ * asignaturas sin créditos (marca del admin) no. */
 export function computeSeasonRango(subjects, entries, logs, season) {
-  const ids = new Set(subjects.map((s) => s.id));
-  const activeSubjects = subjectsWithActivityInRange(subjects, entries, season.startDate, season.endDate);
+  const contables = subjects.filter((s) => !s.sinCreditos);
+  const ids = new Set(contables.map((s) => s.id));
+  const activeSubjects = subjectsWithActivityInRange(contables, entries, season.startDate, season.endDate);
   const seasonEntries = entriesInRange(entries, season.startDate, season.endDate);
   let minutosTotales = 0;
   Object.values(seasonEntries).forEach((bySubject) => {

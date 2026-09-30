@@ -215,7 +215,7 @@ function RangoView({ subjects, entries, logs }) {
           suman lo mismo por hora estudiada.
         </p>
         <p className="rt-proghelp">
-          Ejemplo: 3 h en una asignatura y 2 h en otra son 5 puntos. Solo cuentan las horas registradas dentro de la season.
+          Ejemplo: 3 h en una asignatura y 2 h en otra son 5 puntos. Solo cuentan las horas registradas dentro de la season; las asignaturas sin créditos no puntúan.
         </p>
       </div>
 
