@@ -2589,6 +2589,12 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   // una antes de continuar. Una vez confirmado no vuelve a saltar dentro
   // de la misma sesión aunque borre esa asignatura después.
   const [subjectGateConfirmed, setSubjectGateConfirmed] = useState(false);
+  // Una vez mostrada la pantalla de añadir asignaturas, se mantiene abierta hasta pulsar
+  // "Continuar": si no, desaparecería al añadir la primera y no se podrían añadir más.
+  const [subjectGateOpen, setSubjectGateOpen] = useState(false);
+  useEffect(() => {
+    if (data && data.subjects.length === 0 && !subjectGateConfirmed) setSubjectGateOpen(true);
+  }, [data, subjectGateConfirmed]);
   const [theme, setTheme] = useState(
     () => (typeof window !== "undefined" && window.localStorage.getItem("clever_theme")) || "dark"
   );
@@ -2981,7 +2987,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     );
   }
 
-  if (data.subjects.length === 0 && !subjectGateConfirmed) {
+  if ((data.subjects.length === 0 || subjectGateOpen) && !subjectGateConfirmed) {
     return (
       <SelectSubjectsGate
         curso={curso}
