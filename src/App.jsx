@@ -2543,7 +2543,7 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
           <div>
             <div className="news-title">Nueva pestaña: Rangos</div>
             <ul className="news-list">
-              <li>Ya puedes ver tu <strong>rango de la season</strong> según tus h/crédito, tu <strong>racha</strong> de días seguidos estudiando y el <strong>historial</strong> de temporadas pasadas.</li>
+              <li>Ya puedes ver tu <strong>rango de la season</strong> según tus puntos, tu <strong>racha</strong> de días seguidos estudiando y el <strong>historial</strong> de temporadas pasadas.</li>
               <li>Las seasons duran un cuatrimestre cada una: <strong>Season 1</strong> de septiembre a febrero y <strong>Season 2</strong> de febrero a julio — son las mismas fechas para todo el mundo, como en un videojuego.</li>
               <li>Al terminar una season, su rango final queda guardado para siempre en el Historial y el rango vuelve a cero para la nueva.</li>
             </ul>

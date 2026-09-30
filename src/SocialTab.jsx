@@ -544,7 +544,7 @@ function RankLadderModal({ tier, onClose }) {
             <RankEmblem tier={t} size={40} />
             <div className="sc-lname"><strong>{RANK_NAMES[t]}</strong><span className="sc-dim">{RANK_QUIPS[t]}</span></div>
             <div className="sc-lth mono">
-              {t === RANK_THRESHOLDS.length - 1 ? `${RANK_THRESHOLDS[t]}+` : `${RANK_THRESHOLDS[t]} – ${RANK_THRESHOLDS[t + 1]}`}<br />h/cr
+              {t === RANK_THRESHOLDS.length - 1 ? `${RANK_THRESHOLDS[t]}+` : `${RANK_THRESHOLDS[t]} – ${RANK_THRESHOLDS[t + 1]}`}<br />pts
             </div>
           </div>
         ))}
@@ -594,7 +594,7 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
 
   const rows = [
     ["Rango", RANK_NAMES[own.tier], RANK_NAMES[model.tier]],
-    ["h/crédito (season)", fmtNum(own.hpcSeason), fmtNum(model.hpcSeason)],
+    ["Puntos de rango (season)", fmtNum(own.hpcSeason), fmtNum(model.hpcSeason)],
     ["Racha actual", `${own.streak} d`, `${model.streak} d`],
   ];
 
@@ -640,7 +640,7 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
       </div>
 
       <div className="sc-cards">
-        <StatCardSc label="H/CRÉDITO" value={fmtNum(model.hpcSeason)} hint="season actual (en curso)" />
+        <StatCardSc label="PUNTOS" value={fmtNum(model.hpcSeason)} hint="season actual (en curso)" />
         <StatCardSc label="MINUTOS TOTALES" value={hm(model.totalMinutes)} hint={`${model.totalMinutes.toLocaleString("es-ES")} min`} />
         <StatCardSc
           label="ASIGNATURAS" value={model.numSubjects} hint={showSubjects ? "ocultar desglose" : "ver desglose"}
@@ -697,7 +697,7 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
               <div className="sc-emblem-year-name mono">CURSO {year}</div>
               <div className="sc-emblems">
                 {items.map((h) => {
-                  const info = `${h.season.label} · ${RANK_NAMES[h.tier]} · ${fmtNum(h.hoursPerCredit)} h/crédito`;
+                  const info = `${h.season.label} · ${RANK_NAMES[h.tier]} · ${fmtNum(h.hoursPerCredit)} puntos`;
                   return (
                     <button
                       type="button" key={h.season.id} title={info} aria-label={info} aria-pressed={emblemId === h.season.id}
@@ -715,8 +715,8 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
           ))}
           <div className="sc-emblem-info" aria-live="polite">
             {emblemSel
-              ? <><strong style={{ color: TIER_COLORS[emblemSel.tier] }}>{RANK_NAMES[emblemSel.tier]}</strong> · {emblemSel.season.label} · <strong>{fmtNum(emblemSel.hoursPerCredit)} h/crédito</strong></>
-              : <span className="sc-dim">Toca o pasa el cursor por un emblema para ver su rango y sus h/crédito.</span>}
+              ? <><strong style={{ color: TIER_COLORS[emblemSel.tier] }}>{RANK_NAMES[emblemSel.tier]}</strong> · {emblemSel.season.label} · <strong>{fmtNum(emblemSel.hoursPerCredit)} puntos</strong></>
+              : <span className="sc-dim">Toca o pasa el cursor por un emblema para ver su rango y sus puntos.</span>}
           </div>
         </div>
       )}
