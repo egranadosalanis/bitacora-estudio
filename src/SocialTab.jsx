@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { RANK_NAMES, RANK_QUIPS, APP_SHARE_URL, hm, wearLabel } from "./domain.js";
+import { RANK_NAMES, RANK_QUIPS, APP_URL, hm, wearLabel } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
@@ -692,7 +692,7 @@ function AmigosSection({ perfil, subjects, entries, logs, pendingInvite, onInvit
   }
 
   async function shareInvite() {
-    const link = `${APP_SHARE_URL}/?invitar=${encodeURIComponent(perfil.username)}`;
+    const link = `${APP_URL}/?invitar=${encodeURIComponent(perfil.username)}`;
     const text = `Te invito a Clever, la bitácora de estudio. Únete y seremos amigos: ${link}`;
     setShareMsg(null);
     try {
