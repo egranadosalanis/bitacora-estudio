@@ -2234,7 +2234,7 @@ const DISABLE_CLOUD_SAVE = import.meta.env.VITE_DISABLE_CLOUD_SAVE === "true";
 /*  APP PRINCIPAL                                                      */
 /* ------------------------------------------------------------------ */
 
-function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
+function WelcomeCreateCurso({ onCreate }) {
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
 
   function updateName(name) {
@@ -2275,7 +2275,6 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
           >
             Crear curso
           </button>
-          <button className="btn-ghost" onClick={onSignOut}>Cerrar sesión ({email})</button>
         </div>
       </div>
     </div>
@@ -2952,7 +2951,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   }
 
   if (data && data.cursos.length === 0) {
-    return <WelcomeCreateCurso onCreate={handleAddCurso} onSignOut={onSignOut} email={session.user.email} />;
+    return <WelcomeCreateCurso onCreate={handleAddCurso} />;
   }
 
   if (!data && cloudError) {
