@@ -58,18 +58,32 @@ create policy "profiles_insert_own" on public.profiles
 
 -- ---------- 2. asignaturas ----------
 
+-- Una policy de asignaturas que consultara asignaturas directamente daría
+-- "infinite recursion", así que la comprobación va en funciones SECURITY
+-- DEFINER que solo devuelven un booleano sobre filas del propio usuario.
+create or replace function public.curso_es_mio(p_id uuid)
+returns boolean
+language sql stable security definer set search_path = public
+as $$ select exists (select 1 from public.cursos where id = p_id and user_id = auth.uid()) $$;
+
+create or replace function public.asignatura_es_mia(p_id uuid)
+returns boolean
+language sql stable security definer set search_path = public
+as $$ select exists (select 1 from public.asignaturas where id = p_id and user_id = auth.uid()) $$;
+
+revoke execute on function public.curso_es_mio(uuid) from public, anon, authenticated;
+revoke execute on function public.asignatura_es_mia(uuid) from public, anon, authenticated;
+grant execute on function public.curso_es_mio(uuid) to authenticated;
+grant execute on function public.asignatura_es_mia(uuid) to authenticated;
+
 drop policy if exists "asignaturas_all_own" on public.asignaturas;
 create policy "asignaturas_all_own" on public.asignaturas
   for all to authenticated
   using (auth.uid() = user_id)
   with check (
     auth.uid() = user_id
-    and (origin_curso_id is null or exists (
-      select 1 from public.cursos c where c.id = origin_curso_id and c.user_id = auth.uid()
-    ))
-    and (asignatura_equivalente_id is null or exists (
-      select 1 from public.asignaturas a where a.id = asignatura_equivalente_id and a.user_id = auth.uid()
-    ))
+    and (origin_curso_id is null or public.curso_es_mio(origin_curso_id))
+    and (asignatura_equivalente_id is null or public.asignatura_es_mia(asignatura_equivalente_id))
   );
 
 -- ---------- 3. canónicas y alias: solo vía funciones ----------

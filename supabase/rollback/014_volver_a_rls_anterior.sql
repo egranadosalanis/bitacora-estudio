@@ -30,3 +30,6 @@ create policy "asignaturas_alias_insert_auth" on public.asignaturas_alias
 alter function public.crear_universidad_pendiente(text, text) security invoker;
 alter function public.crear_carrera_pendiente(uuid, text) security invoker;
 alter function public.crear_asignatura_pendiente(uuid, text, numeric) security invoker;
+
+drop function if exists public.curso_es_mio(uuid);
+drop function if exists public.asignatura_es_mia(uuid);
