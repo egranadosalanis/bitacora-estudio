@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -19,7 +19,8 @@ import {
 import { supabase } from "./supabaseClient.js";
 import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from "./offline.js";
 import SocialTab, { SOCIAL_CSS, SocialSettingsModal } from "./SocialTab.jsx";
-import { readPendingInvite, clearPendingInvite } from "./socialData.js";
+import { readPendingInvite, clearPendingInvite, getMiPerfilSocial, photoUrl, GOOGLE_AVATAR_RE } from "./socialData.js";
+import { AccountAvatar, AVATAR_CSS } from "./Avatar.jsx";
 import RangosTab, { prefetchRangosImages } from "./RangosTab.jsx";
 
 /* ------------------------------------------------------------------ */
@@ -99,6 +100,11 @@ const NAV_ICON_PATHS = {
   novedades: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />,
   reportar: <path d="M5 21V4M5 4h11l-2 4 2 4H5" />,
   flecha: <path d="M9 6l6 6-6 6" />,
+  huella: <><path d="M12 11v3a5 5 0 0 1-1.5 3.6" /><path d="M8 11a4 4 0 0 1 8 0v1.5" /><path d="M5 12a7 7 0 0 1 14 0v1" /><path d="M9 19c1-1 1.5-2.4 1.5-4" /><path d="M15 12v3c0 2-.6 3.6-1.8 5" /></>,
+  sol: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
+  luna: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />,
+  salir: <><path d="M10 4H5v16h5" /><path d="M15 8l4 4-4 4M19 12H9" /></>,
+  borrar: <><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></>,
   volver: <path d="M15 6l-6 6 6 6" />,
   web: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a14 14 0 0 1 0 18" /><path d="M12 3a14 14 0 0 0 0 18" /></>,
 };
@@ -140,6 +146,25 @@ function BottomNav({ tab, moreOpen, newsDot, onSelect, onMore }) {
         <span className="bn-label">Más</span>
       </button>
     </nav>
+  );
+}
+
+/** Fila del menú de cuenta en PC: mismo estilo que el panel "Más" del móvil (icono + texto). */
+function AccRow({ icon, children, dot, disabled, danger, title, href, onClick }) {
+  const inner = (
+    <>
+      <span className="acc-icon"><NavIcon name={icon} size={16} /></span>
+      <span className="acc-text">{children}</span>
+      {dot && <span className="bn-dot bn-dot-inline" />}
+    </>
+  );
+  if (href) {
+    return <a className="acc-row" href={href} target="_blank" rel="noopener noreferrer" onClick={onClick}>{inner}</a>;
+  }
+  return (
+    <button type="button" className={`acc-row ${danger ? "acc-row-danger" : ""}`} onClick={onClick} disabled={disabled} title={title}>
+      {inner}
+    </button>
   );
 }
 
@@ -2525,7 +2550,7 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
           <div>
             <div className="news-title">¿Algo no funciona? Cuéntanoslo</div>
             <p className="news-text">
-              Desde el menú <strong>☰ → Reportar un problema</strong> puedes enviarnos errores o sugerencias en un momento, o escribirnos
+              Desde el menú de tu cuenta (el círculo de arriba a la derecha) → <strong>Reportar un problema</strong> puedes enviarnos errores o sugerencias en un momento, o escribirnos
               directamente a <a href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(SUPPORT_EMAIL)}`} target="_blank" rel="noopener noreferrer">{SUPPORT_EMAIL}</a>.
             </p>
             <button className="btn-ghost btn-small" onClick={onReport}>Reportar un problema</button>
@@ -2578,7 +2603,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
   const userId = session.user.id;
 
-  // Menú de cuenta (el "☰" de la cabecera): agrupa huella, exportar,
+  // Menú de cuenta (el círculo de perfil de la cabecera): agrupa huella, exportar,
   // tema, cerrar sesión y eliminar cuenta en un desplegable, para no
   // llenar la cabecera de botones sueltos. Se cierra solo al tocar fuera.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -2590,6 +2615,18 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   // Invitación recibida por enlace (?invitar=usuario): lleva directo a Social.
   const [pendingInvite, setPendingInvite] = useState(() => readPendingInvite());
   const [socialSettingsOpen, setSocialSettingsOpen] = useState(false);
+  // Foto para el botón de cuenta: la subida por el usuario y, si no, la de Google.
+  const googleAvatar = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
+  const googlePhoto = googleAvatar && GOOGLE_AVATAR_RE.test(googleAvatar) ? googleAvatar : null;
+  const [socialPhoto, setSocialPhoto] = useState(null);
+  const headerPhoto = socialPhoto || googlePhoto;
+  const refreshSocialPhoto = useCallback(async () => {
+    try {
+      const pf = await getMiPerfilSocial(session.user.id);
+      setSocialPhoto(pf?.avatar_path ? photoUrl(pf.avatar_path) : null);
+    } catch { /* sin conexión: se queda la de Google o la inicial */ }
+  }, [session.user.id]);
+  useEffect(() => { refreshSocialPhoto(); }, [refreshSocialPhoto]);
   const [socialKey, setSocialKey] = useState(0); // al cerrar los ajustes se recarga la pestaña Social
   useEffect(() => { if (pendingInvite) setTab("social"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [newsSeen, setNewsSeen] = useState(() => Boolean(readNewsState(session.user.id).seen));
@@ -2981,14 +3018,56 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           </select>
           <div className="account-menu" ref={menuRef}>
             <button
-              className={isMobile ? `profile-btn ${menuOpen ? "profile-btn-open" : ""}` : "btn-ghost btn-small menu-trigger"}
+              className={`profile-btn ${menuOpen ? "profile-btn-open" : ""}`}
               onClick={() => setMenuOpen((v) => !v)}
               aria-label={isMobile ? "Perfil" : "Menú de cuenta"}
               aria-expanded={menuOpen}
             >
-              {isMobile ? (session.user.email || "?").charAt(0).toUpperCase() : "☰"}
+              <AccountAvatar url={headerPhoto} letter={(session.user.email || "?").charAt(0).toUpperCase()} />
             </button>
-            {menuOpen && (
+            {menuOpen && !isMobile && (
+              <div className="account-dropdown acc-desktop">
+                <div className="acc-head">
+                  <span className="acc-avatar"><AccountAvatar url={headerPhoto} letter={(session.user.email || "?").charAt(0).toUpperCase()} /></span>
+                  <div className="acc-head-txt">
+                    <div className="acc-name">Mi cuenta</div>
+                    <div className="acc-email">{session.user.email}</div>
+                  </div>
+                </div>
+
+                <div className="acc-section">CUENTA</div>
+                <AccRow icon="social" onClick={() => { setMenuOpen(false); setSocialSettingsOpen(true); }}>Ajustes de Social</AccRow>
+                {supportsPasskey && !passkeyRegistered && (
+                  <AccRow icon="huella" onClick={registerPasskey} disabled={passkeyBusy}>{passkeyBusy ? "Activando…" : "Activar huella"}</AccRow>
+                )}
+                {passkeyMsg && (
+                  <div className={`account-dropdown-note ${passkeyMsg.startsWith("Error") ? "account-dropdown-note-error" : "account-dropdown-note-ok"}`}>
+                    {passkeyMsg}
+                  </div>
+                )}
+                <AccRow icon={theme === "dark" ? "sol" : "luna"} onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
+                  {theme === "dark" ? "Modo claro" : "Modo oscuro"}
+                </AccRow>
+
+                <div className="acc-section">HERRAMIENTAS</div>
+                <AccRow
+                  icon="excel" disabled={!isPremium || exportBusy}
+                  onClick={() => { setMenuOpen(false); handleExportExcel(); }}
+                  title={isPremium ? `Descarga un Excel del curso ${curso?.name ?? "actual"}: registro diario, resumen con fórmulas y gráficas` : "Exportar a Excel está disponible en los planes de pago"}
+                >
+                  {exportBusy ? "Generando…" : "Exportar a Excel"}
+                </AccRow>
+                {exportError && <div className="account-dropdown-note account-dropdown-note-error">⚠ {exportError}</div>}
+                <AccRow icon="novedades" dot={!newsSeen} onClick={() => { setMenuOpen(false); setNewsOpen("manual"); }}>Novedades</AccRow>
+                <AccRow icon="web" href={APP_SHARE_URL} onClick={() => setMenuOpen(false)}>Web de Clever</AccRow>
+                <AccRow icon="reportar" onClick={() => { setMenuOpen(false); setReportOpen(true); }}>Reportar un problema</AccRow>
+
+                <div className="account-dropdown-divider" />
+                <AccRow icon="salir" onClick={onSignOut}>Cerrar sesión</AccRow>
+                <AccRow icon="borrar" danger onClick={() => { setMenuOpen(false); setDeleteConfirmOpen(true); }}>Eliminar cuenta</AccRow>
+              </div>
+            )}
+            {menuOpen && isMobile && (
               <div className="account-dropdown">
                 <div className="account-dropdown-email">{session.user.email}</div>
                 {supportsPasskey && !passkeyRegistered && (
@@ -3060,7 +3139,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
       </header>
 
       {socialSettingsOpen && (
-        <SocialSettingsModal userId={userId} onClose={() => { setSocialSettingsOpen(false); setSocialKey((k) => k + 1); }} />
+        <SocialSettingsModal userId={userId} googleAvatarUrl={googleAvatar} onClose={() => { setSocialSettingsOpen(false); setSocialKey((k) => k + 1); refreshSocialPhoto(); }} />
       )}
 
       {newsOpen && (
@@ -3153,6 +3232,8 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           <SocialTab
             key={socialKey}
             userId={userId}
+            avatarUrl={googleAvatar}
+            onOwnPhoto={setSocialPhoto}
             carreraId={profile?.carrera_canonica_id ?? null}
             onOpenSettings={() => setSocialSettingsOpen(true)}
             subjects={data.subjects}
@@ -3378,6 +3459,26 @@ export const CSS = `
   .app-main { max-width: 1080px; margin: 0 auto; }
 
   ${SOCIAL_CSS}
+  ${AVATAR_CSS}
+
+  /* ---- Menú de cuenta en PC: mismas secciones que el panel "Más" del móvil ---- */
+  .acc-desktop { min-width: 290px; padding: 10px; gap: 0; }
+  .acc-head { display: flex; align-items: center; gap: 12px; padding: 6px 8px 12px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .acc-avatar { width: 40px; height: 40px; border-radius: 20px; overflow: hidden; background: #12314a; color: var(--cyan); border: 1px solid #24406b; display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+  .acc-head-txt { min-width: 0; }
+  .acc-name { font-size: 14px; font-weight: 700; }
+  .acc-email { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acc-section { padding: 12px 8px 4px; font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--text-dim); }
+  .acc-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; padding: 7px 8px; border: none; background: none; border-radius: 10px;
+    color: var(--text); font-size: 13.5px; text-align: left; cursor: pointer; text-decoration: none;
+  }
+  .acc-row:hover:not(:disabled) { background: var(--panel-2); }
+  .acc-row:disabled { opacity: 0.5; cursor: not-allowed; }
+  .acc-icon { width: 30px; height: 30px; border-radius: 9px; background: var(--panel-2); color: var(--cyan-text); display: flex; align-items: center; justify-content: center; flex: none; }
+  .acc-row:hover:not(:disabled) .acc-icon { background: var(--bg); }
+  .acc-text { flex: 1; min-width: 0; }
+  .acc-row-danger, .acc-row-danger .acc-icon { color: var(--red); }
 
   /* ---- Navegación móvil: barra inferior, panel "Más" y perfil ---- */
   .bottom-nav, .more-overlay { display: none; }

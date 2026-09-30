@@ -73,6 +73,7 @@ export const setConsentimiento = (tipo, acepta, version) =>
   rpc("establecer_consentimiento", { p_tipo: tipo, p_acepta: acepta, p_version: version ?? null });
 export const establecerAvatar = (url) => rpc("establecer_avatar", { p_url: url });
 export const setMostrarFoto = (mostrar) => rpc("establecer_mostrar_foto", { p_mostrar: mostrar });
+export const establecerFoto = (path) => rpc("establecer_foto", { p_path: path });
 export const setMostrarNotas = (mostrar) => rpc("establecer_mostrar_notas", { p_mostrar: mostrar });
 export const buscarUsuarios = (q) => rpc("buscar_usuarios", { p_query: q });
 export const solicitarAmistad = (username) => rpc("solicitar_amistad", { p_username: username });
@@ -123,4 +124,71 @@ export function readPendingInvite() {
 
 export function clearPendingInvite() {
   try { window.localStorage.removeItem(INVITE_KEY); } catch { /* nada */ }
+}
+
+/* ---------- fotos de perfil ---------- */
+
+export function photoUrl(path) {
+  return supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+}
+
+/** Dirección de la foto de una persona: la que subió ella y, si no, la de Google.
+ * Sirve para filas de la base de datos (avatar_path / avatar_url) y para modelos
+ * ya convertidos (avatarPath / avatarUrl). */
+export function avatarSrc(row) {
+  if (!row) return null;
+  const path = row.avatar_path ?? row.avatarPath ?? null;
+  if (path) return photoUrl(path);
+  return row.avatar_url ?? row.avatarUrl ?? null;
+}
+
+// Recorta la imagen a un cuadrado de 160 px y la guarda como JPEG ligero: así se
+// sube poco, se quitan los datos EXIF (ubicación, etc.) y cabe en el límite de 100 KB.
+async function resizeToJpeg(file) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch {
+    throw new SocialError("foto", "No se ha podido leer esa imagen. Prueba con otra (JPG, PNG o WebP).");
+  }
+  const size = 160;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const side = Math.min(bitmap.width, bitmap.height);
+  canvas.getContext("2d").drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
+  if (bitmap.close) bitmap.close();
+  for (const q of [0.85, 0.7, 0.55, 0.4]) {
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", q));
+    if (blob && blob.size <= 90 * 1024) return blob;
+  }
+  throw new SocialError("foto", "No se ha podido reducir esa imagen.");
+}
+
+async function removeOld(path) {
+  if (!path) return;
+  try { await supabase.storage.from("avatars").remove([path]); } catch { /* si falla, queda un archivo suelto sin importancia */ }
+}
+
+/** Sube la foto elegida, la asocia al perfil y borra la anterior. Devuelve la ruta nueva. */
+export async function uploadAvatar(userId, file, previousPath) {
+  if (!file || !String(file.type).startsWith("image/")) throw new SocialError("foto", "Elige una imagen (JPG, PNG o WebP).");
+  if (file.size > 8 * 1024 * 1024) throw new SocialError("foto", "Esa imagen pesa demasiado (máximo 8 MB).");
+  const blob = await resizeToJpeg(file);
+  const path = `${userId}/${Date.now()}.jpg`;
+  let res;
+  try {
+    res = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+  } catch (e) {
+    throw toSocialError(e);
+  }
+  if (res.error) throw toSocialError(res.error);
+  await establecerFoto(path);
+  await removeOld(previousPath);
+  return path;
+}
+
+export async function removeAvatar(previousPath) {
+  await establecerFoto(null);
+  await removeOld(previousPath);
 }

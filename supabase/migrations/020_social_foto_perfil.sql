@@ -3,7 +3,7 @@
 --   * Foto de Google: perfil_social.avatar_url (solo se admite
 --     https://lh3.googleusercontent.com/..., para que nadie pueda poner una
 --     dirección propia que rastree a quien la vea).
---   * Foto subida por el usuario: bucket público "avatars" (máx. 200 KB, solo
+--   * Foto subida por el usuario: bucket público "avatars" (máx. 100 KB, solo
 --     JPEG/WebP), cada persona solo puede escribir en su propia carpeta.
 --     perfil_social.avatar_path guarda la ruta (nunca una URL): la app construye
 --     la dirección con su propio proyecto, así no se puede apuntar a otro servidor.
@@ -24,7 +24,7 @@ alter table public.perfil_social add constraint perfil_social_avatar_path_format
 
 -- ---------- almacén de fotos ----------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('avatars', 'avatars', true, 204800, array['image/jpeg', 'image/webp'])
+values ('avatars', 'avatars', true, 102400, array['image/jpeg', 'image/webp'])
 on conflict (id) do update
   set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
