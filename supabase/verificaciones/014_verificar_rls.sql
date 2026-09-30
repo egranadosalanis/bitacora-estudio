@@ -46,8 +46,7 @@ begin
 
   ok := false;
   begin
-    update public.profiles set plan = 'premium_historico' where id = atacante;
-    get diagnostics n = row_count;
+    update public.profiles set plan = case when plan = 'free' then 'premium_historico' else 'free' end where id = atacante;
   exception when others then ok := true; end;
   r := r || case when ok then 'OK   ' else 'FALLO' end || ' se sube su propio plan a premium' || E'\n';
 
