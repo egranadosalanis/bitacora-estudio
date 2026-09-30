@@ -18,7 +18,7 @@ import {
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
 import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from "./offline.js";
-import SocialTab, { SOCIAL_CSS } from "./SocialTab.jsx";
+import SocialTab, { SOCIAL_CSS, SocialSettingsModal } from "./SocialTab.jsx";
 import { readPendingInvite, clearPendingInvite } from "./socialData.js";
 import RangosTab, { prefetchRangosImages } from "./RangosTab.jsx";
 
@@ -2589,6 +2589,8 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [moreOpen, setMoreOpen] = useState(false);
   // Invitación recibida por enlace (?invitar=usuario): lleva directo a Social.
   const [pendingInvite, setPendingInvite] = useState(() => readPendingInvite());
+  const [socialSettingsOpen, setSocialSettingsOpen] = useState(false);
+  const [socialKey, setSocialKey] = useState(0); // al cerrar los ajustes se recarga la pestaña Social
   useEffect(() => { if (pendingInvite) setTab("social"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [newsSeen, setNewsSeen] = useState(() => Boolean(readNewsState(session.user.id).seen));
 
@@ -3040,6 +3042,9 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
                     </button>
                   </>
                 )}
+                <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setSocialSettingsOpen(true); }}>
+                  👥 Ajustes de Social
+                </button>
                 <button className="account-dropdown-row" onClick={onSignOut}>Cerrar sesión</button>
                 <div className="account-dropdown-divider" />
                 <button
@@ -3053,6 +3058,10 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           </div>
         </div>
       </header>
+
+      {socialSettingsOpen && (
+        <SocialSettingsModal userId={userId} onClose={() => { setSocialSettingsOpen(false); setSocialKey((k) => k + 1); }} />
+      )}
 
       {newsOpen && (
         <NewsModal
@@ -3142,7 +3151,10 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
         )}
         {tab === "social" && (
           <SocialTab
+            key={socialKey}
             userId={userId}
+            carreraId={profile?.carrera_canonica_id ?? null}
+            onOpenSettings={() => setSocialSettingsOpen(true)}
             subjects={data.subjects}
             entries={data.entries}
             logs={data.logs}

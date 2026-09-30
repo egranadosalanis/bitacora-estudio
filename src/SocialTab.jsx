@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { RANK_NAMES, RANK_QUIPS, APP_SHARE_URL, hm } from "./domain.js";
-import { OFFLINE_MESSAGE } from "./offline.js";
+import { RANK_NAMES, RANK_QUIPS, APP_SHARE_URL, hm, wearLabel } from "./domain.js";
+import { searchAsignaturasCanonicas } from "./supabaseData.js";
+import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
 import { USERNAME_RE } from "./socialData.js";
-import { CONSENT_VERSION, CONSENT_METRICAS } from "./socialTexts.js";
+import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, STATS_PRIVACY_NOTE } from "./socialTexts.js";
 import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
@@ -793,9 +794,394 @@ function AmigosSection({ perfil, subjects, entries, logs, pendingInvite, onInvit
   );
 }
 
+
+/* ---------- sección Guía (estadísticas de la comunidad) ---------- */
+
+const SMALL_SAMPLE = 5; // por debajo de este nº de aprobados se avisa de que la muestra es pequeña
+const rankingAskedKey = (userId) => `clever:social:ranking-preguntado:${userId}`;
+
+function plural(n, one, many) { return n === 1 ? one : many; }
+
+function StatsBlock({ stats }) {
+  if (stats.excluida) {
+    return (
+      <div className="panel">
+        <div className="panel-title">Esta asignatura no entra en las estadísticas</div>
+        <p className="panel-subtitle" style={{ marginBottom: 0 }}>
+          Las asignaturas de Erasmus y las marcadas como «sin créditos» no se incluyen, porque no se pueden comparar en horas por crédito.
+        </p>
+      </div>
+    );
+  }
+  if (!stats.suficiente) {
+    return (
+      <div className="panel sc-empty">
+        <div className="panel-title">Basado en {stats.n} {plural(stats.n, "aprobado", "aprobados")}</div>
+        <p className="panel-subtitle" style={{ marginBottom: 0 }}>
+          Todavía faltan datos para mostrar estadísticas de esta asignatura. Cuantos más alumnos la aprueben, más fiables serán.
+        </p>
+      </div>
+    );
+  }
+  const n = stats.n;
+  return (
+    <>
+      <div className="panel">
+        <div className="panel-title">Basado en {n} {plural(n, "aprobado", "aprobados")}</div>
+        {n < SMALL_SAMPLE && (
+          <div className="sc-warn">La muestra es pequeña: tómalo como una orientación, no como una cifra firme.</div>
+        )}
+        <ul className="sc-facts">
+          <li>De media, los aprobados estudiaron <strong>{fmtNum(stats.horas_por_credito_media)} h/crédito</strong> ({hm(stats.minutos_medios)} en total).</li>
+          {stats.horas_por_credito_q1 != null && (
+            <li>La mitad de los aprobados estudió entre <strong>{fmtNum(stats.horas_por_credito_q1)}</strong> y <strong>{fmtNum(stats.horas_por_credito_q3)} h/crédito</strong>.</li>
+          )}
+          {stats.pct_aprobado_primera != null && (
+            <li>El <strong>{fmtNum(stats.pct_aprobado_primera, 0)}%</strong> aprobó a la primera{stats.cursos_necesarios_medio != null ? <>; se necesitaron de media <strong>{fmtNum(stats.cursos_necesarios_medio)}</strong> cursos</> : null}.</li>
+          )}
+          {stats.desgaste_medio != null && (
+            <li>Desgaste medio: <strong>{fmtNum(stats.desgaste_medio)}/10</strong> ({wearLabel(stats.desgaste_medio)}).</li>
+          )}
+        </ul>
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">Por tramo de nota</div>
+        <div className="sc-table-wrap">
+          <table className="sc-table">
+            <thead>
+              <tr><th>Nota</th><th>Aprobados</th><th>H/crédito</th><th>A la 1.ª</th></tr>
+            </thead>
+            <tbody>
+              {stats.tramos.map((t) => (
+                <tr key={t.tramo}>
+                  <td className="mono">{t.tramo.replace("-", " a ").replace(".", ",").replace("9+", "9 o más")}</td>
+                  <td>{t.n}</td>
+                  <td>{t.horas_por_credito_media == null ? "—" : fmtNum(t.horas_por_credito_media)}</td>
+                  <td>{t.pct_aprobado_primera == null ? "—" : `${fmtNum(t.pct_aprobado_primera, 0)}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, onOpenSettings, reloadPerfil }) {
+  const [catalog, setCatalog] = useState(null);
+  const [catError, setCatError] = useState(null);
+  const [selected, setSelected] = useState("");
+  const [stats, setStats] = useState(null);
+  const [statsError, setStatsError] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [rows, setRows] = useState(null);
+  const [rowsError, setRowsError] = useState(null);
+  const [askRanking, setAskRanking] = useState(false);
+  const [asked, setAsked] = useState(() => {
+    try { return window.localStorage.getItem(rankingAskedKey(userId)) === "1"; } catch { return false; }
+  });
+
+  const loadCatalog = useCallback(async () => {
+    if (!carreraId) return;
+    setCatError(null);
+    try {
+      const rowsCat = await searchAsignaturasCanonicas(carreraId, "", { limit: 400 });
+      setCatalog(rowsCat ?? []);
+    } catch (e) {
+      setCatError(friendlyError(e));
+    }
+  }, [carreraId]);
+  useEffect(() => { loadCatalog(); }, [loadCatalog]);
+
+  const approvedIds = useMemo(
+    () => new Set(subjects.filter((s) => s.estado === "aprobada" && s.asignaturaCanonicaId).map((s) => s.asignaturaCanonicaId)),
+    [subjects]
+  );
+
+  const groups = useMemo(() => {
+    if (!catalog) return [];
+    const mine = catalog.filter((c) => approvedIds.has(c.id));
+    const rest = catalog.filter((c) => !approvedIds.has(c.id));
+    const byYear = new Map();
+    rest.forEach((c) => {
+      const key = c.anio ? `${c.anio}.º curso` : "Otras";
+      if (!byYear.has(key)) byYear.set(key, []);
+      byYear.get(key).push(c);
+    });
+    const out = [];
+    if (mine.length) out.push({ label: "Tus aprobadas", items: mine });
+    [...byYear.entries()].sort(([a], [b]) => a.localeCompare(b, "es")).forEach(([label, items]) => out.push({ label, items }));
+    return out;
+  }, [catalog, approvedIds]);
+
+  // Por defecto, la primera asignatura aprobada del usuario.
+  const defaulted = useRef(false);
+  useEffect(() => {
+    if (defaulted.current || !catalog) return;
+    defaulted.current = true;
+    const first = catalog.find((c) => approvedIds.has(c.id));
+    if (first) setSelected(first.id);
+  }, [catalog, approvedIds]);
+
+  useEffect(() => {
+    if (!selected) { setStats(null); return undefined; }
+    let cancelled = false;
+    setStatsLoading(true);
+    setStatsError(null);
+    api.comunidadStats(selected)
+      .then((r) => { if (!cancelled) setStats(r); })
+      .catch((e) => { if (!cancelled) { setStats(null); setStatsError(e.message); } })
+      .finally(() => { if (!cancelled) setStatsLoading(false); });
+    return () => { cancelled = true; };
+  }, [selected]);
+
+  const rankingOk = perfil?.share_ranking_ok === true;
+  useEffect(() => {
+    if (!selected || !rankingOk) { setRows(null); return undefined; }
+    let cancelled = false;
+    setRowsError(null);
+    api.listadoAprobados(selected)
+      .then((r) => { if (!cancelled) setRows(r ?? []); })
+      .catch((e) => { if (!cancelled) { setRows(null); setRowsError(e.message); } });
+    return () => { cancelled = true; };
+  }, [selected, rankingOk]);
+
+  // Pregunta por el listado una sola vez (solo si ya tiene nombre de usuario).
+  useEffect(() => {
+    if (perfil && !perfil.share_ranking_ok && !asked) setAskRanking(true);
+  }, [perfil, asked]);
+
+  function markAsked() {
+    try { window.localStorage.setItem(rankingAskedKey(userId), "1"); } catch { /* nada */ }
+    setAsked(true);
+    setAskRanking(false);
+  }
+  async function acceptRanking() {
+    await api.setConsentimiento("ranking", true, CONSENT_VERSION);
+    markAsked();
+    await reloadPerfil();
+  }
+
+  if (!carreraId) {
+    return <div className="panel"><p className="panel-subtitle" style={{ marginBottom: 0 }}>Completa tu carrera en tu perfil para ver las estadísticas de tus asignaturas.</p></div>;
+  }
+  if (catError) return <ErrorPanel message={catError} onRetry={loadCatalog} />;
+  if (!catalog) return <div className="sc-hint">Cargando asignaturas…</div>;
+
+  return (
+    <>
+      {!online && <OfflineBar />}
+      <div className="panel">
+        <label className="panel-title" htmlFor="sc-guia-select">Asignatura</label>
+        <select id="sc-guia-select" className="input-field" value={selected} onChange={(e) => setSelected(e.target.value)}>
+          <option value="">Elige una asignatura…</option>
+          {groups.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.items.map((c) => <option key={c.id} value={c.id}>{c.nombre_oficial}</option>)}
+            </optgroup>
+          ))}
+        </select>
+        <p className="sc-hint" style={{ margin: "10px 0 0" }}>Solo cuentan alumnos que han aprobado la asignatura.</p>
+      </div>
+
+      {statsLoading && <div className="sc-hint">Cargando estadísticas…</div>}
+      {statsError && <div className="auth-error">{statsError}</div>}
+      {stats && !statsLoading && <StatsBlock stats={stats} />}
+
+      {selected && (
+        <div className="panel">
+          <div className="panel-title">Listado de aprobados</div>
+          {rankingOk ? (
+            <>
+              {rowsError && <div className="auth-error">{rowsError}</div>}
+              {rows && rows.length === 0 && <p className="sc-hint" style={{ margin: 0 }}>Todavía nadie que haya aceptado aparecer ha aprobado esta asignatura.</p>}
+              {rows && rows.length > 0 && (
+                <div className="sc-table-wrap">
+                  <table className="sc-table">
+                    <thead>
+                      <tr><th>Usuario</th><th>H/cr</th><th>Nota</th><th>Desgaste</th><th>Cursos</th></tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r) => (
+                        <tr key={r.username} className={r.username.toLowerCase() === perfil.username.toLowerCase() ? "sc-tr-me" : ""}>
+                          <td><Username name={r.username} verified={r.verificado} /></td>
+                          <td>{fmtNum(r.horas_por_credito)}</td>
+                          <td>{r.nota == null ? "—" : fmtNum(r.nota, 1)}</td>
+                          <td>{r.desgaste_maximo == null ? "—" : fmtNum(r.desgaste_maximo)}</td>
+                          <td>{r.cursos_necesarios ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : perfil === null ? (
+            <>
+              <p className="panel-subtitle">Para aparecer en el listado y verlo, primero elige tu nombre de usuario.</p>
+              <button className="btn-ghost btn-small" onClick={onGoAmigos}>Elegir nombre de usuario</button>
+            </>
+          ) : (
+            <>
+              <p className="panel-subtitle">Solo lo ven quienes han aceptado aparecer en él. Puedes activarlo cuando quieras en Ajustes de Social.</p>
+              <button className="btn-ghost btn-small" onClick={onOpenSettings}>Abrir ajustes de Social</button>
+            </>
+          )}
+        </div>
+      )}
+
+      <p className="sc-hint sc-legal-note">{STATS_PRIVACY_NOTE}</p>
+
+      {askRanking && perfil && (
+        <ConsentModal text={CONSENT_RANKING} online={online} onAccept={acceptRanking} onDecline={markAsked} />
+      )}
+    </>
+  );
+}
+
+/* ---------- ajustes de Social ---------- */
+
+function SettingSwitch({ label, hint, on, disabled, onChange }) {
+  return (
+    <div className="sc-setting">
+      <div className="sc-setting-txt">
+        <div className="sc-setting-label">{label}</div>
+        {hint && <div className="sc-setting-hint">{hint}</div>}
+      </div>
+      <button
+        type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled}
+        className={`switch ${on ? "switch-on" : ""}`} onClick={() => onChange(!on)}
+      ><span className="switch-knob" /></button>
+    </div>
+  );
+}
+
+export function SocialSettingsModal({ userId, onClose }) {
+  const online = useOnline();
+  const [perfil, setPerfil] = useState(undefined);
+  const [blocked, setBlocked] = useState([]);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [nameMsg, setNameMsg] = useState(null);
+  const [consentFor, setConsentFor] = useState(null); // "metricas" | "ranking"
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const p = await api.getMiPerfilSocial(userId);
+      setPerfil(p);
+      setNewName(p?.username ?? "");
+      if (p) setBlocked(((await api.misAmistades()) ?? []).filter((a) => a.estado === "bloqueada"));
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [userId]);
+  useEffect(() => { load(); }, [load]);
+
+  async function run(fn) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleConsent(tipo, next) {
+    if (next) { setConsentFor(tipo); return; }
+    run(() => api.setConsentimiento(tipo, false));
+  }
+
+  async function saveName() {
+    const u = newName.trim();
+    setNameMsg(null);
+    if (u === perfil.username) return;
+    if (!USERNAME_RE.test(u)) { setNameMsg({ type: "error", text: "Usa entre 3 y 20 caracteres: letras, números, punto o guion bajo." }); return; }
+    setBusy(true);
+    try {
+      await api.cambiarUsername(u);
+      setNameMsg({ type: "ok", text: "Nombre de usuario actualizado." });
+      await load();
+    } catch (e) {
+      setNameMsg({ type: "error", text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SocialModal title="Ajustes de Social" onClose={onClose}>
+      {perfil === undefined && !error && <div className="sc-hint">Cargando…</div>}
+      {error && <div className="auth-error">{error}</div>}
+      {!online && <OfflineBar />}
+      {perfil === null && (
+        <p className="panel-subtitle" style={{ marginBottom: 0 }}>Aún no tienes perfil social. Entra en la pestaña Social para elegir tu nombre de usuario.</p>
+      )}
+      {perfil && (
+        <div className="sc-settings">
+          <div className="sc-setting-block">
+            <div className="sc-setting-label">Nombre de usuario {perfil.verificado && <VerifiedBadge size={15} />}</div>
+            <div className="sc-name-edit">
+              <input
+                className="input-field" value={newName} maxLength={20} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                onChange={(e) => setNewName(e.target.value)} aria-label="Nombre de usuario"
+              />
+              <button className="btn-primary btn-small" onClick={saveName} disabled={busy || !online || newName.trim() === perfil.username}>Cambiar</button>
+            </div>
+            {nameMsg && <div className={nameMsg.type === "error" ? "auth-error" : "sc-ok"}>{nameMsg.text}</div>}
+          </div>
+
+          <SettingSwitch
+            label="Compartir mis métricas con amigos"
+            hint="Tus amigos aceptados ven tu rango, racha y métricas. Si lo desactivas, dejan de verte al instante y se te volverá a preguntar al entrar en Amigos."
+            on={perfil.share_metrics_ok} disabled={busy || !online} onChange={(v) => toggleConsent("metricas", v)}
+          />
+          <SettingSwitch
+            label="Aparecer en el listado de aprobados"
+            hint="Apareces, con tu nombre de usuario, en el listado de las asignaturas que has aprobado."
+            on={perfil.share_ranking_ok} disabled={busy || !online} onChange={(v) => toggleConsent("ranking", v)}
+          />
+          <SettingSwitch
+            label="Mostrar mis notas a mis amigos"
+            hint="Solo se ven si además compartes tus métricas."
+            on={perfil.show_grades} disabled={busy || !online} onChange={(v) => run(() => api.setMostrarNotas(v))}
+          />
+
+          <div className="sc-setting-block">
+            <div className="sc-setting-label">Usuarios bloqueados</div>
+            {blocked.length === 0 && <div className="sc-setting-hint">No has bloqueado a nadie.</div>}
+            {blocked.map((b) => (
+              <div key={b.id} className="sc-blocked">
+                <Username name={b.username} verified={b.verificado} />
+                <button className="btn-ghost btn-small" disabled={busy || !online} onClick={() => run(() => api.desbloquearUsuario(b.username))}>Desbloquear</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {consentFor && (
+        <ConsentModal
+          text={consentFor === "metricas" ? CONSENT_METRICAS : CONSENT_RANKING}
+          online={online}
+          onAccept={async () => { await api.setConsentimiento(consentFor, true, CONSENT_VERSION); setConsentFor(null); await load(); }}
+          onDecline={() => setConsentFor(null)}
+        />
+      )}
+    </SocialModal>
+  );
+}
+
 /* ---------- pestaña ---------- */
 
-export default function SocialTab({ userId, subjects, entries, logs, pendingInvite, onInviteHandled, onBack, onLeave, isMobile }) {
+export default function SocialTab({ userId, carreraId, subjects, entries, logs, pendingInvite, onInviteHandled, onBack, onLeave, onOpenSettings, isMobile }) {
   const online = useOnline();
   const [perfil, setPerfil] = useState(undefined); // undefined = cargando, null = sin perfil
   const [loadError, setLoadError] = useState(null);
@@ -820,10 +1206,10 @@ export default function SocialTab({ userId, subjects, entries, logs, pendingInvi
   let body;
   if (section === "guia") {
     body = (
-      <div className="panel sc-empty">
-        <div className="panel-title">Guía</div>
-        <p className="panel-subtitle" style={{ marginBottom: 0 }}>Las estadísticas de la comunidad por asignatura llegarán en la próxima actualización.</p>
-      </div>
+      <GuiaSection
+        userId={userId} perfil={loadError ? undefined : perfil} carreraId={carreraId} subjects={subjects} online={online}
+        onGoAmigos={() => setSection("amigos")} onOpenSettings={onOpenSettings} reloadPerfil={loadPerfil}
+      />
     );
   } else if (loadError) {
     body = <ErrorPanel message={loadError} onRetry={loadPerfil} />;
@@ -965,6 +1351,30 @@ export const SOCIAL_CSS = `
   .sc-emblems { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
   .sc-emblem { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .sc-emblem-label { font-size: 10px; color: var(--text-dim); }
+
+  .sc-warn { font-size: 12px; color: var(--amber); margin: 6px 0 10px; line-height: 1.45; }
+  [data-theme="light"] .sc-warn { color: #B7791F; }
+  .sc-facts { margin: 8px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.6; }
+  .sc-facts li { margin-bottom: 4px; }
+  .sc-facts strong { color: var(--cyan-text); }
+  .sc-table-wrap { overflow-x: auto; margin-top: 10px; }
+  .sc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .sc-table th { text-align: left; font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.1em; color: var(--text-dim); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .sc-table td { padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .sc-table tr:last-child td { border-bottom: none; }
+  .sc-tr-me td { background: var(--panel-2); }
+  .sc-legal-note { font-size: 11px; }
+  select.input-field { height: 42px; margin-top: 8px; }
+  .sc-settings { display: flex; flex-direction: column; gap: 16px; }
+  .sc-setting { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .sc-setting-txt { min-width: 0; }
+  .sc-setting-label { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .sc-setting-hint { font-size: 12px; color: var(--text-dim); line-height: 1.45; margin-top: 3px; }
+  .sc-setting .switch { flex: none; }
+  .sc-setting-block { display: flex; flex-direction: column; gap: 8px; }
+  .sc-name-edit { display: flex; gap: 8px; align-items: center; }
+  .sc-blocked { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; font-weight: 600; }
+  .sc-ok { color: var(--green); font-size: 13px; }
   [data-theme="light"] .sc-streak, [data-theme="light"] .sc-hero-streak, [data-theme="light"] .sc-offline { color: #B7791F; }
   [data-theme="light"] .sc-rank-name, [data-theme="light"] .sc-hero-rank { filter: brightness(0.82); }
 `;
