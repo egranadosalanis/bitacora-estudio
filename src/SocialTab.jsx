@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
-import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel } from "./domain.js";
+import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
@@ -1143,7 +1143,14 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
 
   const approvedIds = useMemo(
-    () => new Set(subjects.filter((s) => s.estado === "aprobada" && s.asignaturaCanonicaId).map((s) => s.asignaturaCanonicaId)),
+    // Una asignatura cuenta como aprobada si lo está ella o alguna combinada con ella (p. ej. la
+    // cursada en Erasmus), igual que en la clasificación.
+    () => new Set(
+      subjects
+        .filter((s) => s.asignaturaCanonicaId && !s.esErasmus
+          && getMergeGroup(subjects, s.id).some((m) => m.estado === "aprobada"))
+        .map((s) => s.asignaturaCanonicaId)
+    ),
     [subjects]
   );
 
