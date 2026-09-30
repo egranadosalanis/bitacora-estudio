@@ -145,12 +145,12 @@ export async function deleteEntry(userId, entryId) {
 
 /* ---------- asignaturas ---------- */
 
-export async function insertSubject(userId, { name, credits, color, originCursoId, asignaturaCanonicaId = null, esErasmus = false }) {
+export async function insertSubject(userId, { name, credits, color, originCursoId, asignaturaCanonicaId = null, esErasmus = false, mergedInto = null }) {
   const { data, error } = await supabase
     .from("asignaturas")
     .insert({
       user_id: userId, nombre: name, creditos: credits, color, origin_curso_id: originCursoId, estado: "en_curso",
-      asignatura_canonica_id: asignaturaCanonicaId, es_erasmus: esErasmus,
+      asignatura_canonica_id: asignaturaCanonicaId, es_erasmus: esErasmus, asignatura_equivalente_id: mergedInto,
     })
     .select()
     .single();

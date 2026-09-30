@@ -2887,17 +2887,23 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   async function handleAddSubject({ name, credits, asignaturaCanonicaId = null, esErasmus = false }) {
     const color = PALETTE[(data?.subjects.length || 0) % PALETTE.length];
     const originCursoId = curso?.id ?? null;
+    // Repetir una asignatura: si ya tienes otra del mismo catálogo, el intento nuevo se
+    // combina solo con ella (cuentan juntas como una sola en cuanto alguna se apruebe).
+    const previousAttempt = asignaturaCanonicaId && !esErasmus
+      ? data?.subjects.find((s) => s.asignaturaCanonicaId === asignaturaCanonicaId && !s.esErasmus)
+      : null;
+    const mergedInto = previousAttempt?.id ?? null;
     if (DISABLE_CLOUD_SAVE) {
       const newSub = {
         id: uid("sub"), name, credits, target: null, color,
-        estado: "en_curso", mergedInto: null, originCursoId, frozen: null,
+        estado: "en_curso", mergedInto, originCursoId, frozen: null,
         asignaturaCanonicaId, esErasmus, canonicalEstado: null,
       };
       setData((d) => ({ ...d, subjects: [...d.subjects, newSub] }));
       return;
     }
     try {
-      const newSub = await insertSubject(userId, { name, credits, color, originCursoId, asignaturaCanonicaId, esErasmus });
+      const newSub = await insertSubject(userId, { name, credits, color, originCursoId, asignaturaCanonicaId, esErasmus, mergedInto });
       setData((d) => ({ ...d, subjects: [...d.subjects, newSub] }));
       setCloudError(null);
     } catch (e) {
