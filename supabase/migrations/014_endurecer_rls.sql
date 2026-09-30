@@ -30,7 +30,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = public
-as $$
+as $fn$
 begin
   -- current_user es 'authenticated'/'anon' cuando la petición viene de la app
   -- con la clave anon; con la service_role key o desde el SQL Editor es otro.
@@ -44,7 +44,7 @@ begin
   end if;
   return new;
 end;
-$$;
+$fn$;
 
 drop trigger if exists proteger_columnas_profiles on public.profiles;
 create trigger proteger_columnas_profiles
@@ -64,12 +64,12 @@ create policy "profiles_insert_own" on public.profiles
 create or replace function public.curso_es_mio(p_id uuid)
 returns boolean
 language sql stable security definer set search_path = public
-as $$ select exists (select 1 from public.cursos where id = p_id and user_id = auth.uid()) $$;
+as $fn$ select exists (select 1 from public.cursos where id = p_id and user_id = auth.uid()) $fn$;
 
 create or replace function public.asignatura_es_mia(p_id uuid)
 returns boolean
 language sql stable security definer set search_path = public
-as $$ select exists (select 1 from public.asignaturas where id = p_id and user_id = auth.uid()) $$;
+as $fn$ select exists (select 1 from public.asignaturas where id = p_id and user_id = auth.uid()) $fn$;
 
 revoke execute on function public.curso_es_mio(uuid) from public, anon, authenticated;
 revoke execute on function public.asignatura_es_mia(uuid) from public, anon, authenticated;
@@ -100,7 +100,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare v_id uuid;
 begin
   if auth.uid() is null then
@@ -123,14 +123,14 @@ begin
 
   return v_id;
 end;
-$$;
+$fn$;
 
 create or replace function public.crear_carrera_pendiente(p_universidad_id uuid, p_nombre text)
 returns uuid
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare v_id uuid;
 begin
   if auth.uid() is null then
@@ -153,14 +153,14 @@ begin
 
   return v_id;
 end;
-$$;
+$fn$;
 
 create or replace function public.crear_asignatura_pendiente(p_carrera_id uuid, p_nombre text, p_creditos numeric default null)
 returns uuid
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare v_id uuid;
 begin
   if auth.uid() is null then
@@ -183,7 +183,7 @@ begin
 
   return v_id;
 end;
-$$;
+$fn$;
 
 -- create or replace conserva los permisos, pero se reafirman por seguridad.
 revoke execute on function public.crear_universidad_pendiente(text, text) from public, anon, authenticated;
