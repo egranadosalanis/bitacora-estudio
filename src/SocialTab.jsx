@@ -13,7 +13,7 @@ import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells } from ".
 /* ------------------------------------------------------------------ */
 
 // Colores de cada rango (elegidos para que se lean bien en modo claro y oscuro).
-const TIER_COLORS = ["#7A8AA6", "#2FB36D", "#1AA5BC", "#D98A0B", "#E8681C", "#8B6DF0", "#E85D93"];
+const TIER_COLORS = ["#7A8AA6", "#2FB36D", "#1AA5BC", "#D98A0B", "#E8681C", "#8B6DF0", "#E5484D"];
 
 function fmtNum(n, d = 2) {
   return Number(n).toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -678,6 +678,7 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
                   return (
                     <button
                       type="button" key={h.season.id} title={info} aria-label={info} aria-pressed={emblemId === h.season.id}
+                      style={{ gridColumn: h.season.number === 1 ? 1 : 2 }}
                       className={`sc-emblem ${emblemId === h.season.id ? "sc-emblem-on" : ""}`}
                       onClick={() => setEmblemId((cur) => (cur === h.season.id ? null : h.season.id))}
                     >
@@ -1521,7 +1522,7 @@ export const SOCIAL_CSS = `
 
   .sc-list { display: flex; flex-direction: column; gap: 8px; }
   .sc-row {
-    display: grid; grid-template-columns: 24px 34px 1fr auto; align-items: center; column-gap: 10px; width: 100%;
+    display: grid; grid-template-columns: 24px 34px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; width: 100%;
     text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 10px 12px; color: var(--text); font: inherit; cursor: pointer;
   }
@@ -1531,7 +1532,7 @@ export const SOCIAL_CSS = `
   .sc-row-static { cursor: default; grid-template-columns: 34px 1fr auto; }
   .sc-rowerr { grid-column: 1 / -1; margin: 4px 0 0; }
   .sc-pos { font-size: 13px; color: var(--text-dim); text-align: center; }
-  .sc-who { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; font-weight: 600; font-size: 15px; }
+  .sc-who { max-width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; font-weight: 600; font-size: 15px; }
   .sc-you { font-size: 9px; letter-spacing: 0.14em; color: var(--cyan-text); border: 1px solid var(--cyan); border-radius: 999px; padding: 1px 6px; font-weight: 600; }
   .sc-note { font-size: 10px; color: var(--text-dim); font-weight: 400; }
   .sc-rank { display: flex; align-items: center; gap: 8px; }
