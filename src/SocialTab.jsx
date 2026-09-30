@@ -1397,7 +1397,7 @@ export default function SocialTab({ userId, avatarUrl, onOwnPhoto, carreraId, su
 }
 
 export const SOCIAL_CSS = `
-  .sc-wrap { display: flex; flex-direction: column; gap: 14px; max-width: 640px; }
+  .sc-wrap { display: flex; flex-direction: column; gap: 14px; max-width: 640px; width: 100%; margin: 0 auto; }
   .sc-head { display: flex; align-items: center; gap: 12px; }
   .sc-title { flex: 1; margin: 0; font-size: 26px; font-weight: 700; }
   .sc-backbtn { margin-left: -10px; }
