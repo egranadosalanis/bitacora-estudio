@@ -553,6 +553,11 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
   const color = TIER_COLORS[model.tier];
   const past = model.history.filter((h) => !h.isCurrent);
   const [emblemId, setEmblemId] = useState(null);
+  const pastByYear = useMemo(() => {
+    const m = new Map();
+    past.forEach((h) => { const y = h.season.academicYear; m.set(y, [...(m.get(y) ?? []), h].sort((x, z) => x.season.number - z.season.number)); });
+    return [...m];
+  }, [past]);
   const emblemSel = past.find((h) => h.season.id === emblemId) ?? null;
 
   async function doConfirm() {
@@ -665,21 +670,26 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
       {past.length > 0 && (
         <div className="panel">
           <div className="panel-title">Emblemas de seasons anteriores</div>
-          <div className="sc-emblems">
-            {past.map((h) => {
-              const info = `${h.season.label} · ${RANK_NAMES[h.tier]} · ${fmtNum(h.hoursPerCredit)} h/crédito`;
-              return (
-                <button
-                  type="button" key={h.season.id} title={info} aria-label={info} aria-pressed={emblemId === h.season.id}
-                  className={`sc-emblem ${emblemId === h.season.id ? "sc-emblem-on" : ""}`}
-                  onClick={() => setEmblemId((cur) => (cur === h.season.id ? null : h.season.id))}
-                >
-                  <RankEmblem tier={h.tier} size={64} />
-                  <span className="sc-emblem-label mono">{h.season.label.replace("Season ", "S")}</span>
-                </button>
-              );
-            })}
-          </div>
+          {pastByYear.map(([year, items]) => (
+            <div key={year} className="sc-emblem-year">
+              <div className="sc-emblem-year-name mono">CURSO {year}</div>
+              <div className="sc-emblems">
+                {items.map((h) => {
+                  const info = `${h.season.label} · ${RANK_NAMES[h.tier]} · ${fmtNum(h.hoursPerCredit)} h/crédito`;
+                  return (
+                    <button
+                      type="button" key={h.season.id} title={info} aria-label={info} aria-pressed={emblemId === h.season.id}
+                      className={`sc-emblem ${emblemId === h.season.id ? "sc-emblem-on" : ""}`}
+                      onClick={() => setEmblemId((cur) => (cur === h.season.id ? null : h.season.id))}
+                    >
+                      <RankEmblem tier={h.tier} size={64} />
+                      <span className="sc-emblem-label mono">{`S${h.season.number}`}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           <div className="sc-emblem-info" aria-live="polite">
             {emblemSel
               ? <><strong style={{ color: TIER_COLORS[emblemSel.tier] }}>{RANK_NAMES[emblemSel.tier]}</strong> · {emblemSel.season.label} · <strong>{fmtNum(emblemSel.hoursPerCredit)} h/crédito</strong></>
@@ -1607,6 +1617,8 @@ export const SOCIAL_CSS = `
   .sc-emblems { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 10px; justify-items: center; }
   .sc-emblem { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 1px solid transparent; border-radius: 12px; padding: 8px 16px; cursor: pointer; color: inherit; width: 100%; max-width: 180px; }
   .sc-emblem:hover, .sc-emblem-on { border-color: var(--cyan); background: var(--panel-2); }
+  .sc-emblem-year { margin-top: 12px; }
+  .sc-emblem-year-name { font-size: 11px; letter-spacing: 0.14em; color: var(--text-dim); text-align: center; }
   .sc-emblem-info { font-size: 13px; margin-top: 10px; min-height: 20px; line-height: 1.5; text-align: center; }
   @media (max-width: 420px) { .sc-rank-name { max-width: 100px; } .sc-row { column-gap: 8px; padding: 10px; } }
   .sc-photo-pick { display: flex; gap: 14px; align-items: center; margin: 4px 0 14px; }

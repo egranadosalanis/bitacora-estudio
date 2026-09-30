@@ -1047,11 +1047,15 @@ function ColorPicker({ color, onChange }) {
   );
 }
 
+// Los carteles de las gráficas se ajustan al ancho de la pantalla y parten el texto largo.
+const TOOLTIP_STYLE = { background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12, whiteSpace: "normal", overflowWrap: "anywhere", maxWidth: "min(260px, 70vw)" };
+const TOOLTIP_WRAPPER = { maxWidth: "min(260px, 70vw)", zIndex: 5 };
+
 function HoursPerCreditTooltip({ active, payload }) {
   if (!active || !payload || !payload.length) return null;
   const p = payload[0].payload;
   return (
-    <div style={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#E7ECF5" }}>
+    <div style={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#E7ECF5", whiteSpace: "normal", overflowWrap: "anywhere", maxWidth: "min(260px, 70vw)" }}>
       <div style={{ marginBottom: 2 }}>{p.fullName}</div>
       <div className="mono">{p.horasPorCredito.toFixed(2)}</div>
     </div>
@@ -1172,7 +1176,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
             <XAxis dataKey="date" stroke="#8291AC" fontSize={11} minTickGap={30} />
             <YAxis stroke="#8291AC" fontSize={11} />
-            <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} wrapperStyle={TOOLTIP_WRAPPER} labelStyle={{ color: "#E7ECF5" }} />
             {visibleSubjects.map((s) => (
               <Area key={s.id} type="monotone" dataKey={s.name} stackId="1" stroke={s.color} fill={s.color} fillOpacity={0.55} />
             ))}
@@ -1197,7 +1201,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
                 <XAxis dataKey="date" stroke="#8291AC" fontSize={11} minTickGap={40} />
                 <YAxis stroke="#8291AC" fontSize={11} />
-                <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} formatter={(v) => [`${v} h`, "Acumulado"]} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} wrapperStyle={TOOLTIP_WRAPPER} labelStyle={{ color: "#E7ECF5" }} formatter={(v) => [`${v} h`, "Acumulado"]} />
                 <Line type="monotone" dataKey="horas" stroke="#4FD8EA" strokeWidth={2} dot={false} />
               </LineChart>
             ) : (
@@ -1205,7 +1209,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
                 <XAxis dataKey="date" stroke="#8291AC" fontSize={11} minTickGap={40} />
                 <YAxis stroke="#8291AC" fontSize={11} />
-                <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} formatter={(v) => [`${v} h`, "Ese día"]} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} wrapperStyle={TOOLTIP_WRAPPER} labelStyle={{ color: "#E7ECF5" }} formatter={(v) => [`${v} h`, "Ese día"]} />
                 <Bar dataKey="horasDia" fill="#F5A623" radius={[3, 3, 0, 0]} />
               </BarChart>
             )}
@@ -1219,7 +1223,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
               <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={70} paddingAngle={2}>
                 {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: "#121A2B", border: "1px solid #26324A", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#E7ECF5" }} itemStyle={{ color: "#E7ECF5" }} formatter={(v) => hm(v)} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} wrapperStyle={TOOLTIP_WRAPPER} labelStyle={{ color: "#E7ECF5" }} itemStyle={{ color: "#E7ECF5" }} formatter={(v) => hm(v)} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#8291AC" }} />
             </PieChart>
           </ResponsiveContainer>
@@ -1233,7 +1237,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#26324A" />
             <XAxis dataKey="name" stroke="#8291AC" fontSize={11} />
             <YAxis stroke="#8291AC" fontSize={11} />
-            <Tooltip content={<HoursPerCreditTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+            <Tooltip content={<HoursPerCreditTooltip />} wrapperStyle={TOOLTIP_WRAPPER} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
             <Bar dataKey="horasPorCredito" radius={[4, 4, 0, 0]}>
               {barData.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Bar>

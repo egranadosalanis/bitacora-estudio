@@ -12,6 +12,9 @@
 
 insert into public.universidades_canonicas (nombre, pais, estado, origen)
 values
+  -- Sevilla
+  ('Universidad Loyola Andalucía', 'España', 'aprobada', 'seed'),
+  ('Universidad Pablo de Olavide', 'España', 'aprobada', 'seed'),
   -- Huelva
   ('Universidad de Huelva', 'España', 'aprobada', 'seed'),
   -- Granada
@@ -24,7 +27,6 @@ values
   ('Universidad de Jaén', 'España', 'aprobada', 'seed'),
   -- Córdoba
   ('Universidad de Córdoba', 'España', 'aprobada', 'seed'),
-  ('Universidad Loyola Andalucía', 'España', 'aprobada', 'seed'),
   -- Málaga
   ('Universidad de Málaga', 'España', 'aprobada', 'seed'),
   -- Santander
