@@ -5,18 +5,21 @@ import {
 } from "recharts";
 import {
   PALETTE, SUBJECT_COLORS, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
-  buildDefaultData, migrateData, applyHistoricalImport, computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
+  computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, freezeApproval, computeClassification,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
   APP_SHARE_URL,
 } from "./domain.js";
 import {
   loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
-  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso, migrateFromGoogleSheets,
+  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso,
   searchUniversidades, searchCarreras, searchAsignaturasCanonicas,
   createUniversidadPendiente, createCarreraPendiente, createAsignaturaPendiente,
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
+import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from "./offline.js";
+import SocialTab, { SOCIAL_CSS, SocialSettingsModal } from "./SocialTab.jsx";
+import { readPendingInvite, clearPendingInvite } from "./socialData.js";
 import RangosTab, { prefetchRangosImages } from "./RangosTab.jsx";
 
 /* ------------------------------------------------------------------ */
@@ -97,6 +100,7 @@ const NAV_ICON_PATHS = {
   reportar: <path d="M5 21V4M5 4h11l-2 4 2 4H5" />,
   flecha: <path d="M9 6l6 6-6 6" />,
   volver: <path d="M15 6l-6 6 6 6" />,
+  web: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a14 14 0 0 1 0 18" /><path d="M12 3a14 14 0 0 0 0 18" /></>,
 };
 
 function NavIcon({ name, size = 22 }) {
@@ -160,7 +164,7 @@ function MoreSheet({ onClose, onGo, newsDot, isPremium, exportBusy, onExport, on
         <div className="more-section">SECCIONES</div>
         <MoreRow icon="desgaste" onClick={() => onGo("desgaste")}>Desgaste</MoreRow>
         <MoreRow icon="clasificacion" onClick={() => onGo("clasificacion")}>Clasificación</MoreRow>
-        <MoreRow icon="social" pill onClick={() => onGo("social")}>Social</MoreRow>
+        <MoreRow icon="social" onClick={() => onGo("social")}>Social</MoreRow>
         <div className="more-divider" />
         <div className="more-section">HERRAMIENTAS</div>
         <MoreRow icon="asignaturas" onClick={() => onGo("asignaturas")}>Mis asignaturas</MoreRow>
@@ -171,43 +175,8 @@ function MoreSheet({ onClose, onGo, newsDot, isPremium, exportBusy, onExport, on
           {exportBusy ? "Generando…" : "Exportar a Excel"}
         </MoreRow>
         <MoreRow icon="novedades" dot={newsDot} onClick={onNews}>Novedades</MoreRow>
+        <MoreRow icon="web" onClick={() => window.open(APP_SHARE_URL, "_blank", "noopener,noreferrer")}>Web de Clever</MoreRow>
         <MoreRow icon="reportar" onClick={onReport}>Reportar un problema</MoreRow>
-      </div>
-    </div>
-  );
-}
-
-/** Social: por ahora solo un aviso "Próximamente" con vista previa sin cifras. */
-function SocialTab({ onBack }) {
-  return (
-    <div className="social-wrap">
-      <div className="social-head">
-        {onBack && (
-          <button className="social-back" onClick={onBack} aria-label="Volver a Más"><NavIcon name="volver" /></button>
-        )}
-        <h2 className="social-title">Social</h2>
-        <span className="pronto-pill pronto-pill-big">PRÓXIMAMENTE</span>
-      </div>
-      <div className="panel social-card">
-        <svg width="160" height="120" viewBox="0 0 160 120" fill="none" aria-hidden="true">
-          <ellipse cx="80" cy="60" rx="70" ry="26" stroke="#24406b" strokeWidth="1.5" transform="rotate(-18 80 60)" />
-          <ellipse cx="80" cy="60" rx="46" ry="16" stroke="#2a4f7f" strokeWidth="1.5" transform="rotate(-18 80 60)" />
-          <circle cx="80" cy="60" r="10" fill="#4dd8ee" />
-          <circle cx="141" cy="42" r="6" fill="#f472b6" />
-          <circle cx="24" cy="80" r="5" fill="#fbbf24" />
-          <circle cx="112" cy="72" r="4" fill="#8a93f0" />
-        </svg>
-        <p className="social-text">Compara tus estadísticas con las de otros usuarios y descubre las asignaturas más difíciles de tu carrera.</p>
-      </div>
-      <div className="social-preview" aria-hidden="true">
-        <div className="social-preview-label">VISTA PREVIA</div>
-        {[[120, 78, 58], [150, 46, 64], [96, 88, 70]].map(([w, a, b], i) => (
-          <div key={i} className="social-bars">
-            <div className="sb sb-title" style={{ width: w }} />
-            <div className="sb sb-cyan" style={{ width: `${a}%` }} />
-            <div className="sb sb-dim" style={{ width: `${b}%` }} />
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -578,7 +547,9 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
     } catch (e) {
       setFormMsg({
         type: "error",
-        text: `No se pudo guardar (${String((e && e.message) || e)}). Tus minutos siguen en el formulario: pulsa "Guardar registro" para reintentar.`,
+        text: isNetworkError(e)
+          ? `${friendlyError(e)}. Tus minutos siguen en el formulario: pulsa "Guardar registro" para reintentar.`
+          : `No se pudo guardar (${String((e && e.message) || e)}). Tus minutos siguen en el formulario: pulsa "Guardar registro" para reintentar.`,
       });
     } finally {
       savingRef.current = false;
@@ -635,7 +606,12 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
       forgetSessionEdit(id);
       setListMsg({ type: "error", text: `${e.message} He actualizado la lista.` });
     } else {
-      setSessionError(id, `No se pudo guardar el cambio (${String((e && e.message) || e)}). Inténtalo de nuevo.`);
+      setSessionError(
+        id,
+        isNetworkError(e)
+          ? `${friendlyError(e)}.`
+          : `No se pudo guardar el cambio (${String((e && e.message) || e)}). Inténtalo de nuevo.`
+      );
     }
   }
 
@@ -2223,93 +2199,11 @@ function ClasificacionTab({ subjects, entries }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  CONEXIÓN CON GOOGLE SHEETS (Apps Script) — YA NO SE USA            */
-/*  Se deja sin borrar como red de seguridad durante la migración a    */
-/*  Supabase (ver supabaseData.js). Una vez confirmado en producción   */
-/*  que todo funciona bien con Supabase, se puede eliminar este bloque */
-/*  y las variables VITE_APPS_SCRIPT_*.                                */
-/* ------------------------------------------------------------------ */
-
-const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
-const APPS_SCRIPT_TOKEN = import.meta.env.VITE_APPS_SCRIPT_TOKEN;
 const DISABLE_CLOUD_SAVE = import.meta.env.VITE_DISABLE_CLOUD_SAVE === "true";
-
-async function cloudLoad() {
-  const res = await fetch(`${APPS_SCRIPT_URL}?token=${encodeURIComponent(APPS_SCRIPT_TOKEN)}`);
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  const json = await res.json();
-  if (json.error) throw new Error(json.error);
-  return json.value;
-}
-
-async function cloudSave(dataObj) {
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ token: APPS_SCRIPT_TOKEN, value: JSON.stringify(dataObj) }),
-  });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  const json = await res.json();
-  if (json.error) throw new Error(json.error);
-  return json;
-}
 
 /* ------------------------------------------------------------------ */
 /*  APP PRINCIPAL                                                      */
 /* ------------------------------------------------------------------ */
-
-// El email real del propietario, cuyo historial vive todavía en Google
-// Sheets — solo para esa cuenta, la primera vez que entra sin ningún curso
-// en Supabase, se dispara la migración automática (ver AutoMigrate más
-// abajo). Cualquier otra cuenta nueva (un usuario real futuro) no tiene
-// nada que migrar y simplemente ve el formulario para crear su primer
-// curso, igual que cualquier alta nueva.
-const OWNER_EMAIL = "egranadosalanis@gmail.com";
-
-/** Trae, una sola vez y de forma automática (sin botón ni intervención),
- * el historial del propietario desde Google Sheets a sus tablas de
- * Supabase — mismo espíritu que applyHistoricalImport() en domain.js
- * (import histórico incrustado y aplicado solo), pero para esta migración
- * de backend. Nunca toca ni borra el Google Sheet original. */
-function AutoMigrateFromSheets({ userId }) {
-  const [status, setStatus] = useState("Leyendo tu historial de Google Sheets…");
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const raw = await cloudLoad();
-        const legacyData = applyHistoricalImport(migrateData(raw ? JSON.parse(raw) : buildDefaultData()));
-        if (cancelled) return;
-        const result = await migrateFromGoogleSheets(userId, legacyData, (msg) => !cancelled && setStatus(msg));
-        if (cancelled) return;
-        setStatus(`Migrado: ${result.cursos} curso(s), ${result.subjects} asignatura(s), ${result.registros} registro(s). Actualizando plan…`);
-        await supabase.from("profiles").update({ plan: "premium_historico" }).eq("id", userId);
-        if (cancelled) return;
-        window.location.reload();
-      } catch (e) {
-        if (!cancelled) setError(String((e && e.message) || e));
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
-
-  return (
-    <div className="app-shell app-loading">
-      <style>{CSS}</style>
-      <div className="panel auth-card">
-        <div className="panel-title">Preparando tu cuenta</div>
-        {error ? (
-          <div className="auth-error">No se pudo migrar el historial: {error}</div>
-        ) : (
-          <div className="mono" style={{ color: "#8291AC" }}>{status}</div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
@@ -2554,7 +2448,7 @@ function BugReportModal({ onClose, userId, tab }) {
 // NEWS_MAX_SHOWS entradas a la app (por cuenta y dispositivo), salvo que
 // el usuario marque "No volver a mostrar". Para anunciar otra novedad en
 // el futuro basta con cambiar NEWS_VERSION y el contenido.
-const NEWS_VERSION = "2026-09-navegacion";
+const NEWS_VERSION = "2026-10-social";
 const NEWS_MAX_SHOWS = 3;
 const newsCountedThisLoad = new Set(); // evita contar dos veces la misma carga
 
@@ -2580,13 +2474,25 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
     <Modal title="🚀 Novedades en Clever" onClose={() => onClose(dontShow)} wide>
       <div className="news">
         <section className="news-item">
+          <div className="news-icon">👥</div>
+          <div>
+            <div className="news-title">Ya está aquí Social: Amigos</div>
+            <ul className="news-list">
+              <li>Elige tu <strong>nombre de usuario</strong>, añade amigos con la lupa y mira la <strong>clasificación</strong> de rangos y rachas entre vosotros.</li>
+              <li>Toca a un amigo para ver su <strong>ficha</strong>: rango, racha, métricas y mapa de calor — en modo solo lectura, y solo si los dos habéis aceptado compartir.</li>
+              <li>¿Un amigo aún no tiene Clever? Con el botón de <strong>invitar</strong> le mandas un enlace.</li>
+              <li>Las estadísticas de la comunidad por asignatura llegarán pronto.</li>
+            </ul>
+          </div>
+        </section>
+        <section className="news-item">
           <div className="news-icon">🧭</div>
           <div>
             <div className="news-title">Nuevo orden y navegación móvil</div>
             <ul className="news-list">
               <li>Las secciones van ahora en este orden: <strong>Bitácora, Trayectoria, Panel, Rangos, Desgaste, Clasificación, Social y Asignaturas</strong>.</li>
               <li>En el móvil hay una <strong>barra inferior</strong> con Bitácora, Trayectoria, Panel, Rangos y <strong>Más</strong>; el menú de cuenta ahora está en el círculo con tu inicial.</li>
-              <li>Nueva sección <strong>Social</strong> (próximamente): compararás tus estadísticas con las de otros usuarios.</li>
+              <li>Nueva sección <strong>Social</strong>: compara tus estadísticas con las de tus amigos.</li>
               <li>Los registros ahora salen de <strong>más reciente a más antiguo</strong>.</li>
             </ul>
           </div>
@@ -2681,6 +2587,11 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [newsOpen, setNewsOpen] = useState(null);
   const isMobile = useIsMobile();
   const [moreOpen, setMoreOpen] = useState(false);
+  // Invitación recibida por enlace (?invitar=usuario): lleva directo a Social.
+  const [pendingInvite, setPendingInvite] = useState(() => readPendingInvite());
+  const [socialSettingsOpen, setSocialSettingsOpen] = useState(false);
+  const [socialKey, setSocialKey] = useState(0); // al cerrar los ajustes se recarga la pestaña Social
+  useEffect(() => { if (pendingInvite) setTab("social"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [newsSeen, setNewsSeen] = useState(() => Boolean(readNewsState(session.user.id).seen));
 
   useEffect(() => {
@@ -2798,7 +2709,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
       );
       setCloudError(null);
     } catch (e) {
-      if (seq === loadSeqRef.current) setCloudError(String((e && e.message) || e));
+      if (seq === loadSeqRef.current) setCloudError(friendlyError(e));
     }
   }
 
@@ -2815,7 +2726,13 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     }
     document.addEventListener("visibilitychange", onReturn);
     window.addEventListener("focus", onReturn);
+    // Al recuperar la conexión se recarga (limpia también el aviso de "sin conexión").
+    function onOnline() {
+      if (!DISABLE_CLOUD_SAVE) refreshData();
+    }
+    window.addEventListener("online", onOnline);
     return () => {
+      window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onReturn);
       window.removeEventListener("focus", onReturn);
     };
@@ -2832,7 +2749,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
       await fn();
       setCloudError(null);
     } catch (e) {
-      setCloudError(String((e && e.message) || e));
+      setCloudError(friendlyError(e));
     }
   }
 
@@ -2930,7 +2847,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
       setData((d) => ({ ...d, subjects: [...d.subjects, newSub] }));
       setCloudError(null);
     } catch (e) {
-      setCloudError(String((e && e.message) || e));
+      setCloudError(friendlyError(e));
     }
   }
 
@@ -2972,7 +2889,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
       setData((d) => ({ ...d, activeCursoId: newCurso.id, cursos: [...d.cursos, newCurso] }));
       setCloudError(null);
     } catch (e) {
-      setCloudError(String((e && e.message) || e));
+      setCloudError(friendlyError(e));
     }
   }
 
@@ -2994,10 +2911,25 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   }
 
   if (data && data.cursos.length === 0) {
-    if (session.user.email === OWNER_EMAIL) {
-      return <AutoMigrateFromSheets userId={userId} />;
-    }
     return <WelcomeCreateCurso onCreate={handleAddCurso} onSignOut={onSignOut} email={session.user.email} />;
+  }
+
+  if (!data && cloudError) {
+    // La primera carga falló: en vez de "Cargando…" para siempre, se avisa
+    // (con mensaje propio si es por falta de conexión) y se deja reintentar.
+    const offline = cloudError === OFFLINE_MESSAGE;
+    return (
+      <div className="app-shell app-loading">
+        <style>{CSS}</style>
+        <div className="panel auth-card">
+          <div className="panel-title">{offline ? "Sin conexión" : "No se pudieron cargar tus datos"}</div>
+          <div className="auth-error">{cloudError}</div>
+          <div className="btn-row">
+            <button className="btn-primary" onClick={() => { setCloudError(null); refreshData(); }}>Reintentar</button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!data || !curso || !stats) {
@@ -3102,11 +3034,17 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
                     <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setNewsOpen("manual"); }}>
                       🚀 Novedades
                     </button>
+                    <a className="account-dropdown-row" href={APP_SHARE_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)}>
+                      🌐 Web de Clever
+                    </a>
                     <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setReportOpen(true); }}>
                       🐞 Reportar un problema
                     </button>
                   </>
                 )}
+                <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setSocialSettingsOpen(true); }}>
+                  👥 Ajustes de Social
+                </button>
                 <button className="account-dropdown-row" onClick={onSignOut}>Cerrar sesión</button>
                 <div className="account-dropdown-divider" />
                 <button
@@ -3120,6 +3058,10 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           </div>
         </div>
       </header>
+
+      {socialSettingsOpen && (
+        <SocialSettingsModal userId={userId} onClose={() => { setSocialSettingsOpen(false); setSocialKey((k) => k + 1); }} />
+      )}
 
       {newsOpen && (
         <NewsModal
@@ -3180,9 +3122,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           <Tab id="rangos" active={tab === "rangos"} onClick={setTab}>Rangos</Tab>
           <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
           <Tab id="clasificacion" active={tab === "clasificacion"} onClick={setTab}>Clasificación</Tab>
-          <Tab id="social" active={tab === "social"} onClick={setTab}>
-            Social <span className="pronto-pill pronto-pill-tab">PRONTO</span>
-          </Tab>
+          <Tab id="social" active={tab === "social"} onClick={setTab}>Social</Tab>
           <Tab id="asignaturas" active={tab === "asignaturas"} onClick={setTab}>Asignaturas</Tab>
         </nav>
       )}
@@ -3209,7 +3149,22 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             ? <ClasificacionTab subjects={data.subjects} entries={data.entries} />
             : <PremiumLocked feature="la Clasificación histórica" />
         )}
-        {tab === "social" && <SocialTab onBack={isMobile ? () => setMoreOpen(true) : null} />}
+        {tab === "social" && (
+          <SocialTab
+            key={socialKey}
+            userId={userId}
+            carreraId={profile?.carrera_canonica_id ?? null}
+            onOpenSettings={() => setSocialSettingsOpen(true)}
+            subjects={data.subjects}
+            entries={data.entries}
+            logs={data.logs}
+            pendingInvite={pendingInvite}
+            onInviteHandled={() => { clearPendingInvite(); setPendingInvite(null); }}
+            onBack={isMobile ? () => setMoreOpen(true) : null}
+            onLeave={() => setTab("bitacora")}
+            isMobile={isMobile}
+          />
+        )}
         {tab === "asignaturas" && (
           <AsignaturasTab
             subjects={data.subjects}
@@ -3423,27 +3378,7 @@ export const CSS = `
 
   .app-main { max-width: 1080px; margin: 0 auto; }
 
-  /* ---- Social (próximamente) ---- */
-  .pronto-pill {
-    display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--cyan); color: var(--cyan);
-    font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
-  }
-  .pronto-pill-tab { margin-left: 6px; padding: 1px 6px; font-size: 9px; }
-  .tab-btn-active .pronto-pill-tab { color: var(--bg); border-color: var(--bg); }
-  .pronto-pill-big { padding: 5px 10px; font-size: 11px; }
-  .social-wrap { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
-  .social-head { display: flex; align-items: center; gap: 12px; }
-  .social-title { flex: 1; margin: 0; font-size: 26px; font-weight: 700; }
-  .social-back { width: 44px; height: 44px; margin-left: -10px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-dim); cursor: pointer; }
-  .social-card { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 24px 20px; }
-  .social-text { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text-dim); }
-  .social-preview { border: 1px dashed var(--border); border-radius: 20px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; filter: blur(0.5px); }
-  .social-preview-label { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--text-dim); }
-  .social-bars { display: flex; flex-direction: column; gap: 6px; }
-  .sb { height: 10px; border-radius: 5px; }
-  .sb-title { background: var(--border); }
-  .sb-cyan { background: var(--cyan); opacity: 0.55; }
-  .sb-dim { background: var(--panel-2); }
+  ${SOCIAL_CSS}
 
   /* ---- Navegación móvil: barra inferior, panel "Más" y perfil ---- */
   .bottom-nav, .more-overlay { display: none; }

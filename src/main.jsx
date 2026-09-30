@@ -2,6 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import AuthGate from './AuthGate.jsx'
+import { captureInviteFromUrl } from './socialData.js'
+
+// Enlace de invitación (?invitar=usuario): se recuerda antes de registrarse/iniciar sesión.
+captureInviteFromUrl()
 
 // Aplica el tema guardado antes del primer render, para que no haya un
 // parpadeo oscuro->claro al cargar si el usuario ya eligió modo claro.

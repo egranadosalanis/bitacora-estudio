@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import {
   deleteAccountData, getNormalizationStatus, linkProfileToCanonical, linkAsignaturaToCanonical, markAsignaturaErasmus,
 } from "./supabaseData.js";
+import { OFFLINE_MESSAGE, isNetworkError } from "./offline.js";
 import App, { CSS, CanonicalUniversidadPicker, CanonicalCarreraPicker, CanonicalAsignaturaPicker } from "./App.jsx";
 
 const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
@@ -536,7 +537,9 @@ export default function AuthGate() {
   const [maintenance, setMaintenance] = useState(undefined);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
+    // Si getSession falla (p. ej. sin red al refrescar un token caducado),
+    // se sigue sin sesión en vez de quedarse cargando para siempre.
+    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null)).catch(() => setSession(null));
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === "PASSWORD_RECOVERY") setPasswordRecovery(true);
       setSession(s);
@@ -556,6 +559,20 @@ export default function AuthGate() {
       // la app a todo el mundo por un fallo de lectura.
       .catch(() => setMaintenance(null));
   }, []);
+
+  // Al pulsar "Reintentar" (o al recuperar la conexión) se vuelve a pedir
+  // el perfil y el estado de normalización.
+  const [retryKey, setRetryKey] = useState(0);
+  const profileErrorIsOffline = Boolean(profileError) && isNetworkError({ message: profileError });
+  function retryLoad() {
+    setProfileError(null);
+    setRetryKey((k) => k + 1);
+  }
+  useEffect(() => {
+    if (!profileErrorIsOffline) return;
+    window.addEventListener("online", retryLoad);
+    return () => window.removeEventListener("online", retryLoad);
+  }, [profileErrorIsOffline]);
 
   useEffect(() => {
     if (!session) {
@@ -590,7 +607,7 @@ export default function AuthGate() {
       setProfileError(error.message);
     })();
     return () => { cancelled = true; };
-  }, [session]);
+  }, [session, retryKey]);
 
   // Promoción "premium por unirte este curso": se intenta en cuanto hay
   // perfil, en cualquier inicio de sesión (incluida una sesión recordada
@@ -625,7 +642,7 @@ export default function AuthGate() {
       .then((s) => { if (!cancelled) setNormStatus(s); })
       .catch((err) => { if (!cancelled) setProfileError(err.message || String(err)); });
     return () => { cancelled = true; };
-  }, [profile]);
+  }, [profile, retryKey]);
 
   async function completeProfile({ universidadId, universidadNombre, carreraId, carreraNombre }) {
     const { data, error } = await supabase
@@ -657,6 +674,20 @@ export default function AuthGate() {
   if (maintenance) return <MaintenanceScreen message={maintenance.message} />;
   if (passwordRecovery) return <SetNewPassword />;
   if (!session) return <AuthForm />;
+  if (profileErrorIsOffline) {
+    return (
+      <div className="app-shell app-loading">
+        <style>{CSS}</style>
+        <div className="panel auth-card">
+          <div className="panel-title">Sin conexión</div>
+          <div className="auth-error">{OFFLINE_MESSAGE}</div>
+          <div className="btn-row">
+            <button className="btn-primary" onClick={retryLoad}>Reintentar</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (profileError) {
     return (
       <div className="app-shell app-loading">
