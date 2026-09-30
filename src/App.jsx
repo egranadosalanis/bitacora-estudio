@@ -121,7 +121,7 @@ const BOTTOM_TABS = [
   { id: "bitacora", label: "Bitácora" },
   { id: "trayectoria", label: "Trayect." },
   { id: "panel", label: "Panel" },
-  { id: "rangos", label: "Rangos" },
+  { id: "social", label: "Social" },
 ];
 
 /** Barra inferior fija del móvil: 4 secciones + "Más". */
@@ -187,9 +187,9 @@ function MoreSheet({ onClose, onGo, newsDot, isPremium, exportBusy, onExport, on
       <div className="more-sheet" role="dialog" aria-label="Más" onClick={(e) => e.stopPropagation()}>
         <div className="more-handle" />
         <div className="more-section">SECCIONES</div>
+        <MoreRow icon="rangos" onClick={() => onGo("rangos")}>Rangos</MoreRow>
         <MoreRow icon="desgaste" onClick={() => onGo("desgaste")}>Desgaste</MoreRow>
         <MoreRow icon="clasificacion" onClick={() => onGo("clasificacion")}>Clasificación</MoreRow>
-        <MoreRow icon="social" onClick={() => onGo("social")}>Social</MoreRow>
         <div className="more-divider" />
         <div className="more-section">HERRAMIENTAS</div>
         <MoreRow icon="asignaturas" onClick={() => onGo("asignaturas")}>Mis asignaturas</MoreRow>
@@ -2516,7 +2516,7 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
             <div className="news-title">Nuevo orden y navegación móvil</div>
             <ul className="news-list">
               <li>Las secciones van ahora en este orden: <strong>Bitácora, Trayectoria, Panel, Rangos, Desgaste, Clasificación, Social y Asignaturas</strong>.</li>
-              <li>En el móvil hay una <strong>barra inferior</strong> con Bitácora, Trayectoria, Panel, Rangos y <strong>Más</strong>; el menú de cuenta ahora está en el círculo con tu inicial.</li>
+              <li>En el móvil hay una <strong>barra inferior</strong> con Bitácora, Trayectoria, Panel, Social y <strong>Más</strong> (Rangos, Desgaste y Clasificación están dentro de Más); el menú de cuenta ahora está en el círculo con tu inicial.</li>
               <li>Nueva sección <strong>Social</strong>: compara tus estadísticas con las de tus amigos.</li>
               <li>Los registros ahora salen de <strong>más reciente a más antiguo</strong>.</li>
             </ul>
@@ -3241,7 +3241,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             logs={data.logs}
             pendingInvite={pendingInvite}
             onInviteHandled={() => { clearPendingInvite(); setPendingInvite(null); }}
-            onBack={isMobile ? () => setMoreOpen(true) : null}
+            onBack={null}
             isMobile={isMobile}
           />
         )}
