@@ -6,7 +6,7 @@ import {
 import {
   PALETTE, SUBJECT_COLORS, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
-  computeDesgaste, freezeApproval, computeClassification,
+  computeDesgaste, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
   APP_SHARE_URL,
 } from "./domain.js";
@@ -1419,36 +1419,20 @@ export function CanonicalAsignaturaPicker({ carreraId, initialQuery, onSelect })
   );
 }
 
-function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
+function ApprovalForm({ subject, subjects, suggestedCursos, onConfirm, onCancel }) {
   const [nota, setNota] = useState("");
-  const [cursosNecesarios, setCursosNecesarios] = useState("1");
-  const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
-  const activeSources = mergedSources.filter((s) => s.estado === "aprobada");
-  const pendingSources = mergedSources.filter((s) => s.estado !== "aprobada");
-  const mergeTarget = subject.mergedInto ? subjects.find((s) => s.id === subject.mergedInto) : null;
+  const [cursosNecesarios, setCursosNecesarios] = useState(String(suggestedCursos || 1));
+  const others = getMergeGroup(subjects, subject.id).filter((s) => s.id !== subject.id);
   return (
     <div>
       <p className="panel-subtitle">
-        Vas a marcar <strong>{subject.name}</strong> como aprobada. Nota y cursos necesarios quedan fijos para
-        siempre; las horas/crédito, días totales y el desgaste se siguen recalculando siempre con los datos
-        actuales, no se congelan.
+        Vas a marcar <strong>{subject.name}</strong> como aprobada. Nota y fecha quedan fijas para siempre; las
+        horas/crédito, días totales y el desgaste se siguen recalculando siempre con los datos actuales.
       </p>
-      {activeSources.length > 0 && (
+      {others.length > 0 && (
         <p className="panel-subtitle">
-          Ya suma las horas de: <strong>{activeSources.map((s) => s.name).join(", ")}</strong> (combinadas, ya aprobada).
-        </p>
-      )}
-      {pendingSources.length > 0 && (
-        <p className="panel-subtitle">
-          Combinada también con <strong>{pendingSources.map((s) => s.name).join(", ")}</strong>, pero como
-          {pendingSources.length === 1 ? " todavía no está aprobada" : " ninguna está aprobada todavía"}, sus horas
-          no cuentan aún — se sumarán solas en cuanto la apruebes.
-        </p>
-      )}
-      {mergeTarget && (
-        <p className="panel-subtitle">
-          Esta asignatura está combinada con <strong>{mergeTarget.name}</strong>: al aprobarla ahora, sus horas
-          empezarán a sumarse también a la clasificación de {mergeTarget.name}.
+          Está combinada con <strong>{others.map((s) => s.name).join(", ")}</strong>: cuentan juntas como una sola
+          asignatura aprobada (horas, días y cursos), aunque las demás no estén aprobadas.
         </p>
       )}
       <div className="field-row">
@@ -1586,8 +1570,9 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
           )}
         </div>
         <div className="panel-subtitle">
-          Si esta asignatura convalida o equivale a otra con nombre distinto que cursaste antes, puedes combinarla con
-          ella desde "Combinar con". Sus horas, días y cursos necesarios se sumarán a la asignatura que finalmente apruebes.
+          Si repites una asignatura de otro curso, o la cursaste en Erasmus, enlázalas desde "Combinar con" (da igual
+          con cuál del grupo). En cuanto apruebes una, cuentan juntas como una sola asignatura: horas, días y cursos
+          necesarios, sin tener que aprobar las demás.
           {curso?.estado === "terminado"
             ? " Este curso está marcado como terminado: en Trayectoria se muestra por cuatrimestres en vez de por días."
             : " Este curso está en marcha: en Trayectoria se muestra por los últimos 30/90 días."}
@@ -1612,8 +1597,11 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
                 // casos (p. ej. una repetida sin apenas registros propios
                 // todavía), así que solo se usa para la etiqueta informativa
                 // del curso en cada opción, nunca para ocultarla.
-                const mergeOptions = subjects.filter((o) => o.id !== s.id && !o.mergedInto);
-                const hasOwnSources = subjects.some((o) => o.mergedInto === s.id);
+                // Se puede enlazar con cualquier asignatura que aún no esté en
+                // el grupo de esta (da igual con cuál del grupo la enlaces).
+                const groupOthers = getMergeGroup(subjects, s.id).filter((o) => o.id !== s.id);
+                const groupIds = new Set(groupOthers.map((o) => o.id));
+                const mergeOptions = subjects.filter((o) => o.id !== s.id && (!groupIds.has(o.id) || o.id === s.mergedInto));
                 const deletable = !hasEntries(s.id);
                 return (
                   <tr key={s.id}>
@@ -1634,37 +1622,23 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
                           </button>
                         </div>
                       )}
-                      {!hasOwnSources && (
-                        <select
-                          className="input-field input-inline merge-select"
-                          value={s.mergedInto || ""}
-                          onChange={(e) => onUpdateSubject(s.id, { mergedInto: e.target.value || null })}
-                        >
-                          <option value="">No combinar (cuenta por separado)</option>
-                          {mergeOptions.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              Combinada con: {o.name} ({cursoNameById.get(cursoIdBySubjectId.get(o.id)) ?? "sin curso"})
-                            </option>
-                          ))}
-                        </select>
+                      <select
+                        className="input-field input-inline merge-select"
+                        value={s.mergedInto || ""}
+                        onChange={(e) => onUpdateSubject(s.id, { mergedInto: e.target.value || null })}
+                      >
+                        <option value="">{s.mergedInto ? "Dejar de combinar (cuenta por separado)" : "Combinar con otra asignatura…"}</option>
+                        {mergeOptions.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            Combinada con: {o.name} ({cursoNameById.get(cursoIdBySubjectId.get(o.id)) ?? "sin curso"})
+                          </option>
+                        ))}
+                      </select>
+                      {groupOthers.length > 0 && (
+                        <div className="gauge-sub" style={{ marginTop: 4 }}>
+                          Cuenta junto con: {groupOthers.map((o) => o.name).join(", ")}
+                        </div>
                       )}
-                      {hasOwnSources && (() => {
-                        const sources = subjects.filter((o) => o.mergedInto === s.id);
-                        const active = sources.filter((o) => o.estado === "aprobada");
-                        const pending = sources.filter((o) => o.estado !== "aprobada");
-                        return (
-                          <div style={{ marginTop: 4 }}>
-                            {active.length > 0 && (
-                              <div className="gauge-sub">Combinada con: {active.map((o) => o.name).join(", ")}</div>
-                            )}
-                            {pending.length > 0 && (
-                              <div className="gauge-sub" style={{ color: "var(--amber)" }}>
-                                Combinada con (pendiente, no cuenta aún): {pending.map((o) => o.name).join(", ")}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
                       {s.canonicalEstado === "rechazada" && reviewingId !== s.id && (
                         <div className="gauge-sub" style={{ color: "var(--red, #e5484d)" }}>
                           Rechazada al revisarla.{" "}
@@ -1767,6 +1741,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
           <ApprovalForm
             subject={approvingSubject}
             subjects={subjects}
+            suggestedCursos={countCursosOf(getMergeGroup(subjects, approvingSubject.id), entries, cursos)}
             onCancel={() => setApprovingId(null)}
             onConfirm={({ nota, cursosNecesarios }) => { onApprove(approvingSubject.id, { nota, cursosNecesarios }); setApprovingId(null); }}
           />
@@ -1866,16 +1841,20 @@ function DesgasteCard({ subject, desgaste, bare }) {
   );
 }
 
-/** Para cada asignatura "oficial" (no fusionada dentro de otra), calcula el
- * desgaste de ella misma y el de cualquier asignatura combinada con
- * "Combinar con", y se queda con el mayor de los dos — p. ej. si Calcolo
- * Numerico está combinada con Métodos Matemáticos y su tramo fue más duro,
- * la clasificación general muestra el desgaste de Calcolo Numerico bajo
- * el nombre de Métodos Matemáticos. */
+/** Para cada grupo de asignaturas combinadas ("Combinar con"; las sueltas son
+ * grupos de una), calcula el desgaste de cada miembro y se queda con el mayor
+ * — p. ej. si la de Erasmus tuvo el tramo más duro, se muestra su desgaste
+ * bajo el nombre de la asignatura de tu universidad, indicando de cuál es. */
 function buildDesgasteRanking(subjects, entries) {
-  const targets = subjects.filter((s) => !s.mergedInto);
-  return targets.map((target) => {
-    const members = [target, ...subjects.filter((s) => s.mergedInto === target.id)];
+  const seen = new Set();
+  const groups = [];
+  subjects.forEach((s) => {
+    if (seen.has(s.id)) return;
+    const members = getMergeGroup(subjects, s.id);
+    members.forEach((m) => seen.add(m.id));
+    groups.push({ target: pickGroupBase(members), members });
+  });
+  return groups.map(({ target, members }) => {
     const computed = members.map((m) => ({ subject: m, desgaste: computeDesgaste(m.id, entries) }));
     const ranked = computed.filter((c) => c.desgaste.comparable);
     const best = ranked.length > 0 ? ranked.reduce((a, b) => (b.desgaste.indice > a.desgaste.indice ? b : a)) : null;
@@ -2021,43 +2000,34 @@ const CLASIF_SHARE_LABEL = {
   nota: "nota",
 };
 
-function ClasificacionDetail({ subject, subjects, entries }) {
-  const f = subject.frozen;
-  const c = computeClassification(subject, entries, subjects);
-  const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
-  const activeSources = mergedSources.filter((s) => s.estado === "aprobada");
-  const pendingSources = mergedSources.filter((s) => s.estado !== "aprobada");
+function ClasificacionDetail({ subject, subjects, entries, cursos }) {
+  const c = computeClassification(subject, entries, subjects, cursos);
+  const mergedSources = c.members.filter((m) => m.id !== c.base.id);
 
-  const wearMembers = [subject, ...activeSources];
-  const wearComputed = wearMembers.map((m) => ({ subject: m, desgaste: computeDesgaste(m.id, entries) }));
+  const wearComputed = c.members.map((m) => ({ subject: m, desgaste: computeDesgaste(m.id, entries) }));
   const wearRanked = wearComputed.filter((w) => w.desgaste.comparable);
   const wearBest = wearRanked.length > 0
     ? wearRanked.reduce((a, b) => (b.desgaste.indice > a.desgaste.indice ? b : a))
-    : wearComputed[0];
+    : wearComputed.find((w) => w.subject.id === c.base.id) ?? wearComputed[0];
   const d = wearBest.desgaste;
   return (
     <div>
       <div className="stat-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
         <StatCard label="Horas / crédito" value={c.horasPorCredito.toFixed(2)} accent="var(--cyan-text)" />
         <StatCard label="Días totales" value={`${c.diasTotales} d`} accent="#F5A623" />
-        <StatCard label="Cursos necesarios" value={f.cursosNecesarios ?? "—"} accent="var(--purple)" />
-        <StatCard label="Nota" value={f.nota ?? "—"} accent="#3DDC84" />
+        <StatCard label="Cursos necesarios" value={c.cursosNecesarios || "—"} accent="var(--purple)" />
+        <StatCard label="Nota" value={c.nota ?? "—"} accent="#3DDC84" />
       </div>
-      {activeSources.length > 0 && (
+      {mergedSources.length > 0 && (
         <div className="gauge-sub" style={{ padding: "0 4px 4px" }}>
-          Combinada con: {activeSources.map((s) => s.name).join(", ")}
-        </div>
-      )}
-      {pendingSources.length > 0 && (
-        <div className="gauge-sub" style={{ padding: "0 4px 4px", color: "var(--amber)" }}>
-          Pendiente de combinar (aún no aprobada, no cuenta todavía): {pendingSources.map((s) => s.name).join(", ")}
+          Combinada con: {mergedSources.map((s) => s.name).join(", ")}
         </div>
       )}
       <div className="panel" style={{ marginTop: 4 }}>
         <div className="panel-title">Desgaste</div>
-        {wearBest.subject.id !== subject.id && (
+        {wearBest.subject.id !== c.base.id && (
           <div className="gauge-sub" style={{ marginBottom: 6 }}>
-            Desgaste mostrado: {wearBest.subject.name} (la que más costó)
+            Desgaste mostrado: {wearBest.subject.name}{wearBest.subject.esErasmus ? " (Erasmus)" : ""} (la que más costó)
           </div>
         )}
         {!d.comparable && <div className="empty-hint">No comparable — datos insuficientes.</div>}
@@ -2082,7 +2052,7 @@ function ClasificacionDetail({ subject, subjects, entries }) {
         )}
       </div>
       <div className="gauge-sub" style={{ padding: "0 4px" }}>
-        Inicio: {c.fechaInicio ? formatMedium(c.fechaInicio) : "—"} · Aprobada: {formatMedium(f.fechaAprobacion)}
+        Inicio: {c.fechaInicio ? formatMedium(c.fechaInicio) : "—"} · Aprobada: {formatMedium(c.fechaAprobacion)}
       </div>
     </div>
   );
@@ -2128,7 +2098,7 @@ function ClassificationShareCard({ ref, items, sortKey }) {
   );
 }
 
-function ClasificacionTab({ subjects, entries }) {
+function ClasificacionTab({ subjects, entries, cursos }) {
   const [sortKey, setSortKey] = useState("horasPorCredito");
   const [sortDir, setSortDir] = useState("desc");
   const [detailId, setDetailId] = useState(null);
@@ -2136,17 +2106,30 @@ function ClasificacionTab({ subjects, entries }) {
   const [shareError, setShareError] = useState(null);
   const shareCardRef = useRef(null);
 
-  const approved = subjects.filter((s) => s.estado === "aprobada" && s.frozen && !s.sinCreditos);
+  // Una fila por grupo de combinadas (ver getMergeGroup), no por asignatura.
+  const approved = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    subjects.forEach((s) => {
+      if (seen.has(s.id)) return;
+      const members = getMergeGroup(subjects, s.id);
+      members.forEach((m) => seen.add(m.id));
+      const base = pickGroupBase(members);
+      const approvedMembers = members.filter((m) => m.estado === "aprobada" && m.frozen);
+      if (approvedMembers.length && !base.sinCreditos) out.push(approvedMembers[approvedMembers.length - 1]);
+    });
+    return out;
+  }, [subjects]);
 
   const rows = useMemo(() => {
     const list = approved.map((s) => {
-      const c = computeClassification(s, entries, subjects);
+      const c = computeClassification(s, entries, subjects, cursos);
       return {
-        id: s.id, name: s.name, color: s.color,
+        id: s.id, name: c.base.name, color: c.base.color,
         horasPorCredito: c.horasPorCredito,
         horasTotales: +(c.minutosTotales / 60).toFixed(1),
-        cursosNecesarios: s.frozen.cursosNecesarios ?? 0,
-        nota: s.frozen.nota ?? 0,
+        cursosNecesarios: c.cursosNecesarios,
+        nota: c.nota ?? 0,
       };
     });
     list.sort((a, b) => {
@@ -2155,7 +2138,7 @@ function ClasificacionTab({ subjects, entries }) {
       return sortDir === "asc" ? av - bv : bv - av;
     });
     return list;
-  }, [approved, entries, subjects, sortKey, sortDir]);
+  }, [approved, entries, subjects, cursos, sortKey, sortDir]);
 
   function toggleSort(key) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -2241,8 +2224,8 @@ function ClasificacionTab({ subjects, entries }) {
       </div>
 
       {detailSubject && (
-        <Modal title={detailSubject.name} onClose={() => setDetailId(null)} wide>
-          <ClasificacionDetail subject={detailSubject} subjects={subjects} entries={entries} />
+        <Modal title={pickGroupBase(getMergeGroup(subjects, detailSubject.id)).name} onClose={() => setDetailId(null)} wide>
+          <ClasificacionDetail subject={detailSubject} subjects={subjects} entries={entries} cursos={cursos} />
         </Modal>
       )}
     </div>
@@ -3261,7 +3244,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
         {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
         {tab === "clasificacion" && (
           isPremium
-            ? <ClasificacionTab subjects={data.subjects} entries={data.entries} />
+            ? <ClasificacionTab subjects={data.subjects} entries={data.entries} cursos={data.cursos} />
             : <PremiumLocked feature="la Clasificación histórica" />
         )}
         {tab === "social" && (
@@ -3884,12 +3867,12 @@ export const CSS = `
     .rt-hero:not(.rt-hero-share), .rt-scene:not(.rt-scene-share) { max-width: 640px; margin-left: auto; margin-right: auto; }
   }
   .rt-hero .rt-sc { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .94; }
-  .rt-hero .rt-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,10,18,.05) 0%, rgba(6,10,18,0) 45%, rgba(6,10,18,.3) 75%, rgba(6,10,18,.58) 100%); }
+  .rt-hero .rt-tint { position: absolute; inset: 0; background: none; }
   .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #d7e3f5; text-shadow: 0 1px 6px rgba(0,0,0,.9); z-index: 2; margin: 0; }
   .rt-hero .rt-prevtag { position: absolute; top: 12px; right: 14px; z-index: 2; }
   .rt-herocard { position: relative; z-index: 2; text-align: center; padding: 16px 16px 20px; width: 100%; }
   .rt-emwrap { position: relative; z-index: 2; display: flex; justify-content: center; margin-bottom: 2px; }
-  .rt-emwrap img { width: 104px; height: auto; }
+  .rt-emwrap img { width: 104px; height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
   .rt-rname { font-family: "Manrope", sans-serif; font-size: 25px; font-weight: 700; line-height: 1.12; margin-top: 4px; color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.8); }
   .rt-rquip { font-size: 12.5px; color: #dbe6f5; margin-top: 5px; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
 

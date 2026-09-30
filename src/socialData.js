@@ -86,6 +86,7 @@ export const miResumen = () => rpc("mi_resumen");
 export const resumenAmigo = (username) => rpc("resumen_amigo", { p_username: username });
 export const comunidadStats = (canonicaId) => rpc("comunidad_stats", { p_canonica: canonicaId });
 export const listadoAprobados = (canonicaId) => rpc("listado_aprobados", { p_canonica: canonicaId });
+export const detalleAprobado = (canonicaId, username) => rpc("detalle_aprobado", { p_canonica: canonicaId, p_username: username });
 
 /* ---------- invitaciones por enlace ---------- */
 

@@ -218,7 +218,7 @@ function RangoView({ subjects, entries, logs }) {
           Ejemplo: 72 h en una asignatura de 6 créditos son 12 puntos. Con 5 asignaturas así, 5 × 12 = 60 puntos.
         </p>
         <p className="rt-proghelp">
-          Solo cuentan las horas registradas dentro de la season. Las asignaturas de Erasmus o sin créditos no puntúan.
+          Solo cuentan las horas registradas dentro de la season. Las asignaturas sin créditos no puntúan.
         </p>
       </div>
 
