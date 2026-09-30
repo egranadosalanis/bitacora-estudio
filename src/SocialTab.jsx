@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { RANK_NAMES, RANK_QUIPS, APP_URL, hm, wearLabel } from "./domain.js";
+import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
@@ -438,19 +438,95 @@ function RequestsView({ amistades, online, busyId, error, onRespond, onCancel, o
 
 /* ---------- ficha del amigo ---------- */
 
+function fmtDay(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+}
+
 function Heatmap({ dailyTotals, weeks }) {
   const cols = useMemo(() => heatmapCells(dailyTotals, weeks), [dailyTotals, weeks]);
+  const [sel, setSel] = useState(null);
   const level = (m) => (m == null ? -1 : m <= 0 ? 0 : m < 30 ? 1 : m < 90 ? 2 : m < 180 ? 3 : 4);
+  const label = (c) => `${fmtDay(c.date)}: ${c.minutes > 0 ? hm(c.minutes) : "sin estudio"}`;
+  const selCell = sel && cols.flat().find((c) => c.date === sel);
   return (
-    <div className="sc-hm" role="img" aria-label={`Mapa de calor de estudio de las últimas ${weeks} semanas`}>
-      {cols.map((col, i) => (
-        <div key={i} className="sc-hm-col">
-          {col.map((c) => (
-            <div key={c.date} className="sc-hm-cell" data-l={level(c.minutes)} title={c.minutes == null ? "" : `${c.date}: ${hm(c.minutes)}`} />
-          ))}
-        </div>
-      ))}
+    <>
+      <div className="sc-hm" role="group" aria-label={`Mapa de calor de estudio de las últimas ${weeks} semanas`}>
+        {cols.map((col, i) => (
+          <div key={i} className="sc-hm-col">
+            {col.map((c) => c.minutes == null
+              ? <div key={c.date} className="sc-hm-cell" data-l="-1" />
+              : (
+                <button
+                  type="button" key={c.date} className={`sc-hm-cell sc-hm-btn ${sel === c.date ? "sc-hm-sel" : ""}`} data-l={level(c.minutes)}
+                  title={label(c)} aria-label={label(c)}
+                  onMouseEnter={() => setSel(c.date)} onFocus={() => setSel(c.date)}
+                  onClick={() => setSel((cur) => (cur === c.date ? null : c.date))}
+                />
+              ))}
+          </div>
+        ))}
+      </div>
+      <div className="sc-hm-info" aria-live="polite">
+        {selCell ? <><strong>{fmtDay(selCell.date)}</strong> · {selCell.minutes > 0 ? hm(selCell.minutes) : "sin estudio"}</> : <span className="sc-dim">Toca o pasa el cursor por un día para ver su tiempo de estudio.</span>}
+      </div>
+    </>
+  );
+}
+
+function StudyHistory({ logs, subjects }) {
+  const [shown, setShown] = useState(10);
+  const days = useMemo(() => {
+    const names = new Map(subjects.map((s) => [s.id, s]));
+    const byDate = new Map();
+    logs.forEach((l) => {
+      const day = byDate.get(l.date) ?? { date: l.date, total: 0, items: new Map() };
+      day.total += l.minutes || 0;
+      day.items.set(l.subjectId, (day.items.get(l.subjectId) || 0) + (l.minutes || 0));
+      byDate.set(l.date, day);
+    });
+    return [...byDate.values()]
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+      .map((d) => ({ ...d, items: [...d.items].map(([id, min]) => ({ id, min, s: names.get(id) })).sort((a, b) => b.min - a.min) }));
+  }, [logs, subjects]);
+  if (!days.length) return null;
+  return (
+    <div className="panel">
+      <div className="panel-title">Historial de estudio</div>
+      <div className="sc-hist">
+        {days.slice(0, shown).map((d) => (
+          <div key={d.date} className="sc-hist-day">
+            <div className="sc-hist-head"><span className="sc-hist-date">{fmtDay(d.date)}</span><span className="sc-hist-total mono">{hm(d.total)}</span></div>
+            {d.items.map((it) => (
+              <div key={it.id} className="sc-brow">
+                <span className="sc-bdot" style={{ background: it.s?.color || "var(--cyan)" }} />
+                <span className="sc-bname">{it.s?.name ?? "Asignatura"}</span>
+                <span className="sc-bval mono">{hm(it.min)}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {shown < days.length && <button type="button" className="btn-ghost btn-small" style={{ marginTop: 10 }} onClick={() => setShown((n) => n + 10)}>Ver más</button>}
     </div>
+  );
+}
+
+function RankLadderModal({ tier, onClose }) {
+  return (
+    <SocialModal title="Clasificación de rangos" onClose={onClose}>
+      <div className="sc-ladder">
+        {[...RANK_NAMES.keys()].sort((a, b) => b - a).map((t) => (
+          <div key={t} className={`sc-lrow ${t === tier ? "sc-lrow-cur" : ""}`} style={{ "--rc": TIER_COLORS[t] }}>
+            <RankEmblem tier={t} size={40} />
+            <div className="sc-lname"><strong>{RANK_NAMES[t]}</strong><span className="sc-dim">{RANK_QUIPS[t]}</span></div>
+            <div className="sc-lth mono">
+              {t === RANK_THRESHOLDS.length - 1 ? `${RANK_THRESHOLDS[t]}+` : `${RANK_THRESHOLDS[t]} – ${RANK_THRESHOLDS[t + 1]}`}<br />h/cr
+            </div>
+          </div>
+        ))}
+      </div>
+    </SocialModal>
   );
 }
 
@@ -471,6 +547,9 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [showSubjects, setShowSubjects] = useState(false);
+  const [showLadder, setShowLadder] = useState(false);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const heroPhoto = photoFailed ? null : api.avatarSrc(model);
   const color = TIER_COLORS[model.tier];
   const past = model.history.filter((h) => !h.isCurrent);
   const [emblemId, setEmblemId] = useState(null);
@@ -519,9 +598,13 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
       )}
 
       <div className="panel sc-hero" style={{ "--rc": color }}>
-        <RankEmblem tier={model.tier} size={isMobile ? 104 : 120} />
-        <div className="sc-hero-rank">{RANK_NAMES[model.tier]}</div>
+        {heroPhoto && <img className="sc-hero-bg" src={heroPhoto} alt="" referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} />}
+        <button type="button" className="sc-hero-btn" onClick={() => setShowLadder(true)} aria-label="Ver la clasificación de rangos">
+          <RankEmblem tier={model.tier} size={isMobile ? 104 : 120} />
+          <span className="sc-hero-rank">{RANK_NAMES[model.tier]}</span>
+        </button>
         <div className="sc-hero-quip">{RANK_QUIPS[model.tier]}</div>
+        <div className="sc-hero-more mono">Toca el rango para ver la clasificación</div>
         <div className="sc-hero-streak mono">
           <Flame size={15} /> {model.streak} {model.streak === 1 ? "día" : "días"} de racha
           {model.bestStreak > model.streak && <span className="sc-dim"> · mejor: {model.bestStreak}</span>}
@@ -530,7 +613,7 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
       </div>
 
       <div className="sc-cards">
-        <StatCardSc label="H/CRÉDITO" value={model.hpcTotal == null ? "—" : fmtNum(model.hpcTotal)} hint="acumuladas (aprobadas)" />
+        <StatCardSc label="H/CRÉDITO" value={fmtNum(model.hpcSeason)} hint="season actual (en curso)" />
         <StatCardSc label="MINUTOS TOTALES" value={hm(model.totalMinutes)} hint={`${model.totalMinutes.toLocaleString("es-ES")} min`} />
         <StatCardSc
           label="ASIGNATURAS" value={model.numSubjects} hint={showSubjects ? "ocultar desglose" : "ver desglose"}
@@ -577,6 +660,8 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
         <div className="sc-hm-legend mono"><span>menos</span>{[0, 1, 2, 3, 4].map((l) => <span key={l} className="sc-hm-cell" data-l={l} />)}<span>más</span></div>
       </div>
 
+      <StudyHistory logs={model.logs} subjects={model.subjects} />
+
       {past.length > 0 && (
         <div className="panel">
           <div className="panel-title">Emblemas de seasons anteriores</div>
@@ -589,7 +674,7 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
                   className={`sc-emblem ${emblemId === h.season.id ? "sc-emblem-on" : ""}`}
                   onClick={() => setEmblemId((cur) => (cur === h.season.id ? null : h.season.id))}
                 >
-                  <RankEmblem tier={h.tier} size={54} />
+                  <RankEmblem tier={h.tier} size={64} />
                   <span className="sc-emblem-label mono">{h.season.label.replace("Season ", "S")}</span>
                 </button>
               );
@@ -602,6 +687,8 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
           </div>
         </div>
       )}
+
+      {showLadder && <RankLadderModal tier={model.tier} onClose={() => setShowLadder(false)} />}
 
       {confirm && !isSelf && (
         <SocialModal title={confirm === "remove" ? "Quitar amigo" : "Bloquear"} onClose={busy ? undefined : () => setConfirm(null)}>
@@ -844,7 +931,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
               <RankRow
                 key={r.username} pos={i + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar} summary={r.summary} isMe={r.me}
                 onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
-                hint={r.me ? (selfBusy ? "abriendo…" : "toca para ver tu perfil como lo ven tus amigos") : null}
+                hint={r.me && selfBusy ? "abriendo…" : null}
               />
             ))}
             {ranking.locked.map((r) => (
@@ -1493,13 +1580,34 @@ export const SOCIAL_CSS = `
   .sc-hm-cell[data-l="1"] { opacity: 0.28; }
   .sc-hm-cell[data-l="2"] { opacity: 0.5; }
   .sc-hm-cell[data-l="3"] { opacity: 0.75; }
+  .sc-hm-btn { border: 0; padding: 0; cursor: pointer; display: block; width: 100%; }
+  .sc-hm-sel { outline: 2px solid var(--text); outline-offset: 1px; }
+  .sc-hm-info { font-size: 13px; margin-top: 10px; min-height: 20px; }
+  .sc-hero { position: relative; overflow: hidden; }
+  .sc-hero > * { position: relative; }
+  .sc-hero .sc-hero-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.22; filter: blur(14px) saturate(1.2); transform: scale(1.2); pointer-events: none; }
+  .sc-hero-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer; color: inherit; font: inherit; padding: 0; }
+  .sc-hero-more { font-size: 10px; letter-spacing: 0.08em; color: var(--text-dim); }
+  .sc-hist { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+  .sc-hist-day { display: flex; flex-direction: column; gap: 5px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .sc-hist-day:last-child { border-bottom: 0; padding-bottom: 0; }
+  .sc-hist-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; }
+  .sc-hist-date { text-transform: capitalize; }
+  .sc-hist-total { color: var(--cyan-text); font-size: 12px; }
+  .sc-ladder { display: flex; flex-direction: column; gap: 8px; }
+  .sc-lrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 12px; }
+  .sc-lrow-cur { border-color: var(--rc); background: var(--panel-2); }
+  .sc-lname { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; }
+  .sc-lname strong { color: var(--rc); }
+  .sc-lname span { font-size: 11px; }
+  .sc-lth { font-size: 11px; text-align: right; color: var(--text-dim); white-space: nowrap; }
   .sc-hm-legend { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 8px; font-size: 10px; color: var(--text-dim); }
   .sc-hm-legend .sc-hm-cell { width: 12px; flex: none; }
 
-  .sc-emblems { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
-  .sc-emblem { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 1px solid transparent; border-radius: 12px; padding: 6px; cursor: pointer; color: inherit; }
+  .sc-emblems { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 10px; justify-items: center; }
+  .sc-emblem { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 1px solid transparent; border-radius: 12px; padding: 8px 16px; cursor: pointer; color: inherit; width: 100%; max-width: 180px; }
   .sc-emblem:hover, .sc-emblem-on { border-color: var(--cyan); background: var(--panel-2); }
-  .sc-emblem-info { font-size: 13px; margin-top: 10px; min-height: 20px; line-height: 1.5; }
+  .sc-emblem-info { font-size: 13px; margin-top: 10px; min-height: 20px; line-height: 1.5; text-align: center; }
   @media (max-width: 420px) { .sc-rank-name { max-width: 100px; } .sc-row { column-gap: 8px; padding: 10px; } }
   .sc-photo-pick { display: flex; gap: 14px; align-items: center; margin: 4px 0 14px; }
   .sc-photo-pick-txt { min-width: 0; }
