@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
@@ -69,10 +69,33 @@ export function VerifiedBadge({ size = 16 }) {
   );
 }
 
+/* El nombre va siempre en una sola línea: si no cabe, se reduce la letra
+   (hasta un mínimo) en vez de partirlo o pisar el rango. */
 function Username({ name, verified }) {
+  const wrapRef = useRef(null);
+  const textRef = useRef(null);
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const text = textRef.current;
+    if (!wrap || !text) return undefined;
+    const fit = () => {
+      const base = parseFloat(getComputedStyle(wrap).fontSize) || 15;
+      let size = base;
+      text.style.fontSize = "";
+      while (text.scrollWidth > text.clientWidth + 0.5 && size > 9) {
+        size -= 0.5;
+        text.style.fontSize = `${size}px`;
+      }
+    };
+    fit();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(fit);
+    ro.observe(wrap.parentElement ?? wrap);
+    return () => ro.disconnect();
+  }, [name, verified]);
   return (
-    <span className="sc-uname">
-      <span className="sc-uname-text">{name}</span>
+    <span className="sc-uname" ref={wrapRef}>
+      <span className="sc-uname-text" ref={textRef}>{name}</span>
       {verified && <VerifiedBadge size={16} />}
     </span>
   );
@@ -475,7 +498,7 @@ function Heatmap({ dailyTotals, weeks }) {
 }
 
 function StudyHistory({ logs, subjects }) {
-  const [shown, setShown] = useState(10);
+  const [shown, setShown] = useState(2);
   const days = useMemo(() => {
     const names = new Map(subjects.map((s) => [s.id, s]));
     const byDate = new Map();
@@ -507,7 +530,7 @@ function StudyHistory({ logs, subjects }) {
           </div>
         ))}
       </div>
-      {shown < days.length && <button type="button" className="btn-ghost btn-small" style={{ marginTop: 10 }} onClick={() => setShown((n) => n + 10)}>Ver más</button>}
+      {shown < days.length && <button type="button" className="btn-ghost btn-small" style={{ marginTop: 10 }} onClick={() => setShown((n) => n + 5)}>Ver más</button>}
     </div>
   );
 }
@@ -1517,8 +1540,9 @@ export const SOCIAL_CSS = `
   }
   .sc-toolbar { display: flex; align-items: center; gap: 2px; }
 
-  .sc-uname { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
-  .sc-uname-text { overflow-wrap: anywhere; }
+  .sc-uname { display: flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; }
+  .sc-uname-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .sc-uname > svg { flex-shrink: 0; }
 
   .sc-list { display: flex; flex-direction: column; gap: 8px; }
   .sc-row {
