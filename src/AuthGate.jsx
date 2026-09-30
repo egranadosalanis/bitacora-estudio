@@ -4,7 +4,7 @@ import {
   deleteAccountData, getNormalizationStatus, linkProfileToCanonical, linkAsignaturaToCanonical, markAsignaturaErasmus,
 } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, isNetworkError } from "./offline.js";
-import App, { CSS, CanonicalUniversidadPicker, CanonicalCarreraPicker, CanonicalAsignaturaPicker } from "./App.jsx";
+import App, { CSS, CanonicalUniversidadPicker, CanonicalCarreraPicker, CanonicalAsignaturaPicker, OnboardingStep, OnboardingSignOut } from "./App.jsx";
 
 const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
 
@@ -243,7 +243,7 @@ function SetNewPassword() {
   );
 }
 
-function CompleteProfileForm({ onSubmit }) {
+function CompleteProfileForm({ onSubmit, onSignOut, email }) {
   const [universidad, setUniversidad] = useState(null);
   const [carrera, setCarrera] = useState(null);
   const [error, setError] = useState(null);
@@ -269,6 +269,7 @@ function CompleteProfileForm({ onSubmit }) {
     <div className="app-shell app-loading">
       <style>{CSS}</style>
       <div className="panel auth-card">
+        <OnboardingStep step={1} total={3} />
         <div className="panel-title">Antes de empezar</div>
         <p className="panel-subtitle">
           Cuéntanos dónde estudias — nos sirve para poder compararte más adelante con otros
@@ -291,19 +292,20 @@ function CompleteProfileForm({ onSubmit }) {
             </button>
           </div>
         </form>
+        <OnboardingSignOut email={email} onSignOut={onSignOut} />
       </div>
     </div>
   );
 }
 
-/** Pantalla obligatoria y sin botón de cerrar: se muestra una vez por
+/** Pantalla obligatoria: se muestra una vez por
  * usuario, la primera vez que entra tras la actualización de
  * normalización, y bloquea el resto de la app hasta vincular (o
  * marcar Erasmus) TODAS sus asignaturas, de TODOS sus cursos — no
  * solo el curso activo. `status` viene de getNormalizationStatus() y
  * se recalcula en vivo después de cada acción: no hay ningún flag
  * guardado que se pueda falsificar para saltarse el paso. */
-function NormalizationGate({ userId, status, initialUniversidadQuery, initialCarreraQuery, onStatusChange }) {
+function NormalizationGate({ userId, status, initialUniversidadQuery, initialCarreraQuery, onStatusChange, onSignOut, email }) {
   const [universidadSel, setUniversidadSel] = useState(null);
   const [carreraSel, setCarreraSel] = useState(null);
   // Elecciones hechas en esta pantalla pero todavía no guardadas: se
@@ -490,6 +492,7 @@ function NormalizationGate({ userId, status, initialUniversidadQuery, initialCar
         )}
 
         {error && <div className="auth-error">{error}</div>}
+        <OnboardingSignOut email={email} onSignOut={onSignOut} />
       </div>
     </div>
   );
@@ -703,7 +706,7 @@ export default function AuthGate() {
     );
   }
   if (!profile) return <LoadingScreen text="Cargando perfil…" />;
-  if (!profile.universidad || !profile.carrera) return <CompleteProfileForm onSubmit={completeProfile} />;
+  if (!profile.universidad || !profile.carrera) return <CompleteProfileForm onSubmit={completeProfile} onSignOut={() => supabase.auth.signOut()} email={session.user.email} />;
   if (normStatus === undefined) return <LoadingScreen text="Comprobando tu universidad y asignaturas…" />;
   if (!normStatus.done) {
     return (
@@ -713,6 +716,8 @@ export default function AuthGate() {
         initialUniversidadQuery={profile.universidad}
         initialCarreraQuery={profile.carrera}
         onStatusChange={setNormStatus}
+        onSignOut={() => supabase.auth.signOut()}
+        email={session.user.email}
       />
     );
   }

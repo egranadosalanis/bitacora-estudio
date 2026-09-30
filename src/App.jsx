@@ -1336,6 +1336,27 @@ function CanonicalPickerBase({ placeholder, entityLabel, initialQuery, disabled,
   );
 }
 
+/** Indicador "Paso X de N" de las pantallas de registro. */
+export function OnboardingStep({ step, total }) {
+  return (
+    <div className="ob-step mono" aria-label={`Paso ${step} de ${total}`}>
+      <span>Paso {step} de {total}</span>
+      <span className="ob-bar"><i style={{ width: `${(step / total) * 100}%` }} /></span>
+    </div>
+  );
+}
+
+/** Salida discreta de las pantallas de registro: pensada para quien se ha
+ * equivocado de cuenta, no como atajo para saltarse el proceso. */
+export function OnboardingSignOut({ email, onSignOut }) {
+  return (
+    <p className="ob-out">
+      Sesión iniciada como {email} · ¿No eres tú?{" "}
+      <button type="button" onClick={onSignOut}>Cerrar sesión</button>
+    </p>
+  );
+}
+
 export function CanonicalUniversidadPicker({ initialQuery, onSelect }) {
   return (
     <CanonicalPickerBase
@@ -2234,7 +2255,7 @@ const DISABLE_CLOUD_SAVE = import.meta.env.VITE_DISABLE_CLOUD_SAVE === "true";
 /*  APP PRINCIPAL                                                      */
 /* ------------------------------------------------------------------ */
 
-function WelcomeCreateCurso({ onCreate }) {
+function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
 
   function updateName(name) {
@@ -2253,6 +2274,7 @@ function WelcomeCreateCurso({ onCreate }) {
     <div className="app-shell app-loading">
       <style>{CSS}</style>
       <div className="panel auth-card">
+        <OnboardingStep step={2} total={3} />
         <div className="panel-title">¡Bienvenido!</div>
         <div className="panel-subtitle">Antes de empezar, crea tu primer curso académico (solo un rango de fechas).</div>
         <div className="field-row">
@@ -2276,6 +2298,7 @@ function WelcomeCreateCurso({ onCreate }) {
             Crear curso
           </button>
         </div>
+        <OnboardingSignOut email={email} onSignOut={onSignOut} />
       </div>
     </div>
   );
@@ -2286,7 +2309,7 @@ function WelcomeCreateCurso({ onCreate }) {
  * crear. Reutiliza el mismo buscador canónico que la pestaña Asignaturas.
  * No tiene botón para saltársela — "Continuar" solo se activa con ≥ 1
  * asignatura añadida. */
-function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject, onDeleteSubject, onContinue }) {
+function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject, onDeleteSubject, onContinue, onSignOut, email }) {
   const carreraCanonicaId = profile?.carrera_canonica_id ?? null;
   const [newSubject, setNewSubject] = useState({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: 0 });
   const [adding, setAdding] = useState(false);
@@ -2324,6 +2347,7 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
     <div className="app-shell app-loading">
       <style>{CSS}</style>
       <div className="panel auth-card" style={{ maxWidth: 560 }}>
+        <OnboardingStep step={3} total={3} />
         <div className="panel-title">Añade tus asignaturas</div>
         <p className="panel-subtitle">
           Antes de empezar, añade al menos una asignatura de <strong>{curso.name}</strong> — puedes añadir el resto
@@ -2382,6 +2406,7 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
             Continuar {subjects.length === 0 && "(añade al menos 1 asignatura)"}
           </button>
         </div>
+        <OnboardingSignOut email={email} onSignOut={onSignOut} />
       </div>
     </div>
   );
@@ -2957,7 +2982,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   }
 
   if (data && data.cursos.length === 0) {
-    return <WelcomeCreateCurso onCreate={handleAddCurso} />;
+    return <WelcomeCreateCurso onCreate={handleAddCurso} onSignOut={onSignOut} email={session.user.email} />;
   }
 
   if (!data && cloudError) {
@@ -2997,6 +3022,8 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
         onAddSubject={handleAddSubject}
         onDeleteSubject={handleDeleteSubject}
         onContinue={() => setSubjectGateConfirmed(true)}
+        onSignOut={onSignOut}
+        email={session.user.email}
       />
     );
   }
@@ -3428,6 +3455,12 @@ export const CSS = `
     background: none; border: none; cursor: pointer; font-size: 15px; padding: 4px 6px; line-height: 1;
   }
   .auth-error { color: var(--red); font-size: 13px; margin: 8px 0; }
+  .ob-step { display: flex; align-items: center; gap: 10px; font-size: 11px; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 12px; }
+  .ob-bar { flex: 1; height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
+  .ob-bar i { display: block; height: 100%; background: var(--cyan); border-radius: 999px; }
+  .ob-out { margin: 22px 0 0; font-size: 11px; color: var(--text-dim); text-align: center; overflow-wrap: anywhere; }
+  .ob-out button { background: none; border: 0; padding: 0; font: inherit; color: var(--text-dim); text-decoration: underline; cursor: pointer; }
+  .ob-out button:hover { color: var(--text); }
   .auth-info { color: var(--cyan); font-size: 13px; margin: 8px 0; }
   .auth-link {
     display: block; background: none; border: none; color: var(--text-dim); font-size: 12px;
