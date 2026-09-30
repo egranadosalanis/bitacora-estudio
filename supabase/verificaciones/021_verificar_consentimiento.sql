@@ -1,0 +1,72 @@
+-- Verificación de 021 (Social solo entre quienes han aceptado). Usuarios FICTICIOS; termina con un error a propósito.
+do $fn$
+declare
+  ua uuid := 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  ub uuid := 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  uni uuid; car uuid; can uuid; sa uuid; sb uuid; j jsonb;
+  r text := E'\n'; n int; ok boolean; good text := 'https://lh3.googleusercontent.com/a/ACg8ocKxyz123=s96-c';
+begin
+  insert into auth.users (id, email) values (ua, 'a@test.invalid'), (ub, 'b@test.invalid');
+  insert into public.universidades_canonicas (nombre, estado, origen) values ('UniTest', 'aprobada', 'seed') returning id into uni;
+  insert into public.carreras_canonicas (nombre, universidad_id, estado, origen) values ('CarTest', uni, 'aprobada', 'seed') returning id into car;
+  insert into public.asignaturas_canonicas (nombre_oficial, carrera_id, creditos, estado, origen) values ('AsigTest', car, 6, 'aprobada', 'seed') returning id into can;
+  insert into public.asignaturas (user_id, nombre, creditos, estado, asignatura_canonica_id, frozen_nota, frozen_cursos_necesarios) values (ua, 'Asig A', 6, 'aprobada', can, 8, 1) returning id into sa;
+  insert into public.asignaturas (user_id, nombre, creditos, estado, asignatura_canonica_id, frozen_nota, frozen_cursos_necesarios) values (ub, 'Asig B', 6, 'aprobada', can, 6, 2) returning id into sb;
+  insert into public.entradas_estudio (user_id, asignatura_id, fecha, minutos) select ua, sa, d, 120 from generate_series('2026-01-10'::date, '2026-01-14'::date, '1 day') d;
+  insert into public.entradas_estudio (user_id, asignatura_id, fecha, minutos) select ub, sb, d, 60 from generate_series('2026-02-01'::date, '2026-02-03'::date, '1 day') d;
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
+  perform public.crear_perfil_social('alice_x');
+  perform public.establecer_avatar(good);
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true); set local role authenticated;
+  perform public.crear_perfil_social('bob_x');
+  perform public.establecer_avatar(good);
+  -- Nadie ha aceptado todavía.
+  select count(*) into n from public.buscar_usuarios('alice');
+  r := r || case when coalesce((n = 0), false) then 'OK   ' else 'FALLO' end || ' sin haber aceptado tú, la búsqueda no devuelve nada' || E'\n';
+  ok := false; begin perform public.solicitar_amistad('alice_x'); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: pedir amistad sin haber aceptado tú' || E'\n';
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
+  perform public.establecer_consentimiento('metricas', true, 'v2');
+  select count(*) into n from public.buscar_usuarios('bob');
+  r := r || case when coalesce((n = 0), false) then 'OK   ' else 'FALLO' end || ' quien no ha aceptado no aparece en la búsqueda (ni su foto)' || E'\n';
+  ok := false; begin perform public.solicitar_amistad('bob_x'); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: pedir amistad a quien no ha aceptado' || E'\n';
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true); set local role authenticated;
+  perform public.establecer_consentimiento('metricas', true, 'v2');
+  select count(*) into n from public.buscar_usuarios('alice') where avatar_url = good;
+  r := r || case when coalesce((n = 1), false) then 'OK   ' else 'FALLO' end || ' cuando los dos han aceptado se ven, con foto' || E'\n';
+  perform public.solicitar_amistad('alice_x');
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
+  perform public.responder_solicitud((select id from public.mis_amistades() where username = 'bob_x'), true);
+  select count(*) into n from public.mis_amistades() where username = 'bob_x' and avatar_url = good;
+  r := r || case when coalesce((n = 1), false) then 'OK   ' else 'FALLO' end || ' amigos con permiso activo: se ve la foto' || E'\n';
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true); set local role authenticated;
+  perform public.establecer_consentimiento('metricas', false, null);
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
+  select count(*) into n from public.mis_amistades() where username = 'bob_x' and avatar_url is null;
+  r := r || case when coalesce((n = 1), false) then 'OK   ' else 'FALLO' end || ' al retirar el permiso deja de verse su foto' || E'\n';
+  select count(*) into n from public.buscar_usuarios('bob');
+  r := r || case when coalesce((n = 0), false) then 'OK   ' else 'FALLO' end || ' y deja de salir en la búsqueda' || E'\n';
+  -- ===== mi propio perfil y notas en el listado =====
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
+  j := public.mi_resumen();
+  r := r || case when coalesce(((j->>'minutos_totales')::int = 600 and (j->>'n_asignaturas')::int = 1), false) then 'OK   ' else 'FALLO' end || ' mi resumen: mis datos (600 min, 1 asignatura)' || E'\n';
+  r := r || case when coalesce(((j->'asignaturas'->0->'nota') = 'null'::jsonb), false) then 'OK   ' else 'FALLO' end || ' mi resumen: la nota sale oculta por defecto' || E'\n';
+  perform public.establecer_mostrar_notas(true);
+  j := public.mi_resumen();
+  r := r || case when coalesce(((j->'asignaturas'->0->>'nota')::numeric = 8), false) then 'OK   ' else 'FALLO' end || ' mi resumen: con las notas activadas sale la nota (8)' || E'\n';
+  perform public.establecer_consentimiento('ranking', true, 'v2');
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true); set local role authenticated;
+  perform public.establecer_consentimiento('ranking', true, 'v2');
+  perform public.establecer_mostrar_notas(false);
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
+  select count(*) into n from public.listado_aprobados(can) where username = 'alice_x' and nota = 8;
+  r := r || case when coalesce((n = 1), false) then 'OK   ' else 'FALLO' end || ' listado: con notas activadas se ve la nota de alice' || E'\n';
+  select count(*) into n from public.listado_aprobados(can) where username = 'bob_x' and nota is null;
+  r := r || case when coalesce((n = 1), false) then 'OK   ' else 'FALLO' end || ' listado: con notas ocultas la nota de bob sale vacía' || E'\n';
+  select count(*) into n from public.listado_aprobados(can) where username = 'bob_x' and desgaste_maximo is not null;
+  r := r || case when coalesce((n = 1), false) then 'OK   ' else 'FALLO' end || ' listado: el resto de datos de bob sigue visible' || E'\n';
+  reset role; perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true); set local role anon;
+  ok := false; begin perform public.mi_resumen(); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: anon: mi_resumen' || E'\n';
+  ok := false; begin perform * from public.buscar_usuarios('alice'); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: anon: buscar' || E'\n';
+  reset role;
+  raise exception 'RESULTADOS (transacción deshecha, no se ha cambiado nada):%', r;
+end $fn$;

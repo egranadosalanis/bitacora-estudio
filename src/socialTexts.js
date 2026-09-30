@@ -1,12 +1,13 @@
 // Textos legales de los consentimientos de Social. Si se cambia el texto,
 // hay que subir CONSENT_VERSION: así consta qué versión aceptó cada persona.
-export const CONSENT_VERSION = "v1";
+export const CONSENT_VERSION = "v2";
 
 export const CONSENT_METRICAS = {
   title: "Compartir tus métricas con amigos",
   paragraphs: [
     "Para usar la sección Amigos necesitas aceptar que tus amigos aceptados puedan ver, en modo solo lectura, tu rango, tu racha y tus métricas de estudio: horas por crédito, minutos totales, número de asignaturas, el desglose por asignatura y tu historial de estudio.",
     "Solo lo verán las personas a las que aceptes como amigas y que a su vez hayan aceptado compartir las suyas. Nadie podrá modificar tus datos.",
+    "Tu foto de perfil (la de tu cuenta de Google o la que subas tú) será visible para otros usuarios en la búsqueda y en la clasificación de tus amigos. Si prefieres que vean solo tu inicial, puedes ocultarla en Ajustes.",
     "Las notas solo se muestran si activas esa opción en Ajustes. Puedes retirar este permiso cuando quieras desde Ajustes y dejarán de verte al instante.",
   ],
   accept: "Aceptar",

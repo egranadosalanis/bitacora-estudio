@@ -3,8 +3,9 @@ import { RANK_NAMES, RANK_QUIPS, APP_URL, hm, wearLabel } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
-import { USERNAME_RE } from "./socialData.js";
+import { USERNAME_RE, GOOGLE_AVATAR_RE } from "./socialData.js";
 import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, STATS_PRIVACY_NOTE } from "./socialTexts.js";
+import Avatar from "./Avatar.jsx";
 import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
@@ -145,10 +146,20 @@ function ErrorPanel({ message, onRetry }) {
 
 /* ---------- entrada: nombre de usuario y consentimiento ---------- */
 
-function UsernameScreen({ pendingInvite, online, onCreated }) {
+function UsernameScreen({ userId, avatarUrl, pendingInvite, online, onCreated, onCancel }) {
   const [name, setName] = useState("");
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (!file) { setPreview(null); return undefined; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   async function submit(e) {
     e.preventDefault();
@@ -161,6 +172,8 @@ function UsernameScreen({ pendingInvite, online, onCreated }) {
     setError(null);
     try {
       await api.crearPerfilSocial(u);
+      // La foto es opcional: si falla, el perfil ya está creado y se puede cambiar luego en Ajustes.
+      if (file) { try { await api.uploadAvatar(userId, file, null); } catch { /* nada */ } }
       await onCreated();
     } catch (err) {
       setError(err.message);
@@ -168,13 +181,29 @@ function UsernameScreen({ pendingInvite, online, onCreated }) {
     }
   }
 
+  const googlePhoto = avatarUrl && GOOGLE_AVATAR_RE.test(avatarUrl) ? avatarUrl : null;
+
   return (
     <form className="panel" onSubmit={submit}>
-      <div className="panel-title">Elige tu nombre de usuario</div>
+      <div className="panel-title">Crea tu perfil</div>
       <p className="panel-subtitle">
-        Es el nombre con el que te verán tus amigos en Clever. Entre 3 y 20 caracteres: letras, números, punto o guion bajo.
-        No distingue mayúsculas y no puede repetirse.
+        Elige el nombre con el que te verán tus amigos en Clever: entre 3 y 20 caracteres (letras, números, punto o guion bajo),
+        sin distinguir mayúsculas, y no puede repetirse. Tu nombre y tu foto serán visibles para otros usuarios de Clever cuando te busquen.
       </p>
+      <div className="sc-photo-pick">
+        <Avatar name={name || "?"} url={preview || googlePhoto} size={56} />
+        <div className="sc-photo-pick-txt">
+          <div className="sc-setting-label">Foto de perfil <span className="sc-dim">(opcional)</span></div>
+          <div className="sc-setting-hint">{preview ? "Foto elegida." : googlePhoto ? "Usaremos la de tu cuenta de Google, o sube otra." : "Sin foto se verá tu inicial."}</div>
+          <div className="btn-row" style={{ marginTop: 6 }}>
+            <button type="button" className="btn-ghost btn-small" onClick={() => fileRef.current?.click()} disabled={busy}>
+              {preview ? "Cambiar foto" : "Subir foto"}
+            </button>
+            {preview && <button type="button" className="btn-ghost btn-small" onClick={() => setFile(null)} disabled={busy}>Quitar</button>}
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+        </div>
+      </div>
       <input
         className="input-field"
         value={name}
@@ -198,6 +227,7 @@ function UsernameScreen({ pendingInvite, online, onCreated }) {
         <button className="btn-primary" type="submit" disabled={busy || !online || name.trim() === ""}>
           {busy ? "Guardando…" : "Continuar"}
         </button>
+        <button className="btn-ghost" type="button" onClick={onCancel} disabled={busy}>Ahora no</button>
       </div>
     </form>
   );
@@ -233,7 +263,7 @@ function ConsentModal({ text, online, onAccept, onDecline }) {
 
 /* ---------- clasificación ---------- */
 
-function RankRow({ pos, name, verified, summary, isMe, locked, note, onClick }) {
+function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, note, hint, onClick }) {
   const tier = summary?.tier ?? 0;
   const color = TIER_COLORS[tier];
   const Tag = locked ? "div" : "button";
@@ -245,10 +275,11 @@ function RankRow({ pos, name, verified, summary, isMe, locked, note, onClick }) 
       onClick={locked ? undefined : onClick}
     >
       <span className="sc-pos mono">{pos ?? "–"}</span>
+      <Avatar name={name} url={avatarUrl} size={34} />
       <span className="sc-who">
         <Username name={name} verified={verified} />
         {isMe && <span className="sc-you mono">TÚ</span>}
-        {note && <span className="sc-note mono">{note}</span>}
+        {(note || hint) && <span className="sc-note mono">{note || hint}</span>}
       </span>
       {summary && (
         <span className="sc-rank">
@@ -343,6 +374,7 @@ function SearchView({ amistades, online, onClose, onSent }) {
           const st = sent[r.username];
           return (
             <div key={r.username} className="sc-row sc-row-static">
+              <Avatar name={r.username} url={api.avatarSrc(r)} size={34} />
               <span className="sc-who"><Username name={r.username} verified={r.verificado} /></span>
               <span className="sc-actions">
                 {rel === "aceptada" ? <span className="sc-tag mono">AMIGOS</span>
@@ -378,6 +410,7 @@ function RequestsView({ amistades, online, busyId, error, onRespond, onCancel, o
       <div className="sc-list">
         {recibidas.map((a) => (
           <div key={a.id} className="sc-row sc-row-static">
+            <Avatar name={a.username} url={api.avatarSrc(a)} size={34} />
             <span className="sc-who"><Username name={a.username} verified={a.verificado} /></span>
             <span className="sc-actions">
               <button className="btn-primary btn-small" disabled={!online || busyId === a.id} onClick={() => onRespond(a.id, true)}>Aceptar</button>
@@ -390,6 +423,7 @@ function RequestsView({ amistades, online, busyId, error, onRespond, onCancel, o
       <div className="sc-list">
         {enviadas.map((a) => (
           <div key={a.id} className="sc-row sc-row-static">
+            <Avatar name={a.username} url={api.avatarSrc(a)} size={34} />
             <span className="sc-who"><Username name={a.username} verified={a.verificado} /></span>
             <span className="sc-actions">
               <span className="sc-tag mono">PENDIENTE</span>
@@ -431,7 +465,7 @@ function StatCardSc({ label, value, hint, onClick, active }) {
   );
 }
 
-function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }) {
+function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, onBlock, onOpenSettings }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState(null); // "remove" | "block"
   const [busy, setBusy] = useState(false);
@@ -439,6 +473,8 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
   const [showSubjects, setShowSubjects] = useState(false);
   const color = TIER_COLORS[model.tier];
   const past = model.history.filter((h) => !h.isCurrent);
+  const [emblemId, setEmblemId] = useState(null);
+  const emblemSel = past.find((h) => h.season.id === emblemId) ?? null;
 
   async function doConfirm() {
     setBusy(true);
@@ -461,8 +497,9 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
     <div className="sc-ficha">
       <div className="sc-ficha-top">
         <button className="sc-iconbtn" onClick={onBack} aria-label="Volver a la clasificación"><Icon name="back" /></button>
+        <Avatar name={model.username} url={api.avatarSrc(model)} size={40} />
         <div className="sc-ficha-name"><Username name={model.username} verified={model.verified} /></div>
-        <div className="sc-menu-wrap">
+        {!isSelf && <div className="sc-menu-wrap">
           <button className="sc-iconbtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Más opciones" aria-expanded={menuOpen}><Icon name="more" /></button>
           {menuOpen && (
             <div className="account-dropdown sc-dropdown">
@@ -470,8 +507,16 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
               <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setConfirm("block"); }}>Bloquear</button>
             </div>
           )}
-        </div>
+        </div>}
       </div>
+
+      {isSelf && (
+        <div className="panel sc-selfnote">
+          <strong>Así te ven tus amigos.</strong> Es exactamente lo que se muestra de ti: la foto y las notas dependen de tus ajustes
+          (ahora mismo: foto {model.avatarUrl || model.avatarPath ? "visible" : "oculta o sin foto"}, notas {model.showGrades ? "visibles" : "ocultas"}).
+          {onOpenSettings && <> <button type="button" className="sc-link" onClick={onOpenSettings}>Cambiar ajustes</button></>}
+        </div>
+      )}
 
       <div className="panel sc-hero" style={{ "--rc": color }}>
         <RankEmblem tier={model.tier} size={isMobile ? 104 : 120} />
@@ -510,7 +555,7 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
         </div>
       )}
 
-      <div className="panel">
+      {!isSelf && <div className="panel">
         <div className="panel-title">Tú vs {model.username}</div>
         <div className="sc-vs">
           <span />
@@ -524,7 +569,7 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
             </React.Fragment>
           ))}
         </div>
-      </div>
+      </div>}
 
       <div className="panel">
         <div className="panel-title">Estudio de las últimas semanas</div>
@@ -536,17 +581,29 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
         <div className="panel">
           <div className="panel-title">Emblemas de seasons anteriores</div>
           <div className="sc-emblems">
-            {past.map((h) => (
-              <div key={h.season.id} className="sc-emblem">
-                <RankEmblem tier={h.tier} size={54} />
-                <span className="sc-emblem-label mono">{h.season.label.replace("Season ", "S")}</span>
-              </div>
-            ))}
+            {past.map((h) => {
+              const info = `${h.season.label} · ${RANK_NAMES[h.tier]} · ${fmtNum(h.hoursPerCredit)} h/crédito`;
+              return (
+                <button
+                  type="button" key={h.season.id} title={info} aria-label={info} aria-pressed={emblemId === h.season.id}
+                  className={`sc-emblem ${emblemId === h.season.id ? "sc-emblem-on" : ""}`}
+                  onClick={() => setEmblemId((cur) => (cur === h.season.id ? null : h.season.id))}
+                >
+                  <RankEmblem tier={h.tier} size={54} />
+                  <span className="sc-emblem-label mono">{h.season.label.replace("Season ", "S")}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="sc-emblem-info" aria-live="polite">
+            {emblemSel
+              ? <><strong style={{ color: TIER_COLORS[emblemSel.tier] }}>{RANK_NAMES[emblemSel.tier]}</strong> · {emblemSel.season.label} · <strong>{fmtNum(emblemSel.hoursPerCredit)} h/crédito</strong></>
+              : <span className="sc-dim">Toca o pasa el cursor por un emblema para ver su rango y sus h/crédito.</span>}
           </div>
         </div>
       )}
 
-      {confirm && (
+      {confirm && !isSelf && (
         <SocialModal title={confirm === "remove" ? "Quitar amigo" : "Bloquear"} onClose={busy ? undefined : () => setConfirm(null)}>
           <p className="panel-subtitle">
             {confirm === "remove"
@@ -604,13 +661,15 @@ function InviteModal({ from, online, onClose }) {
 
 /* ---------- sección Amigos ---------- */
 
-function AmigosSection({ perfil, subjects, entries, logs, pendingInvite, onInviteHandled, isMobile, online, onNeedConsent }) {
+function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, logs, pendingInvite, onInviteHandled, isMobile, online, onNeedConsent }) {
   const [amistades, setAmistades] = useState([]);
   const [models, setModels] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [view, setView] = useState("ranking"); // ranking | search | requests | ficha
   const [fichaUser, setFichaUser] = useState(null);
+  const [selfModel, setSelfModel] = useState(null);
+  const [selfBusy, setSelfBusy] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [reqError, setReqError] = useState(null);
   const [shareMsg, setShareMsg] = useState(null);
@@ -653,17 +712,30 @@ function AmigosSection({ perfil, subjects, entries, logs, pendingInvite, onInvit
   const recibidas = amistades.filter((a) => a.estado === "pendiente" && a.direccion === "recibida");
 
   const ranking = useMemo(() => {
-    const ok = [{ username: perfil.username, verified: perfil.verificado, summary: own, me: true }];
+    const ok = [{ username: perfil.username, verified: perfil.verificado, avatar: ownPhoto, summary: own, me: true }];
     const locked = [];
     amistades.filter((a) => a.estado === "aceptada").forEach((a) => {
       const m = models[a.username];
-      if (m?.state === "ok") ok.push({ username: a.username, verified: m.model.verified, summary: m.model, me: false });
-      else if (m) locked.push({ username: a.username, verified: a.verificado, state: m.state, message: m.message });
-      else locked.push({ username: a.username, verified: a.verificado, state: "loading" });
+      if (m?.state === "ok") ok.push({ username: a.username, verified: m.model.verified, avatar: api.avatarSrc(m.model), summary: m.model, me: false });
+      else if (m) locked.push({ username: a.username, verified: a.verificado, avatar: api.avatarSrc(a), state: m.state, message: m.message });
+      else locked.push({ username: a.username, verified: a.verificado, avatar: api.avatarSrc(a), state: "loading" });
     });
     ok.sort((a, b) => compareByRank(a.summary, b.summary));
     return { ok, locked };
-  }, [amistades, models, own, perfil.username, perfil.verificado]);
+  }, [amistades, models, own, perfil.username, perfil.verificado, ownPhoto]);
+
+  async function openSelf() {
+    setSelfBusy(true);
+    setError(null);
+    try {
+      setSelfModel(buildFriendModel(await api.miResumen()));
+      setView("self");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSelfBusy(false);
+    }
+  }
 
   async function respond(id, acepta) {
     setBusyId(id);
@@ -736,6 +808,13 @@ function AmigosSection({ perfil, subjects, entries, logs, pendingInvite, onInvit
         />
       )}
 
+      {view === "self" && selfModel && (
+        <FriendSheet
+          model={selfModel} own={own} isSelf isMobile={isMobile} online={online}
+          onBack={() => setView("ranking")} onOpenSettings={onOpenSettings}
+        />
+      )}
+
       {view === "search" && (
         <SearchView amistades={amistades} online={online} onClose={() => setView("ranking")} onSent={load} />
       )}
@@ -763,14 +842,14 @@ function AmigosSection({ perfil, subjects, entries, logs, pendingInvite, onInvit
           <div className="sc-list">
             {ranking.ok.map((r, i) => (
               <RankRow
-                key={r.username} pos={i + 1} name={r.username} verified={r.verified} summary={r.summary} isMe={r.me}
-                onClick={r.me ? undefined : () => { setFichaUser(r.username); setView("ficha"); }}
-                locked={r.me}
+                key={r.username} pos={i + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar} summary={r.summary} isMe={r.me}
+                onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
+                hint={r.me ? (selfBusy ? "abriendo…" : "toca para ver tu perfil como lo ven tus amigos") : null}
               />
             ))}
             {ranking.locked.map((r) => (
               <RankRow
-                key={r.username} name={r.username} verified={r.verified} locked
+                key={r.username} name={r.username} verified={r.verified} avatarUrl={r.avatar} locked
                 note={r.state === "noaccess" ? "no comparte sus datos" : r.state === "loading" ? "cargando…" : "no se pudo cargar"}
               />
             ))}
@@ -797,6 +876,7 @@ function AmigosSection({ perfil, subjects, entries, logs, pendingInvite, onInvit
 
 /* ---------- sección Guía (estadísticas de la comunidad) ---------- */
 
+const CACHE_MS = 5 * 60 * 1000; // una asignatura ya consultada no se vuelve a pedir en 5 minutos
 const SMALL_SAMPLE = 5; // por debajo de este nº de aprobados se avisa de que la muestra es pequeña
 const rankingAskedKey = (userId) => `clever:social:ranking-preguntado:${userId}`;
 
@@ -879,6 +959,8 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
   const [rows, setRows] = useState(null);
   const [rowsError, setRowsError] = useState(null);
   const [askRanking, setAskRanking] = useState(false);
+  const statsCache = useRef(new Map());
+  const rowsCache = useRef(new Map());
   const [asked, setAsked] = useState(() => {
     try { return window.localStorage.getItem(rankingAskedKey(userId)) === "1"; } catch { return false; }
   });
@@ -927,11 +1009,13 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
 
   useEffect(() => {
     if (!selected) { setStats(null); return undefined; }
+    const hit = statsCache.current.get(selected);
+    if (hit && Date.now() - hit.t < CACHE_MS) { setStats(hit.data); setStatsError(null); setStatsLoading(false); return undefined; }
     let cancelled = false;
     setStatsLoading(true);
     setStatsError(null);
     api.comunidadStats(selected)
-      .then((r) => { if (!cancelled) setStats(r); })
+      .then((r) => { statsCache.current.set(selected, { t: Date.now(), data: r }); if (!cancelled) setStats(r); })
       .catch((e) => { if (!cancelled) { setStats(null); setStatsError(e.message); } })
       .finally(() => { if (!cancelled) setStatsLoading(false); });
     return () => { cancelled = true; };
@@ -942,16 +1026,20 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
     if (!selected || !rankingOk) { setRows(null); return undefined; }
     let cancelled = false;
     setRowsError(null);
+    const hit = rowsCache.current.get(selected);
+    if (hit && Date.now() - hit.t < CACHE_MS) { setRows(hit.data); return undefined; }
     api.listadoAprobados(selected)
-      .then((r) => { if (!cancelled) setRows(r ?? []); })
+      .then((r) => { rowsCache.current.set(selected, { t: Date.now(), data: r ?? [] }); if (!cancelled) setRows(r ?? []); })
       .catch((e) => { if (!cancelled) { setRows(null); setRowsError(e.message); } });
     return () => { cancelled = true; };
   }, [selected, rankingOk]);
 
-  // Pregunta por el listado una sola vez (solo si ya tiene nombre de usuario).
-  useEffect(() => {
-    if (perfil && !perfil.share_ranking_ok && !asked) setAskRanking(true);
-  }, [perfil, asked]);
+  // Pregunta por el listado una sola vez, la primera vez que el usuario elige él
+  // mismo una asignatura (solo si ya tiene nombre de usuario).
+  function chooseSubject(id) {
+    setSelected(id);
+    if (id && perfil && !perfil.share_ranking_ok && !asked) setAskRanking(true);
+  }
 
   function markAsked() {
     try { window.localStorage.setItem(rankingAskedKey(userId), "1"); } catch { /* nada */ }
@@ -975,7 +1063,7 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
       {!online && <OfflineBar />}
       <div className="panel">
         <label className="panel-title" htmlFor="sc-guia-select">Asignatura</label>
-        <select id="sc-guia-select" className="input-field" value={selected} onChange={(e) => setSelected(e.target.value)}>
+        <select id="sc-guia-select" className="input-field" value={selected} onChange={(e) => chooseSubject(e.target.value)}>
           <option value="">Elige una asignatura…</option>
           {groups.map((g) => (
             <optgroup key={g.label} label={g.label}>
@@ -1058,7 +1146,7 @@ function SettingSwitch({ label, hint, on, disabled, onChange }) {
   );
 }
 
-export function SocialSettingsModal({ userId, onClose }) {
+export function SocialSettingsModal({ userId, googleAvatarUrl, onClose }) {
   const online = useOnline();
   const [perfil, setPerfil] = useState(undefined);
   const [blocked, setBlocked] = useState([]);
@@ -1067,6 +1155,8 @@ export function SocialSettingsModal({ userId, onClose }) {
   const [newName, setNewName] = useState("");
   const [nameMsg, setNameMsg] = useState(null);
   const [consentFor, setConsentFor] = useState(null); // "metricas" | "ranking"
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoRef = useRef(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -1099,6 +1189,33 @@ export function SocialSettingsModal({ userId, onClose }) {
     run(() => api.setConsentimiento(tipo, false));
   }
 
+  async function pickPhoto(file) {
+    if (!file) return;
+    setPhotoBusy(true);
+    setError(null);
+    try {
+      await api.uploadAvatar(userId, file, perfil.avatar_path);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function dropPhoto() {
+    setPhotoBusy(true);
+    setError(null);
+    try {
+      await api.removeAvatar(perfil.avatar_path);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   async function saveName() {
     const u = newName.trim();
     setNameMsg(null);
@@ -1126,6 +1243,24 @@ export function SocialSettingsModal({ userId, onClose }) {
       )}
       {perfil && (
         <div className="sc-settings">
+          <div className="sc-photo-pick">
+            <Avatar name={perfil.username} url={perfil.avatar_path ? api.photoUrl(perfil.avatar_path) : (googleAvatarUrl && GOOGLE_AVATAR_RE.test(googleAvatarUrl) ? googleAvatarUrl : null)} size={56} />
+            <div className="sc-photo-pick-txt">
+              <div className="sc-setting-label">Foto de perfil</div>
+              <div className="sc-setting-hint">{perfil.avatar_path ? "Foto subida por ti." : googleAvatarUrl ? "Ahora se usa la de tu cuenta de Google." : "Sin foto se ve tu inicial."}</div>
+              <div className="btn-row" style={{ marginTop: 6 }}>
+                <button className="btn-ghost btn-small" onClick={() => photoRef.current?.click()} disabled={photoBusy || !online}>{photoBusy ? "Subiendo…" : "Subir foto"}</button>
+                {perfil.avatar_path && <button className="btn-ghost btn-small" onClick={dropPhoto} disabled={photoBusy || !online}>Quitar</button>}
+              </div>
+              <input ref={photoRef} type="file" accept="image/*" hidden onChange={(e) => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+            </div>
+          </div>
+          <SettingSwitch
+            label="Mostrar mi foto a otros usuarios"
+            hint="Se ve en la búsqueda, en la clasificación de tus amigos y en tu ficha. Si la ocultas, verán tu inicial."
+            on={perfil.show_avatar !== false} disabled={busy || !online} onChange={(v) => run(() => api.setMostrarFoto(v))}
+          />
+
           <div className="sc-setting-block">
             <div className="sc-setting-label">Nombre de usuario {perfil.verificado && <VerifiedBadge size={15} />}</div>
             <div className="sc-name-edit">
@@ -1150,7 +1285,7 @@ export function SocialSettingsModal({ userId, onClose }) {
           />
           <SettingSwitch
             label="Mostrar mis notas a mis amigos"
-            hint="Solo se ven si además compartes tus métricas."
+            hint="Tus notas se ven en tu ficha (para tus amigos) y en el listado de aprobados de la Guía. Si lo desactivas, aparecen ocultas en los dos sitios."
             on={perfil.show_grades} disabled={busy || !online} onChange={(v) => run(() => api.setMostrarNotas(v))}
           />
 
@@ -1181,11 +1316,11 @@ export function SocialSettingsModal({ userId, onClose }) {
 
 /* ---------- pestaña ---------- */
 
-export default function SocialTab({ userId, carreraId, subjects, entries, logs, pendingInvite, onInviteHandled, onBack, onLeave, onOpenSettings, isMobile }) {
+export default function SocialTab({ userId, avatarUrl, onOwnPhoto, carreraId, subjects, entries, logs, pendingInvite, onInviteHandled, onBack, onOpenSettings, isMobile }) {
   const online = useOnline();
   const [perfil, setPerfil] = useState(undefined); // undefined = cargando, null = sin perfil
   const [loadError, setLoadError] = useState(null);
-  const [section, setSection] = useState("amigos");
+  const [section, setSection] = useState(pendingInvite ? "amigos" : "guia");
 
   const loadPerfil = useCallback(async () => {
     setLoadError(null);
@@ -1197,6 +1332,19 @@ export default function SocialTab({ userId, carreraId, subjects, entries, logs, 
   }, [userId]);
 
   useEffect(() => { loadPerfil(); }, [loadPerfil]);
+
+  // Foto propia (la subida por el usuario y, si no, la de Google) y aviso a la app para la cabecera.
+  const googlePhoto = avatarUrl && GOOGLE_AVATAR_RE.test(avatarUrl) ? avatarUrl : null;
+  const ownPhoto = perfil ? (perfil.avatar_path ? api.photoUrl(perfil.avatar_path) : (perfil.avatar_url || googlePhoto)) : googlePhoto;
+  useEffect(() => { if (perfil !== undefined && onOwnPhoto) onOwnPhoto(ownPhoto); }, [perfil, ownPhoto, onOwnPhoto]);
+
+  // Guarda en el perfil la foto de Google (una sola vez por sesión) para que los demás puedan verla.
+  const syncedGoogle = useRef(false);
+  useEffect(() => {
+    if (!perfil || !perfil.share_metrics_ok || !googlePhoto || perfil.avatar_url === googlePhoto || syncedGoogle.current) return;
+    syncedGoogle.current = true;
+    api.establecerAvatar(googlePhoto).then(() => setPerfil((p) => (p ? { ...p, avatar_url: googlePhoto } : p))).catch(() => {});
+  }, [perfil, googlePhoto]);
 
   async function acceptMetrics() {
     await api.setConsentimiento("metricas", true, CONSENT_VERSION);
@@ -1216,15 +1364,15 @@ export default function SocialTab({ userId, carreraId, subjects, entries, logs, 
   } else if (perfil === undefined) {
     body = <div className="sc-hint">Cargando…</div>;
   } else if (perfil === null) {
-    body = <UsernameScreen pendingInvite={pendingInvite} online={online} onCreated={loadPerfil} />;
+    body = <UsernameScreen userId={userId} avatarUrl={avatarUrl} pendingInvite={pendingInvite} online={online} onCreated={loadPerfil} onCancel={() => setSection("guia")} />;
   } else if (!perfil.share_metrics_ok) {
     body = (
-      <ConsentModal text={CONSENT_METRICAS} online={online} onAccept={acceptMetrics} onDecline={onLeave} />
+      <ConsentModal text={CONSENT_METRICAS} online={online} onAccept={acceptMetrics} onDecline={() => setSection("guia")} />
     );
   } else {
     body = (
       <AmigosSection
-        perfil={perfil} subjects={subjects} entries={entries} logs={logs}
+        onOpenSettings={onOpenSettings} ownPhoto={ownPhoto} perfil={perfil} subjects={subjects} entries={entries} logs={logs}
         pendingInvite={pendingInvite} onInviteHandled={onInviteHandled}
         isMobile={isMobile} online={online} onNeedConsent={loadPerfil}
       />
@@ -1277,14 +1425,14 @@ export const SOCIAL_CSS = `
 
   .sc-list { display: flex; flex-direction: column; gap: 8px; }
   .sc-row {
-    display: grid; grid-template-columns: 26px 1fr auto; align-items: center; column-gap: 10px; width: 100%;
+    display: grid; grid-template-columns: 24px 34px 1fr auto; align-items: center; column-gap: 10px; width: 100%;
     text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 10px 12px; color: var(--text); font: inherit; cursor: pointer;
   }
   button.sc-row:hover { border-color: var(--cyan); }
-  .sc-row.sc-me { border-color: var(--cyan); background: var(--panel-2); cursor: default; }
+  .sc-row.sc-me { border-color: var(--cyan); background: var(--panel-2); }
   .sc-row.sc-locked:not(.sc-me) { cursor: default; opacity: 0.7; }
-  .sc-row-static { cursor: default; grid-template-columns: 1fr auto; }
+  .sc-row-static { cursor: default; grid-template-columns: 34px 1fr auto; }
   .sc-rowerr { grid-column: 1 / -1; margin: 4px 0 0; }
   .sc-pos { font-size: 13px; color: var(--text-dim); text-align: center; }
   .sc-who { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; font-weight: 600; font-size: 15px; }
@@ -1349,7 +1497,14 @@ export const SOCIAL_CSS = `
   .sc-hm-legend .sc-hm-cell { width: 12px; flex: none; }
 
   .sc-emblems { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
-  .sc-emblem { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sc-emblem { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 1px solid transparent; border-radius: 12px; padding: 6px; cursor: pointer; color: inherit; }
+  .sc-emblem:hover, .sc-emblem-on { border-color: var(--cyan); background: var(--panel-2); }
+  .sc-emblem-info { font-size: 13px; margin-top: 10px; min-height: 20px; line-height: 1.5; }
+  @media (max-width: 420px) { .sc-rank-name { max-width: 100px; } .sc-row { column-gap: 8px; padding: 10px; } }
+  .sc-photo-pick { display: flex; gap: 14px; align-items: center; margin: 4px 0 14px; }
+  .sc-photo-pick-txt { min-width: 0; }
+  .sc-selfnote { font-size: 13px; line-height: 1.55; border-color: var(--cyan); }
+  .sc-link { background: none; border: none; padding: 0; color: var(--cyan-text); font: inherit; text-decoration: underline; cursor: pointer; }
   .sc-emblem-label { font-size: 10px; color: var(--text-dim); }
 
   .sc-warn { font-size: 12px; color: var(--amber); margin: 6px 0 10px; line-height: 1.45; }
