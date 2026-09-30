@@ -3884,7 +3884,7 @@ export const CSS = `
     .rt-hero:not(.rt-hero-share), .rt-scene:not(.rt-scene-share) { max-width: 640px; margin-left: auto; margin-right: auto; }
   }
   .rt-hero .rt-sc { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .94; }
-  .rt-hero .rt-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,10,18,.08) 0%, rgba(6,10,18,.05) 40%, rgba(6,10,18,.55) 72%, rgba(6,10,18,.88) 100%); }
+  .rt-hero .rt-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,10,18,.05) 0%, rgba(6,10,18,0) 45%, rgba(6,10,18,.3) 75%, rgba(6,10,18,.58) 100%); }
   .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #d7e3f5; text-shadow: 0 1px 6px rgba(0,0,0,.9); z-index: 2; margin: 0; }
   .rt-hero .rt-prevtag { position: absolute; top: 12px; right: 14px; z-index: 2; }
   .rt-herocard { position: relative; z-index: 2; text-align: center; padding: 16px 16px 20px; width: 100%; }
