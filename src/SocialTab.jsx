@@ -548,8 +548,6 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
   const [error, setError] = useState(null);
   const [showSubjects, setShowSubjects] = useState(false);
   const [showLadder, setShowLadder] = useState(false);
-  const [photoFailed, setPhotoFailed] = useState(false);
-  const heroPhoto = photoFailed ? null : api.avatarSrc(model);
   const color = TIER_COLORS[model.tier];
   const past = model.history.filter((h) => !h.isCurrent);
   const [emblemId, setEmblemId] = useState(null);
@@ -603,7 +601,8 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
       )}
 
       <div className="panel sc-hero" style={{ "--rc": color }}>
-        {heroPhoto && <img className="sc-hero-bg" src={heroPhoto} alt="" referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} />}
+        <img className="sc-hero-bg" src={`/rangos/rank-bg/rank-${model.tier}.webp`} alt="" decoding="async" />
+        <div className="sc-hero-tint" />
         <button type="button" className="sc-hero-btn" onClick={() => setShowLadder(true)} aria-label="Ver la clasificación de rangos">
           <RankEmblem tier={model.tier} size={isMobile ? 104 : 120} />
           <span className="sc-hero-rank">{RANK_NAMES[model.tier]}</span>
@@ -1595,7 +1594,9 @@ export const SOCIAL_CSS = `
   .sc-hm-info { font-size: 13px; margin-top: 10px; min-height: 20px; }
   .sc-hero { position: relative; overflow: hidden; }
   .sc-hero > * { position: relative; }
-  .sc-hero .sc-hero-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.22; filter: blur(14px) saturate(1.2); transform: scale(1.2); pointer-events: none; }
+  .sc-hero .sc-hero-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.9; pointer-events: none; }
+  .sc-hero .sc-hero-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,10,18,.15) 0%, rgba(6,10,18,.35) 45%, rgba(6,10,18,.85) 100%); pointer-events: none; }
+  .sc-hero .sc-hero-quip, .sc-hero .sc-hero-more, .sc-hero .sc-hero-season { color: #d7e3f5; text-shadow: 0 1px 6px rgba(0,0,0,.9); }
   .sc-hero-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: 0; cursor: pointer; color: inherit; font: inherit; padding: 0; }
   .sc-hero-more { font-size: 10px; letter-spacing: 0.08em; color: var(--text-dim); }
   .sc-hist { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
