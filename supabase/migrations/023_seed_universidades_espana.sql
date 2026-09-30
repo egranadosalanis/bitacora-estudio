@@ -1,7 +1,7 @@
 -- ============================================================
 -- Migración: amplía el catálogo de universidades canónicas con las
 -- universidades de Huelva, Granada, Cádiz, Almería, Jaén, Córdoba,
--- Málaga, Santander, Zaragoza, Barcelona y Valencia (incluida Loyola).
+-- Málaga, Santander, Zaragoza, Barcelona y Valencia (incluida Loyola, con un campus en Sevilla y otro en Córdoba).
 --
 -- Solo siembra universidades (no carreras ni asignaturas). Cada usuario
 -- podrá elegirlas ya en el buscador y las carreras se irán añadiendo por
@@ -13,7 +13,7 @@
 insert into public.universidades_canonicas (nombre, pais, estado, origen)
 values
   -- Sevilla
-  ('Universidad Loyola Andalucía', 'España', 'aprobada', 'seed'),
+  ('Universidad Loyola Andalucía (Campus Sevilla)', 'España', 'aprobada', 'seed'),
   ('Universidad Pablo de Olavide', 'España', 'aprobada', 'seed'),
   -- Huelva
   ('Universidad de Huelva', 'España', 'aprobada', 'seed'),
@@ -27,6 +27,7 @@ values
   ('Universidad de Jaén', 'España', 'aprobada', 'seed'),
   -- Córdoba
   ('Universidad de Córdoba', 'España', 'aprobada', 'seed'),
+  ('Universidad Loyola Andalucía (Campus Córdoba)', 'España', 'aprobada', 'seed'),
   -- Málaga
   ('Universidad de Málaga', 'España', 'aprobada', 'seed'),
   -- Santander
