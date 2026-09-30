@@ -1,17 +1,46 @@
 -- ============================================================
 -- Migración 020: foto de perfil en Social.
---   * perfil_social.avatar_url: solo se admite una foto de Google
---     (https://lh3.googleusercontent.com/...), para que nadie pueda poner una
---     dirección propia que rastree a quien la vea.
+--   * Foto de Google: perfil_social.avatar_url (solo se admite
+--     https://lh3.googleusercontent.com/..., para que nadie pueda poner una
+--     dirección propia que rastree a quien la vea).
+--   * Foto subida por el usuario: bucket público "avatars" (máx. 200 KB, solo
+--     JPEG/WebP), cada persona solo puede escribir en su propia carpeta.
+--     perfil_social.avatar_path guarda la ruta (nunca una URL): la app construye
+--     la dirección con su propio proyecto, así no se puede apuntar a otro servidor.
 --   * perfil_social.show_avatar: interruptor para ocultar la foto (por defecto visible).
---   * buscar_usuarios, mis_amistades y resumen_amigo devuelven avatar_url
---     (solo si show_avatar es true).
+--   * buscar_usuarios, mis_amistades y resumen_amigo devuelven avatar_url y
+--     avatar_path (solo si show_avatar es true).
 -- No borra datos. Rollback: rollback/020_volver_a_sin_foto.sql
 -- ============================================================
 
 alter table public.perfil_social
   add column if not exists avatar_url text,
+  add column if not exists avatar_path text,
   add column if not exists show_avatar boolean not null default true;
+
+alter table public.perfil_social drop constraint if exists perfil_social_avatar_path_formato;
+alter table public.perfil_social add constraint perfil_social_avatar_path_formato
+  check (avatar_path is null or avatar_path ~ '^[0-9a-f-]{36}/[0-9]{10,15}\.(jpg|webp)$');
+
+-- ---------- almacén de fotos ----------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 204800, array['image/jpeg', 'image/webp'])
+on conflict (id) do update
+  set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "avatars_insert_own" on storage.objects;
+create policy "avatars_insert_own" on storage.objects for insert to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "avatars_select_own" on storage.objects;
+create policy "avatars_select_own" on storage.objects for select to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "avatars_update_own" on storage.objects;
+create policy "avatars_update_own" on storage.objects for update to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "avatars_delete_own" on storage.objects;
+create policy "avatars_delete_own" on storage.objects for delete to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
 
 alter table public.perfil_social drop constraint if exists perfil_social_avatar_formato;
 alter table public.perfil_social add constraint perfil_social_avatar_formato
@@ -33,6 +62,29 @@ exception
 end;
 $fn$;
 
+-- p_path: ruta de una foto ya subida a "avatars" (nula o vacía = quitarla).
+create or replace function public.establecer_foto(p_path text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare v_path text := nullif(trim(coalesce(p_path, '')), ''); v_me uuid := auth.uid();
+begin
+  if v_me is null then raise exception 'Hace falta iniciar sesión.' using errcode = '42501'; end if;
+  if v_path is not null and (
+       split_part(v_path, '/', 1) <> v_me::text
+       or not exists (select 1 from storage.objects o where o.bucket_id = 'avatars' and o.name = v_path)
+     ) then
+    raise exception 'avatar_invalido' using errcode = '22023';
+  end if;
+  update public.perfil_social set avatar_path = v_path, updated_at = now() where user_id = v_me;
+  if not found then raise exception 'sin_perfil_social' using errcode = 'P0002'; end if;
+exception
+  when check_violation then raise exception 'avatar_invalido' using errcode = '22023';
+end;
+$fn$;
+
 create or replace function public.establecer_mostrar_foto(p_mostrar boolean)
 returns void
 language plpgsql
@@ -48,13 +100,13 @@ $fn$;
 
 drop function if exists public.mis_amistades();
 create function public.mis_amistades()
-returns table (id uuid, username text, verificado boolean, avatar_url text, estado text, direccion text)
+returns table (id uuid, username text, verificado boolean, avatar_url text, avatar_path text, estado text, direccion text)
 language sql
 stable
 security definer
 set search_path = public
 as $fn$
-  select a.id, ps.username, ps.verificado, case when ps.show_avatar then ps.avatar_url end, a.estado,
+  select a.id, ps.username, ps.verificado, case when ps.show_avatar then ps.avatar_url end, case when ps.show_avatar then ps.avatar_path end, a.estado,
          case when a.solicitante = auth.uid() then 'enviada' else 'recibida' end
   from public.amistades a
   join public.perfil_social ps
@@ -66,13 +118,13 @@ $fn$;
 
 drop function if exists public.buscar_usuarios(text);
 create function public.buscar_usuarios(p_query text)
-returns table (username text, verificado boolean, avatar_url text)
+returns table (username text, verificado boolean, avatar_url text, avatar_path text)
 language sql
 stable
 security definer
 set search_path = public
 as $fn$
-  select ps.username, ps.verificado, case when ps.show_avatar then ps.avatar_url end
+  select ps.username, ps.verificado, case when ps.show_avatar then ps.avatar_url end, case when ps.show_avatar then ps.avatar_path end
   from public.perfil_social ps
   where auth.uid() is not null
     and ps.user_id <> auth.uid()
@@ -156,6 +208,7 @@ begin
     'username', (select username from public.perfil_social where user_id = v_other),
     'verificado', (select verificado from public.perfil_social where user_id = v_other),
     'avatar_url', (select case when show_avatar then avatar_url end from public.perfil_social where user_id = v_other),
+    'avatar_path', (select case when show_avatar then avatar_path end from public.perfil_social where user_id = v_other),
     'mostrar_notas', v_notas,
     'minutos_totales', tot.minutos_totales,
     'n_asignaturas', tot.n_asignaturas,
@@ -187,7 +240,7 @@ do $fn$
 declare f text;
 begin
   foreach f in array array[
-    'establecer_avatar(text)', 'establecer_mostrar_foto(boolean)', 'mis_amistades()', 'buscar_usuarios(text)', 'resumen_amigo(text)'
+    'establecer_avatar(text)', 'establecer_foto(text)', 'establecer_mostrar_foto(boolean)', 'mis_amistades()', 'buscar_usuarios(text)', 'resumen_amigo(text)'
   ] loop
     execute format('revoke execute on function public.%s from public, anon, authenticated', f);
     execute format('grant execute on function public.%s to authenticated', f);

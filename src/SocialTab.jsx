@@ -3,8 +3,9 @@ import { RANK_NAMES, RANK_QUIPS, APP_URL, hm, wearLabel } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
-import { USERNAME_RE } from "./socialData.js";
+import { USERNAME_RE, GOOGLE_AVATAR_RE } from "./socialData.js";
 import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, STATS_PRIVACY_NOTE } from "./socialTexts.js";
+import Avatar from "./Avatar.jsx";
 import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
@@ -234,7 +235,7 @@ function ConsentModal({ text, online, onAccept, onDecline }) {
 
 /* ---------- clasificación ---------- */
 
-function RankRow({ pos, name, verified, summary, isMe, locked, note, onClick }) {
+function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, note, onClick }) {
   const tier = summary?.tier ?? 0;
   const color = TIER_COLORS[tier];
   const Tag = locked ? "div" : "button";
@@ -246,6 +247,7 @@ function RankRow({ pos, name, verified, summary, isMe, locked, note, onClick }) 
       onClick={locked ? undefined : onClick}
     >
       <span className="sc-pos mono">{pos ?? "–"}</span>
+      <Avatar name={name} url={avatarUrl} size={36} />
       <span className="sc-who">
         <Username name={name} verified={verified} />
         {isMe && <span className="sc-you mono">TÚ</span>}

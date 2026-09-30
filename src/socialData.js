@@ -6,9 +6,12 @@ import { OFFLINE_MESSAGE, isNetworkError } from "./offline.js";
    tablas sociales directamente. */
 
 export const USERNAME_RE = /^[A-Za-z0-9_.]{3,20}$/;
+// Solo se admiten fotos de Google (la base de datos lo comprueba también).
+export const GOOGLE_AVATAR_RE = /^https:\/\/lh3\.googleusercontent\.com\/[A-Za-z0-9_/=.-]+$/;
 
 const MESSAGES = {
   offline: OFFLINE_MESSAGE,
+  avatar_invalido: "Esa foto no se puede usar.",
   username_en_uso: "Ese nombre de usuario ya está cogido. Prueba con otro.",
   username_invalido: "Usa entre 3 y 20 caracteres: letras, números, punto o guion bajo.",
   username_reservado: "Ese nombre de usuario no está disponible.",
@@ -68,6 +71,8 @@ export const crearPerfilSocial = (username) => rpc("crear_perfil_social", { p_us
 export const cambiarUsername = (username) => rpc("cambiar_username", { p_username: username });
 export const setConsentimiento = (tipo, acepta, version) =>
   rpc("establecer_consentimiento", { p_tipo: tipo, p_acepta: acepta, p_version: version ?? null });
+export const establecerAvatar = (url) => rpc("establecer_avatar", { p_url: url });
+export const setMostrarFoto = (mostrar) => rpc("establecer_mostrar_foto", { p_mostrar: mostrar });
 export const setMostrarNotas = (mostrar) => rpc("establecer_mostrar_notas", { p_mostrar: mostrar });
 export const buscarUsuarios = (q) => rpc("buscar_usuarios", { p_query: q });
 export const solicitarAmistad = (username) => rpc("solicitar_amistad", { p_username: username });

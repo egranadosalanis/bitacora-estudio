@@ -43,6 +43,7 @@ export function buildFriendModel(resumen) {
   return {
     username: resumen.username,
     verified: resumen.verificado === true,
+    avatarUrl: resumen.avatar_url ?? null,
     showGrades: resumen.mostrar_notas === true,
     totalMinutes: Number(resumen.minutos_totales) || 0,
     numSubjects: Number(resumen.n_asignaturas) || 0,
