@@ -1102,12 +1102,12 @@ function DetalleAprobado({ canonicaId, username }) {
         </thead>
         <tbody>
           {line(data.principal, "Aprobada")}
-          {eq.map((a) => line(a, a.es_erasmus ? "Erasmus" : "Equivalente"))}
+          {eq.map((a) => line(a, "Erasmus"))}
         </tbody>
       </table>
       {eq.length > 0 && (
         <p className="sc-hint" style={{ margin: "8px 0 0" }}>
-          Las horas de la equivalente se suman a la asignatura aprobada: {fmtNum(data.horas_por_credito_total)} h/cr en total.
+          Las horas de la de Erasmus se suman a la asignatura aprobada: {fmtNum(data.horas_por_credito_total)} h/cr en total.
         </p>
       )}
     </div>

@@ -3,7 +3,7 @@
 --   Al pulsar un usuario del listado de aprobados de una asignatura se muestra:
 --     * la asignatura canónica que aprobó, con sus parámetros (h/cr, cursos, desgaste, nota);
 --     * debajo, la(s) asignatura(s) equivalente(s) ya aprobada(s) que aporta(n) horas
---       a esa (p. ej. la cursada en Erasmus), con sus propios parámetros y su nota.
+--       a esa (la cursada en Erasmus; solo las marcadas como Erasmus), con sus propios parámetros y su nota.
 --   Las horas de las equivalentes ya se suman al h/cr de la canónica (_aprobados); aquí solo
 --   se enseña el desglose. La nota de una equivalente se muestra en este detalle, pero NUNCA
 --   entra en comunidad_stats (la correlación h/cr → nota solo usa la nota de la canónica).
@@ -70,7 +70,7 @@ begin
       cross join lateral (
         select coalesce(sum(e.minutos), 0)::numeric as minutos from public.entradas_estudio e where e.asignatura_id = x.id
       ) m
-      where x.asignatura_equivalente_id = v_row.asignatura_id and x.estado = 'aprobada'
+      where x.asignatura_equivalente_id = v_row.asignatura_id and x.estado = 'aprobada' and x.es_erasmus is true
     ), '[]'::jsonb)
   ) into v_res;
 
