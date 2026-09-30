@@ -1069,6 +1069,51 @@ function StatsBlock({ stats }) {
   );
 }
 
+function DetalleAprobado({ canonicaId, username }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    setError(null);
+    api.detalleAprobado(canonicaId, username)
+      .then((r) => { if (!cancelled) setData(r); })
+      .catch((e) => { if (!cancelled) setError(friendlyError(e)); });
+    return () => { cancelled = true; };
+  }, [canonicaId, username]);
+
+  if (error) return <div className="auth-error">{error}</div>;
+  if (!data) return <div className="sc-hint">Cargando…</div>;
+  const eq = data.equivalentes ?? [];
+  const line = (a, tag) => (
+    <tr key={`${tag}-${a.nombre}`}>
+      <td><span className="sc-det-tag">{tag}</span> {a.nombre}</td>
+      <td>{fmtNum(a.horas_por_credito)}</td>
+      <td>{a.nota == null ? "—" : fmtNum(a.nota, 1)}</td>
+      <td>{a.desgaste_maximo == null ? "—" : fmtNum(a.desgaste_maximo)}</td>
+      <td>{a.cursos_necesarios ?? "—"}</td>
+    </tr>
+  );
+  return (
+    <div className="sc-detail">
+      <table className="sc-table">
+        <thead>
+          <tr><th>Asignatura</th><th>H/cr</th><th>Nota</th><th>Desgaste</th><th>Cursos</th></tr>
+        </thead>
+        <tbody>
+          {line(data.principal, "Aprobada")}
+          {eq.map((a) => line(a, a.es_erasmus ? "Erasmus" : "Equivalente"))}
+        </tbody>
+      </table>
+      {eq.length > 0 && (
+        <p className="sc-hint" style={{ margin: "8px 0 0" }}>
+          Las horas de la equivalente se suman a la asignatura aprobada: {fmtNum(data.horas_por_credito_total)} h/cr en total.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, onOpenSettings, reloadPerfil }) {
   const [catalog, setCatalog] = useState(null);
   const [catError, setCatError] = useState(null);
@@ -1079,6 +1124,7 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
   const [rows, setRows] = useState(null);
   const [rowsError, setRowsError] = useState(null);
   const [askRanking, setAskRanking] = useState(false);
+  const [openUser, setOpenUser] = useState(null);
   const statsCache = useRef(new Map());
   const rowsCache = useRef(new Map());
   const [asked, setAsked] = useState(() => {
@@ -1158,6 +1204,7 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
   // mismo una asignatura (solo si ya tiene nombre de usuario).
   function chooseSubject(id) {
     setSelected(id);
+    setOpenUser(null);
     if (id && perfil && !perfil.share_ranking_ok && !asked) setAskRanking(true);
   }
 
@@ -1212,15 +1259,31 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
                       <tr><th>Usuario</th><th>H/cr</th><th>Nota</th><th>Desgaste</th><th>Cursos</th></tr>
                     </thead>
                     <tbody>
-                      {rows.map((r) => (
-                        <tr key={r.username} className={r.username.toLowerCase() === perfil.username.toLowerCase() ? "sc-tr-me" : ""}>
-                          <td><Username name={r.username} verified={r.verificado} /></td>
-                          <td>{fmtNum(r.horas_por_credito)}</td>
-                          <td>{r.nota == null ? "—" : fmtNum(r.nota, 1)}</td>
-                          <td>{r.desgaste_maximo == null ? "—" : fmtNum(r.desgaste_maximo)}</td>
-                          <td>{r.cursos_necesarios ?? "—"}</td>
-                        </tr>
-                      ))}
+                      {rows.map((r) => {
+                        const key = r.username.toLowerCase();
+                        const open = openUser === key;
+                        return (
+                          <React.Fragment key={r.username}>
+                            <tr
+                              className={`sc-tr-click ${key === perfil.username.toLowerCase() ? "sc-tr-me" : ""}`}
+                              tabIndex={0} role="button" aria-expanded={open}
+                              onClick={() => setOpenUser(open ? null : key)}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenUser(open ? null : key); } }}
+                            >
+                              <td><Username name={r.username} verified={r.verificado} /></td>
+                              <td>{fmtNum(r.horas_por_credito)}</td>
+                              <td>{r.nota == null ? "—" : fmtNum(r.nota, 1)}</td>
+                              <td>{r.desgaste_maximo == null ? "—" : fmtNum(r.desgaste_maximo)}</td>
+                              <td>{r.cursos_necesarios ?? "—"}</td>
+                            </tr>
+                            {open && (
+                              <tr className="sc-tr-detail">
+                                <td colSpan={5}><DetalleAprobado canonicaId={selected} username={r.username} /></td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1664,6 +1727,12 @@ export const SOCIAL_CSS = `
   .sc-table td { padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   .sc-table tr:last-child td { border-bottom: none; }
   .sc-tr-me td { background: var(--panel-2); }
+  .sc-tr-click { cursor: pointer; }
+  .sc-tr-click:hover td { background: var(--panel-2); }
+  .sc-tr-detail td { white-space: normal; background: var(--panel-2); }
+  .sc-detail { padding: 4px 0 6px; }
+  .sc-detail .sc-table td, .sc-detail .sc-table th { white-space: normal; }
+  .sc-det-tag { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-right: 4px; }
   .sc-legal-note { font-size: 11px; }
   select.input-field { height: 42px; margin-top: 8px; }
   .sc-settings { display: flex; flex-direction: column; gap: 16px; }
