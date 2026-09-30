@@ -696,14 +696,14 @@ export function getCurrentSeason(today = isoToday()) {
 
 export const RANK_NAMES = [
   "Becario de Ryanair", "Piloto de Cessna alquilada", "Copiloto con café", "Capitán de Iberia",
-  "Piloto de caza", "Astronauta de la NASA", "Dios del cielo",
+  "Piloto de caza", "Astronauta de la NASA", "Atlas",
 ];
 export const RANK_QUIPS = [
   "Sí, te hacen pagar por la maleta.", "Despegas, aterrizas y rezas.", "Ya tocas botones que importan.",
-  "Galones nuevos y cero huelgas.", "Vas a un Mach que da miedo.", "La gravedad ya es opcional.",
-  "Los pájaros te piden permiso.",
+  "Los pájaros te piden permiso.", "Vas a un Mach que da miedo.", "La gravedad ya es opcional.",
+  "Sujetas el firmamento con tus manos.",
 ];
-// h/crédito mínimas de cada rango (el último, "Dios del cielo", no tiene techo).
+// h/crédito mínimas de cada rango (el último, "Atlas", no tiene techo).
 export const RANK_THRESHOLDS = [0, 4, 10, 20, 32, 47, 60];
 
 export function rankTierForHoursPerCredit(hpc) {
