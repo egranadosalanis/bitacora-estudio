@@ -31,6 +31,7 @@ begin
   r := r || case when v = true then 'OK   ' else 'FALLO' end || ' el dueño de la reserva puede usarla y sale verificado' || E'\n';
 
   reset role; perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true); set local role authenticated;
+  reset role; update public.perfil_social set share_metrics_ok = true, share_metrics_at = now(), share_metrics_version = 'v0'; reset role; perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true); set local role authenticated;
   select count(*) into n from public.buscar_usuarios('cleveradmin') where verificado;
   r := r || case when n = 1 then 'OK   ' else 'FALLO' end || ' los demás lo ven verificado en la búsqueda' || E'\n';
   perform public.solicitar_amistad('cleveradmin');

@@ -29,6 +29,8 @@ begin
   perform public.crear_perfil_social('bob_x');
   reset role; perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true); set local role authenticated;
   perform public.crear_perfil_social('carol');
+  reset role; update public.perfil_social set share_metrics_ok = true, share_metrics_at = now(), share_metrics_version = 'v0';
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true); set local role authenticated;
   ok := false; begin perform public.crear_perfil_social('ALICE'); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: nombre de usuario repetido (ALICE)' || E'\n';
   ok := false; begin perform public.crear_perfil_social('ab'); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: nombre de usuario de 2 letras' || E'\n';
   ok := false; begin perform public.crear_perfil_social('a b c'); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: nombre de usuario con espacios' || E'\n';
@@ -66,6 +68,7 @@ begin
   perform public.responder_solicitud((select id from public.mis_amistades() where username = 'Alice'), true);
 
   -- ===== resumen de amigo: consentimientos =====
+  reset role; update public.perfil_social set share_metrics_ok = false where user_id in (ua, ub);
   reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
   ok := false; begin perform public.resumen_amigo('bob_x'); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: resumen sin haber aceptado tú compartir' || E'\n';
   perform public.establecer_consentimiento('metricas', true, 'v1');
@@ -112,6 +115,7 @@ begin
   ok := false; begin perform * from public.listado_aprobados(can); exception when others then ok := true; end; r := r || case when ok then 'OK   ' else 'FALLO' end || ' no debe poder: listado sin haber aceptado aparecer' || E'\n';
   reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
   perform public.establecer_consentimiento('ranking', true, 'v1');
+  perform public.establecer_mostrar_notas(true);
   select count(*) into n from public.listado_aprobados(can);
   r := r || case when coalesce((n = 1), false) then 'OK   ' else 'FALLO' end || ' listado: solo aparece quien aceptó (1: alice)' || E'\n';
   reset role; perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true); set local role authenticated;

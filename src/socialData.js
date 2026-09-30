@@ -82,6 +82,7 @@ export const quitarAmistad = (username) => rpc("quitar_amistad", { p_username: u
 export const bloquearUsuario = (username) => rpc("bloquear_usuario", { p_username: username });
 export const desbloquearUsuario = (username) => rpc("desbloquear_usuario", { p_username: username });
 export const misAmistades = () => rpc("mis_amistades");
+export const miResumen = () => rpc("mi_resumen");
 export const resumenAmigo = (username) => rpc("resumen_amigo", { p_username: username });
 export const comunidadStats = (canonicaId) => rpc("comunidad_stats", { p_canonica: canonicaId });
 export const listadoAprobados = (canonicaId) => rpc("listado_aprobados", { p_canonica: canonicaId });

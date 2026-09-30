@@ -20,6 +20,7 @@ begin
   select avatar_url into u from public.perfil_social where user_id = ub;
   r := r || case when coalesce((u = good), false) then 'OK   ' else 'FALLO' end || ' foto de Google guardada' || E'\n';
   reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
+  reset role; update public.perfil_social set share_metrics_ok = true, share_metrics_at = now(), share_metrics_version = 'v0'; reset role; perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true); set local role authenticated;
   perform public.solicitar_amistad('bob_x');
   select count(*) into n from public.buscar_usuarios('bob') where avatar_url = good;
   r := r || case when coalesce((n = 1), false) then 'OK   ' else 'FALLO' end || ' otros ven la foto en la búsqueda' || E'\n';

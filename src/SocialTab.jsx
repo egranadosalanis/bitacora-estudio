@@ -263,7 +263,7 @@ function ConsentModal({ text, online, onAccept, onDecline }) {
 
 /* ---------- clasificación ---------- */
 
-function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, note, onClick }) {
+function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, note, hint, onClick }) {
   const tier = summary?.tier ?? 0;
   const color = TIER_COLORS[tier];
   const Tag = locked ? "div" : "button";
@@ -279,7 +279,7 @@ function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, note, 
       <span className="sc-who">
         <Username name={name} verified={verified} />
         {isMe && <span className="sc-you mono">TÚ</span>}
-        {note && <span className="sc-note mono">{note}</span>}
+        {(note || hint) && <span className="sc-note mono">{note || hint}</span>}
       </span>
       {summary && (
         <span className="sc-rank">
@@ -465,7 +465,7 @@ function StatCardSc({ label, value, hint, onClick, active }) {
   );
 }
 
-function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }) {
+function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, onBlock, onOpenSettings }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState(null); // "remove" | "block"
   const [busy, setBusy] = useState(false);
@@ -499,7 +499,7 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
         <button className="sc-iconbtn" onClick={onBack} aria-label="Volver a la clasificación"><Icon name="back" /></button>
         <Avatar name={model.username} url={api.avatarSrc(model)} size={40} />
         <div className="sc-ficha-name"><Username name={model.username} verified={model.verified} /></div>
-        <div className="sc-menu-wrap">
+        {!isSelf && <div className="sc-menu-wrap">
           <button className="sc-iconbtn" onClick={() => setMenuOpen((v) => !v)} aria-label="Más opciones" aria-expanded={menuOpen}><Icon name="more" /></button>
           {menuOpen && (
             <div className="account-dropdown sc-dropdown">
@@ -507,8 +507,16 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
               <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setConfirm("block"); }}>Bloquear</button>
             </div>
           )}
-        </div>
+        </div>}
       </div>
+
+      {isSelf && (
+        <div className="panel sc-selfnote">
+          <strong>Así te ven tus amigos.</strong> Es exactamente lo que se muestra de ti: la foto y las notas dependen de tus ajustes
+          (ahora mismo: foto {model.avatarUrl || model.avatarPath ? "visible" : "oculta o sin foto"}, notas {model.showGrades ? "visibles" : "ocultas"}).
+          {onOpenSettings && <> <button type="button" className="sc-link" onClick={onOpenSettings}>Cambiar ajustes</button></>}
+        </div>
+      )}
 
       <div className="panel sc-hero" style={{ "--rc": color }}>
         <RankEmblem tier={model.tier} size={isMobile ? 104 : 120} />
@@ -547,7 +555,7 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
         </div>
       )}
 
-      <div className="panel">
+      {!isSelf && <div className="panel">
         <div className="panel-title">Tú vs {model.username}</div>
         <div className="sc-vs">
           <span />
@@ -561,7 +569,7 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
             </React.Fragment>
           ))}
         </div>
-      </div>
+      </div>}
 
       <div className="panel">
         <div className="panel-title">Estudio de las últimas semanas</div>
@@ -595,7 +603,7 @@ function FriendSheet({ model, own, isMobile, online, onBack, onRemove, onBlock }
         </div>
       )}
 
-      {confirm && (
+      {confirm && !isSelf && (
         <SocialModal title={confirm === "remove" ? "Quitar amigo" : "Bloquear"} onClose={busy ? undefined : () => setConfirm(null)}>
           <p className="panel-subtitle">
             {confirm === "remove"
@@ -653,13 +661,15 @@ function InviteModal({ from, online, onClose }) {
 
 /* ---------- sección Amigos ---------- */
 
-function AmigosSection({ ownPhoto, perfil, subjects, entries, logs, pendingInvite, onInviteHandled, isMobile, online, onNeedConsent }) {
+function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, logs, pendingInvite, onInviteHandled, isMobile, online, onNeedConsent }) {
   const [amistades, setAmistades] = useState([]);
   const [models, setModels] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [view, setView] = useState("ranking"); // ranking | search | requests | ficha
   const [fichaUser, setFichaUser] = useState(null);
+  const [selfModel, setSelfModel] = useState(null);
+  const [selfBusy, setSelfBusy] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [reqError, setReqError] = useState(null);
   const [shareMsg, setShareMsg] = useState(null);
@@ -713,6 +723,19 @@ function AmigosSection({ ownPhoto, perfil, subjects, entries, logs, pendingInvit
     ok.sort((a, b) => compareByRank(a.summary, b.summary));
     return { ok, locked };
   }, [amistades, models, own, perfil.username, perfil.verificado, ownPhoto]);
+
+  async function openSelf() {
+    setSelfBusy(true);
+    setError(null);
+    try {
+      setSelfModel(buildFriendModel(await api.miResumen()));
+      setView("self");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSelfBusy(false);
+    }
+  }
 
   async function respond(id, acepta) {
     setBusyId(id);
@@ -785,6 +808,13 @@ function AmigosSection({ ownPhoto, perfil, subjects, entries, logs, pendingInvit
         />
       )}
 
+      {view === "self" && selfModel && (
+        <FriendSheet
+          model={selfModel} own={own} isSelf isMobile={isMobile} online={online}
+          onBack={() => setView("ranking")} onOpenSettings={onOpenSettings}
+        />
+      )}
+
       {view === "search" && (
         <SearchView amistades={amistades} online={online} onClose={() => setView("ranking")} onSent={load} />
       )}
@@ -813,8 +843,8 @@ function AmigosSection({ ownPhoto, perfil, subjects, entries, logs, pendingInvit
             {ranking.ok.map((r, i) => (
               <RankRow
                 key={r.username} pos={i + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar} summary={r.summary} isMe={r.me}
-                onClick={r.me ? undefined : () => { setFichaUser(r.username); setView("ficha"); }}
-                locked={r.me}
+                onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
+                hint={r.me ? (selfBusy ? "abriendo…" : "toca para ver tu perfil como lo ven tus amigos") : null}
               />
             ))}
             {ranking.locked.map((r) => (
@@ -846,6 +876,7 @@ function AmigosSection({ ownPhoto, perfil, subjects, entries, logs, pendingInvit
 
 /* ---------- sección Guía (estadísticas de la comunidad) ---------- */
 
+const CACHE_MS = 5 * 60 * 1000; // una asignatura ya consultada no se vuelve a pedir en 5 minutos
 const SMALL_SAMPLE = 5; // por debajo de este nº de aprobados se avisa de que la muestra es pequeña
 const rankingAskedKey = (userId) => `clever:social:ranking-preguntado:${userId}`;
 
@@ -928,6 +959,8 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
   const [rows, setRows] = useState(null);
   const [rowsError, setRowsError] = useState(null);
   const [askRanking, setAskRanking] = useState(false);
+  const statsCache = useRef(new Map());
+  const rowsCache = useRef(new Map());
   const [asked, setAsked] = useState(() => {
     try { return window.localStorage.getItem(rankingAskedKey(userId)) === "1"; } catch { return false; }
   });
@@ -976,11 +1009,13 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
 
   useEffect(() => {
     if (!selected) { setStats(null); return undefined; }
+    const hit = statsCache.current.get(selected);
+    if (hit && Date.now() - hit.t < CACHE_MS) { setStats(hit.data); setStatsError(null); setStatsLoading(false); return undefined; }
     let cancelled = false;
     setStatsLoading(true);
     setStatsError(null);
     api.comunidadStats(selected)
-      .then((r) => { if (!cancelled) setStats(r); })
+      .then((r) => { statsCache.current.set(selected, { t: Date.now(), data: r }); if (!cancelled) setStats(r); })
       .catch((e) => { if (!cancelled) { setStats(null); setStatsError(e.message); } })
       .finally(() => { if (!cancelled) setStatsLoading(false); });
     return () => { cancelled = true; };
@@ -991,8 +1026,10 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
     if (!selected || !rankingOk) { setRows(null); return undefined; }
     let cancelled = false;
     setRowsError(null);
+    const hit = rowsCache.current.get(selected);
+    if (hit && Date.now() - hit.t < CACHE_MS) { setRows(hit.data); return undefined; }
     api.listadoAprobados(selected)
-      .then((r) => { if (!cancelled) setRows(r ?? []); })
+      .then((r) => { rowsCache.current.set(selected, { t: Date.now(), data: r ?? [] }); if (!cancelled) setRows(r ?? []); })
       .catch((e) => { if (!cancelled) { setRows(null); setRowsError(e.message); } });
     return () => { cancelled = true; };
   }, [selected, rankingOk]);
@@ -1248,7 +1285,7 @@ export function SocialSettingsModal({ userId, googleAvatarUrl, onClose }) {
           />
           <SettingSwitch
             label="Mostrar mis notas a mis amigos"
-            hint="Solo se ven si además compartes tus métricas."
+            hint="Tus notas se ven en tu ficha (para tus amigos) y en el listado de aprobados de la Guía. Si lo desactivas, aparecen ocultas en los dos sitios."
             on={perfil.show_grades} disabled={busy || !online} onChange={(v) => run(() => api.setMostrarNotas(v))}
           />
 
@@ -1335,7 +1372,7 @@ export default function SocialTab({ userId, avatarUrl, onOwnPhoto, carreraId, su
   } else {
     body = (
       <AmigosSection
-        ownPhoto={ownPhoto} perfil={perfil} subjects={subjects} entries={entries} logs={logs}
+        onOpenSettings={onOpenSettings} ownPhoto={ownPhoto} perfil={perfil} subjects={subjects} entries={entries} logs={logs}
         pendingInvite={pendingInvite} onInviteHandled={onInviteHandled}
         isMobile={isMobile} online={online} onNeedConsent={loadPerfil}
       />
@@ -1393,7 +1430,7 @@ export const SOCIAL_CSS = `
     padding: 10px 12px; color: var(--text); font: inherit; cursor: pointer;
   }
   button.sc-row:hover { border-color: var(--cyan); }
-  .sc-row.sc-me { border-color: var(--cyan); background: var(--panel-2); cursor: default; }
+  .sc-row.sc-me { border-color: var(--cyan); background: var(--panel-2); }
   .sc-row.sc-locked:not(.sc-me) { cursor: default; opacity: 0.7; }
   .sc-row-static { cursor: default; grid-template-columns: 34px 1fr auto; }
   .sc-rowerr { grid-column: 1 / -1; margin: 4px 0 0; }
@@ -1466,6 +1503,8 @@ export const SOCIAL_CSS = `
   @media (max-width: 420px) { .sc-rank-name { max-width: 100px; } .sc-row { column-gap: 8px; padding: 10px; } }
   .sc-photo-pick { display: flex; gap: 14px; align-items: center; margin: 4px 0 14px; }
   .sc-photo-pick-txt { min-width: 0; }
+  .sc-selfnote { font-size: 13px; line-height: 1.55; border-color: var(--cyan); }
+  .sc-link { background: none; border: none; padding: 0; color: var(--cyan-text); font: inherit; text-decoration: underline; cursor: pointer; }
   .sc-emblem-label { font-size: 10px; color: var(--text-dim); }
 
   .sc-warn { font-size: 12px; color: var(--amber); margin: 6px 0 10px; line-height: 1.45; }
