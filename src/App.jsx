@@ -18,6 +18,8 @@ import {
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
 import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from "./offline.js";
+import SocialTab, { SOCIAL_CSS } from "./SocialTab.jsx";
+import { readPendingInvite, clearPendingInvite } from "./socialData.js";
 import RangosTab, { prefetchRangosImages } from "./RangosTab.jsx";
 
 /* ------------------------------------------------------------------ */
@@ -98,6 +100,7 @@ const NAV_ICON_PATHS = {
   reportar: <path d="M5 21V4M5 4h11l-2 4 2 4H5" />,
   flecha: <path d="M9 6l6 6-6 6" />,
   volver: <path d="M15 6l-6 6 6 6" />,
+  web: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a14 14 0 0 1 0 18" /><path d="M12 3a14 14 0 0 0 0 18" /></>,
 };
 
 function NavIcon({ name, size = 22 }) {
@@ -161,7 +164,7 @@ function MoreSheet({ onClose, onGo, newsDot, isPremium, exportBusy, onExport, on
         <div className="more-section">SECCIONES</div>
         <MoreRow icon="desgaste" onClick={() => onGo("desgaste")}>Desgaste</MoreRow>
         <MoreRow icon="clasificacion" onClick={() => onGo("clasificacion")}>Clasificación</MoreRow>
-        <MoreRow icon="social" pill onClick={() => onGo("social")}>Social</MoreRow>
+        <MoreRow icon="social" onClick={() => onGo("social")}>Social</MoreRow>
         <div className="more-divider" />
         <div className="more-section">HERRAMIENTAS</div>
         <MoreRow icon="asignaturas" onClick={() => onGo("asignaturas")}>Mis asignaturas</MoreRow>
@@ -172,43 +175,8 @@ function MoreSheet({ onClose, onGo, newsDot, isPremium, exportBusy, onExport, on
           {exportBusy ? "Generando…" : "Exportar a Excel"}
         </MoreRow>
         <MoreRow icon="novedades" dot={newsDot} onClick={onNews}>Novedades</MoreRow>
+        <MoreRow icon="web" onClick={() => window.open(APP_SHARE_URL, "_blank", "noopener,noreferrer")}>Web de Clever</MoreRow>
         <MoreRow icon="reportar" onClick={onReport}>Reportar un problema</MoreRow>
-      </div>
-    </div>
-  );
-}
-
-/** Social: por ahora solo un aviso "Próximamente" con vista previa sin cifras. */
-function SocialTab({ onBack }) {
-  return (
-    <div className="social-wrap">
-      <div className="social-head">
-        {onBack && (
-          <button className="social-back" onClick={onBack} aria-label="Volver a Más"><NavIcon name="volver" /></button>
-        )}
-        <h2 className="social-title">Social</h2>
-        <span className="pronto-pill pronto-pill-big">PRÓXIMAMENTE</span>
-      </div>
-      <div className="panel social-card">
-        <svg width="160" height="120" viewBox="0 0 160 120" fill="none" aria-hidden="true">
-          <ellipse cx="80" cy="60" rx="70" ry="26" stroke="#24406b" strokeWidth="1.5" transform="rotate(-18 80 60)" />
-          <ellipse cx="80" cy="60" rx="46" ry="16" stroke="#2a4f7f" strokeWidth="1.5" transform="rotate(-18 80 60)" />
-          <circle cx="80" cy="60" r="10" fill="#4dd8ee" />
-          <circle cx="141" cy="42" r="6" fill="#f472b6" />
-          <circle cx="24" cy="80" r="5" fill="#fbbf24" />
-          <circle cx="112" cy="72" r="4" fill="#8a93f0" />
-        </svg>
-        <p className="social-text">Compara tus estadísticas con las de otros usuarios y descubre las asignaturas más difíciles de tu carrera.</p>
-      </div>
-      <div className="social-preview" aria-hidden="true">
-        <div className="social-preview-label">VISTA PREVIA</div>
-        {[[120, 78, 58], [150, 46, 64], [96, 88, 70]].map(([w, a, b], i) => (
-          <div key={i} className="social-bars">
-            <div className="sb sb-title" style={{ width: w }} />
-            <div className="sb sb-cyan" style={{ width: `${a}%` }} />
-            <div className="sb sb-dim" style={{ width: `${b}%` }} />
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -2480,7 +2448,7 @@ function BugReportModal({ onClose, userId, tab }) {
 // NEWS_MAX_SHOWS entradas a la app (por cuenta y dispositivo), salvo que
 // el usuario marque "No volver a mostrar". Para anunciar otra novedad en
 // el futuro basta con cambiar NEWS_VERSION y el contenido.
-const NEWS_VERSION = "2026-09-navegacion";
+const NEWS_VERSION = "2026-10-social";
 const NEWS_MAX_SHOWS = 3;
 const newsCountedThisLoad = new Set(); // evita contar dos veces la misma carga
 
@@ -2506,13 +2474,25 @@ function NewsModal({ onClose, onReport, showDontShowAgain }) {
     <Modal title="🚀 Novedades en Clever" onClose={() => onClose(dontShow)} wide>
       <div className="news">
         <section className="news-item">
+          <div className="news-icon">👥</div>
+          <div>
+            <div className="news-title">Ya está aquí Social: Amigos</div>
+            <ul className="news-list">
+              <li>Elige tu <strong>nombre de usuario</strong>, añade amigos con la lupa y mira la <strong>clasificación</strong> de rangos y rachas entre vosotros.</li>
+              <li>Toca a un amigo para ver su <strong>ficha</strong>: rango, racha, métricas y mapa de calor — en modo solo lectura, y solo si los dos habéis aceptado compartir.</li>
+              <li>¿Un amigo aún no tiene Clever? Con el botón de <strong>invitar</strong> le mandas un enlace.</li>
+              <li>Las estadísticas de la comunidad por asignatura llegarán pronto.</li>
+            </ul>
+          </div>
+        </section>
+        <section className="news-item">
           <div className="news-icon">🧭</div>
           <div>
             <div className="news-title">Nuevo orden y navegación móvil</div>
             <ul className="news-list">
               <li>Las secciones van ahora en este orden: <strong>Bitácora, Trayectoria, Panel, Rangos, Desgaste, Clasificación, Social y Asignaturas</strong>.</li>
               <li>En el móvil hay una <strong>barra inferior</strong> con Bitácora, Trayectoria, Panel, Rangos y <strong>Más</strong>; el menú de cuenta ahora está en el círculo con tu inicial.</li>
-              <li>Nueva sección <strong>Social</strong> (próximamente): compararás tus estadísticas con las de otros usuarios.</li>
+              <li>Nueva sección <strong>Social</strong>: compara tus estadísticas con las de tus amigos.</li>
               <li>Los registros ahora salen de <strong>más reciente a más antiguo</strong>.</li>
             </ul>
           </div>
@@ -2607,6 +2587,9 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [newsOpen, setNewsOpen] = useState(null);
   const isMobile = useIsMobile();
   const [moreOpen, setMoreOpen] = useState(false);
+  // Invitación recibida por enlace (?invitar=usuario): lleva directo a Social.
+  const [pendingInvite, setPendingInvite] = useState(() => readPendingInvite());
+  useEffect(() => { if (pendingInvite) setTab("social"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [newsSeen, setNewsSeen] = useState(() => Boolean(readNewsState(session.user.id).seen));
 
   useEffect(() => {
@@ -3049,6 +3032,9 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
                     <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setNewsOpen("manual"); }}>
                       🚀 Novedades
                     </button>
+                    <a className="account-dropdown-row" href={APP_SHARE_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)}>
+                      🌐 Web de Clever
+                    </a>
                     <button className="account-dropdown-row" onClick={() => { setMenuOpen(false); setReportOpen(true); }}>
                       🐞 Reportar un problema
                     </button>
@@ -3127,9 +3113,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           <Tab id="rangos" active={tab === "rangos"} onClick={setTab}>Rangos</Tab>
           <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
           <Tab id="clasificacion" active={tab === "clasificacion"} onClick={setTab}>Clasificación</Tab>
-          <Tab id="social" active={tab === "social"} onClick={setTab}>
-            Social <span className="pronto-pill pronto-pill-tab">PRONTO</span>
-          </Tab>
+          <Tab id="social" active={tab === "social"} onClick={setTab}>Social</Tab>
           <Tab id="asignaturas" active={tab === "asignaturas"} onClick={setTab}>Asignaturas</Tab>
         </nav>
       )}
@@ -3156,7 +3140,19 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             ? <ClasificacionTab subjects={data.subjects} entries={data.entries} />
             : <PremiumLocked feature="la Clasificación histórica" />
         )}
-        {tab === "social" && <SocialTab onBack={isMobile ? () => setMoreOpen(true) : null} />}
+        {tab === "social" && (
+          <SocialTab
+            userId={userId}
+            subjects={data.subjects}
+            entries={data.entries}
+            logs={data.logs}
+            pendingInvite={pendingInvite}
+            onInviteHandled={() => { clearPendingInvite(); setPendingInvite(null); }}
+            onBack={isMobile ? () => setMoreOpen(true) : null}
+            onLeave={() => setTab("bitacora")}
+            isMobile={isMobile}
+          />
+        )}
         {tab === "asignaturas" && (
           <AsignaturasTab
             subjects={data.subjects}
@@ -3370,27 +3366,7 @@ export const CSS = `
 
   .app-main { max-width: 1080px; margin: 0 auto; }
 
-  /* ---- Social (próximamente) ---- */
-  .pronto-pill {
-    display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--cyan); color: var(--cyan);
-    font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
-  }
-  .pronto-pill-tab { margin-left: 6px; padding: 1px 6px; font-size: 9px; }
-  .tab-btn-active .pronto-pill-tab { color: var(--bg); border-color: var(--bg); }
-  .pronto-pill-big { padding: 5px 10px; font-size: 11px; }
-  .social-wrap { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
-  .social-head { display: flex; align-items: center; gap: 12px; }
-  .social-title { flex: 1; margin: 0; font-size: 26px; font-weight: 700; }
-  .social-back { width: 44px; height: 44px; margin-left: -10px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-dim); cursor: pointer; }
-  .social-card { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 24px 20px; }
-  .social-text { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text-dim); }
-  .social-preview { border: 1px dashed var(--border); border-radius: 20px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; filter: blur(0.5px); }
-  .social-preview-label { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--text-dim); }
-  .social-bars { display: flex; flex-direction: column; gap: 6px; }
-  .sb { height: 10px; border-radius: 5px; }
-  .sb-title { background: var(--border); }
-  .sb-cyan { background: var(--cyan); opacity: 0.55; }
-  .sb-dim { background: var(--panel-2); }
+  ${SOCIAL_CSS}
 
   /* ---- Navegación móvil: barra inferior, panel "Más" y perfil ---- */
   .bottom-nav, .more-overlay { display: none; }
