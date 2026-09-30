@@ -98,7 +98,7 @@ function RankLadderRow({ tier, cur, previewTier, onPreview }) {
 }
 
 function RangoShareCard({ shareRef, rango, season }) {
-  const { tier, hoursPerCredit } = rango;
+  const { tier, puntos } = rango;
   return (
     <div ref={shareRef} className="rt-hero rt-hero-share">
       <img className="rt-sc" decoding="async" src={`/rangos/rank-bg/rank-${tier}.webp`} alt="" />
@@ -108,7 +108,7 @@ function RangoShareCard({ shareRef, rango, season }) {
         <div className="rt-emwrap"><RankEmblem tier={tier} size={104} /></div>
         <h2 className="rt-rname">{RANK_NAMES[tier]}</h2>
         <p className="rt-rquip">{RANK_QUIPS[tier]}</p>
-        <p className="rt-share-stat rt-mono">{fmtNum(hoursPerCredit)} puntos</p>
+        <p className="rt-share-stat rt-mono">{fmtNum(puntos)} puntos</p>
       </div>
       <div className="rt-share-brand">Clever · Bitácora de vuelo</div>
     </div>
@@ -127,8 +127,8 @@ function RangoView({ subjects, entries, logs }) {
   const isMax = cur >= RANK_THRESHOLDS.length - 1;
   const lo = RANK_THRESHOLDS[cur];
   const hi = isMax ? null : RANK_THRESHOLDS[cur + 1];
-  const progressPct = isMax ? 100 : Math.max(0, Math.min(100, ((rango.hoursPerCredit - lo) / (hi - lo)) * 100));
-  const hCreditoFaltante = isMax ? 0 : Math.max(0, hi - rango.hoursPerCredit);
+  const progressPct = isMax ? 100 : Math.max(0, Math.min(100, ((rango.puntos - lo) / (hi - lo)) * 100));
+  const puntosFaltantes = isMax ? 0 : Math.max(0, hi - rango.puntos);
   const seasonEndDisplay = fmtShortDate(addDays(season.endDate, 1));
 
   async function handleShare() {
@@ -181,7 +181,7 @@ function RangoView({ subjects, entries, logs }) {
       {shareError && <div className="auth-error" style={{ marginBottom: 10 }}>{shareError}</div>}
 
       <div className="rt-stats rt-mono">
-        <div className="rt-stat"><p>Puntos</p><p>{fmtNum(rango.hoursPerCredit)}</p></div>
+        <div className="rt-stat"><p>Puntos</p><p>{fmtNum(rango.puntos)}</p></div>
         <div className="rt-stat"><p>Minutos</p><p>{rango.minutosTotales.toLocaleString("es-ES")}</p></div>
         <div className="rt-stat"><p>Mejor sesión</p><p>{rango.mejorSesion > 0 ? hm(rango.mejorSesion) : "—"}</p></div>
         <div className="rt-stat"><p>Asignaturas</p><p>{rango.numAsignaturas}</p></div>
@@ -193,14 +193,14 @@ function RangoView({ subjects, entries, logs }) {
             {isMax ? "Rango máximo alcanzado" : `Progreso hasta ${RANK_NAMES[cur + 1]}`}
           </p>
           <p className="rt-mono rt-progval">
-            {isMax ? "puntos máximo" : `${fmtNum(rango.hoursPerCredit)} / ${fmtThreshold(hi)} pts`}
+            {isMax ? "puntos máximo" : `${fmtNum(rango.puntos)} / ${fmtThreshold(hi)} pts`}
           </p>
         </div>
         <div className="rt-track"><i style={{ width: `${progressPct}%` }} /></div>
         <p className="rt-proghelp">
           {isMax
             ? "No hay rango más alto — sigue estudiando para mantenerlo."
-            : `Te faltan ${fmtNum(hCreditoFaltante)} puntos para el siguiente rango.`}
+            : `Te faltan ${fmtNum(puntosFaltantes)} puntos para el siguiente rango.`}
         </p>
         <p className="rt-proghelp">
           La season actual termina el día {seasonEndDisplay}{!live ? " (esta season ya ha terminado)" : ""}.
@@ -211,14 +211,11 @@ function RangoView({ subjects, entries, logs }) {
       <div className="rt-card">
         <p className="rt-proglabel">¿Cómo se calculan los puntos?</p>
         <p className="rt-proghelp">
-          Cada asignatura que estudias en la season aporta <strong>sus horas ÷ sus créditos</strong>. Tus puntos son la
-          <strong> suma</strong> de todas, no una media: cuantas más asignaturas trabajes, más puntos.
+          Cada hora que estudias dentro de la season es <strong>1 punto</strong>, de la asignatura que sea. Todos
+          suman lo mismo por hora estudiada.
         </p>
         <p className="rt-proghelp">
-          Ejemplo: 72 h en una asignatura de 6 créditos son 12 puntos. Con 5 asignaturas así, 5 × 12 = 60 puntos.
-        </p>
-        <p className="rt-proghelp">
-          Solo cuentan las horas registradas dentro de la season. Las asignaturas sin créditos no puntúan.
+          Ejemplo: 3 h en una asignatura y 2 h en otra son 5 puntos. Solo cuentan las horas registradas dentro de la season; las asignaturas sin créditos no puntúan.
         </p>
       </div>
 
@@ -364,7 +361,7 @@ function HistorialTile({ entry }) {
       <RankEmblem tier={entry.tier} size={76} />
       <p className="rt-sn">{entry.season.label.toUpperCase()}</p>
       <p className="rt-rn">{RANK_NAMES[entry.tier]}</p>
-      <p className="rt-hv">{fmtNum(entry.hoursPerCredit)} pts</p>
+      <p className="rt-hv">{fmtNum(entry.puntos)} pts</p>
       {entry.live && <div style={{ marginTop: 8 }}><span className="rt-pill rt-mono rt-p-live">EN CURSO</span></div>}
     </div>
   );
@@ -380,7 +377,7 @@ function HistorialView({ subjects, entries, logs }) {
   }
 
   const completed = history.filter((h) => !h.live);
-  const best = (completed.length ? completed : history).reduce((a, b) => (b.tier > a.tier || (b.tier === a.tier && b.hoursPerCredit > a.hoursPerCredit) ? b : a));
+  const best = (completed.length ? completed : history).reduce((a, b) => (b.tier > a.tier || (b.tier === a.tier && b.puntos > a.puntos) ? b : a));
 
   return (
     <div>
