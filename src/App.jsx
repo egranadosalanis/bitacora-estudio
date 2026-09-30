@@ -1423,8 +1423,6 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
   const [nota, setNota] = useState("");
   const [cursosNecesarios, setCursosNecesarios] = useState("1");
   const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
-  const activeSources = mergedSources.filter((s) => s.estado === "aprobada");
-  const pendingSources = mergedSources.filter((s) => s.estado !== "aprobada");
   const mergeTarget = subject.mergedInto ? subjects.find((s) => s.id === subject.mergedInto) : null;
   return (
     <div>
@@ -1433,22 +1431,16 @@ function ApprovalForm({ subject, subjects, onConfirm, onCancel }) {
         siempre; las horas/crédito, días totales y el desgaste se siguen recalculando siempre con los datos
         actuales, no se congelan.
       </p>
-      {activeSources.length > 0 && (
+      {mergedSources.length > 0 && (
         <p className="panel-subtitle">
-          Ya suma las horas de: <strong>{activeSources.map((s) => s.name).join(", ")}</strong> (combinadas, ya aprobada).
-        </p>
-      )}
-      {pendingSources.length > 0 && (
-        <p className="panel-subtitle">
-          Combinada también con <strong>{pendingSources.map((s) => s.name).join(", ")}</strong>, pero como
-          {pendingSources.length === 1 ? " todavía no está aprobada" : " ninguna está aprobada todavía"}, sus horas
-          no cuentan aún — se sumarán solas en cuanto la apruebes.
+          Al aprobarla suma las horas de: <strong>{mergedSources.map((s) => s.name).join(", ")}</strong> (combinadas),
+          aunque esas no estén aprobadas.
         </p>
       )}
       {mergeTarget && (
         <p className="panel-subtitle">
-          Esta asignatura está combinada con <strong>{mergeTarget.name}</strong>: al aprobarla ahora, sus horas
-          empezarán a sumarse también a la clasificación de {mergeTarget.name}.
+          Esta asignatura está combinada con <strong>{mergeTarget.name}</strong>: sus horas se suman a la clasificación
+          de {mergeTarget.name} cuando esa esté aprobada. Nota y cursos necesarios de esta no cuentan para ella.
         </p>
       )}
       <div className="field-row">
@@ -1650,18 +1642,12 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
                       )}
                       {hasOwnSources && (() => {
                         const sources = subjects.filter((o) => o.mergedInto === s.id);
-                        const active = sources.filter((o) => o.estado === "aprobada");
-                        const pending = sources.filter((o) => o.estado !== "aprobada");
                         return (
                           <div style={{ marginTop: 4 }}>
-                            {active.length > 0 && (
-                              <div className="gauge-sub">Combinada con: {active.map((o) => o.name).join(", ")}</div>
-                            )}
-                            {pending.length > 0 && (
-                              <div className="gauge-sub" style={{ color: "var(--amber)" }}>
-                                Combinada con (pendiente, no cuenta aún): {pending.map((o) => o.name).join(", ")}
-                              </div>
-                            )}
+                            <div className="gauge-sub">
+                              Combinada con: {sources.map((o) => o.name).join(", ")}
+                              {s.estado !== "aprobada" ? " (sus horas se suman cuando la apruebes)" : ""}
+                            </div>
                           </div>
                         );
                       })()}
@@ -2025,10 +2011,8 @@ function ClasificacionDetail({ subject, subjects, entries }) {
   const f = subject.frozen;
   const c = computeClassification(subject, entries, subjects);
   const mergedSources = subjects.filter((s) => s.mergedInto === subject.id);
-  const activeSources = mergedSources.filter((s) => s.estado === "aprobada");
-  const pendingSources = mergedSources.filter((s) => s.estado !== "aprobada");
 
-  const wearMembers = [subject, ...activeSources];
+  const wearMembers = [subject, ...mergedSources];
   const wearComputed = wearMembers.map((m) => ({ subject: m, desgaste: computeDesgaste(m.id, entries) }));
   const wearRanked = wearComputed.filter((w) => w.desgaste.comparable);
   const wearBest = wearRanked.length > 0
@@ -2043,14 +2027,9 @@ function ClasificacionDetail({ subject, subjects, entries }) {
         <StatCard label="Cursos necesarios" value={f.cursosNecesarios ?? "—"} accent="var(--purple)" />
         <StatCard label="Nota" value={f.nota ?? "—"} accent="#3DDC84" />
       </div>
-      {activeSources.length > 0 && (
+      {mergedSources.length > 0 && (
         <div className="gauge-sub" style={{ padding: "0 4px 4px" }}>
-          Combinada con: {activeSources.map((s) => s.name).join(", ")}
-        </div>
-      )}
-      {pendingSources.length > 0 && (
-        <div className="gauge-sub" style={{ padding: "0 4px 4px", color: "var(--amber)" }}>
-          Pendiente de combinar (aún no aprobada, no cuenta todavía): {pendingSources.map((s) => s.name).join(", ")}
+          Combinada con: {mergedSources.map((s) => s.name).join(", ")}
         </div>
       )}
       <div className="panel" style={{ marginTop: 4 }}>

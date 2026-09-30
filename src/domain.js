@@ -454,15 +454,6 @@ export function getMergedSourceIds(subjects, subjectId) {
   return subjects.filter((s) => s.mergedInto === subjectId).map((s) => s.id);
 }
 
-/** Ids de las asignaturas fusionadas en `subjectId` que además ya están
- * ellas mismas "aprobada" — solo estas cuentan de verdad en el histórico
- * combinado (ver computeClassification): mientras la fuente (p. ej. una
- * asignatura de Erasmus) no esté aprobada, sus horas todavía no se suman
- * a la oficial, aunque el vínculo "Combinar con" ya esté puesto. */
-export function getApprovedMergedSourceIds(subjects, subjectId) {
-  return subjects.filter((s) => s.mergedInto === subjectId && s.estado === "aprobada").map((s) => s.id);
-}
-
 function combineEntriesOf(entries, ids) {
   const byDate = {};
   ids.forEach((id) => {
@@ -476,18 +467,17 @@ function combineEntriesOf(entries, ids) {
 }
 
 /** Historial combinado (fecha + minutos sumados) de una asignatura y TODAS
- * las que tiene fusionadas (mergedInto), estén o no aprobada ellas mismas.
- * Uso general / informativo — para el cómputo real de horas/crédito de la
- * clasificación histórica usa getApprovedCombinedEntries. */
+ * las que tiene fusionadas (mergedInto), estén o no aprobada ellas mismas. */
 export function getCombinedEntries(entries, subjects, subjectId) {
   return combineEntriesOf(entries, [subjectId, ...getMergedSourceIds(subjects, subjectId)]);
 }
 
-/** Historial combinado (fecha + minutos) de una asignatura y solo las
- * fusionadas que YA están aprobada — el que de verdad cuenta para la
- * clasificación histórica en cada momento (ver computeClassification). */
+/** Historial combinado (fecha + minutos) de una asignatura YA aprobada y de
+ * TODAS las que tiene fusionadas (mergedInto), sea cual sea su estado: un
+ * intento anterior suspendido, una de Erasmus... Es el que cuenta para la
+ * clasificación histórica (ver computeClassification). */
 export function getApprovedCombinedEntries(entries, subjects, subjectId) {
-  return combineEntriesOf(entries, [subjectId, ...getApprovedMergedSourceIds(subjects, subjectId)]);
+  return combineEntriesOf(entries, [subjectId, ...getMergedSourceIds(subjects, subjectId)]);
 }
 
 /* ------------------------------------------------------------------ */
@@ -619,12 +609,9 @@ export function computeDesgaste(subjectId, entries) {
  * crédito, días totales y fecha de inicio NO se congelan aquí: se
  * recalculan siempre al vuelo (ver computeClassification), igual que ya
  * pasa con el desgaste, porque dependen del historial combinado con
- * cualquier asignatura fusionada (mergedInto) — y esa combinación solo
- * cuenta de verdad a partir del momento en que la fuente combinada
- * también esté aprobada. Si "Calcolo Numerico" está combinada con
- * "Métodos Matemáticos" pero Calcolo todavía no está aprobada, las horas
- * de Métodos no la incluyen todavía; en cuanto se aprueba Calcolo, la
- * clasificación de Métodos se actualiza sola, sin volver a tocar nada. */
+ * cualquier asignatura fusionada (mergedInto). Las fusionadas cuentan en
+ * cuanto la principal está aprobada, aunque ellas no lo estén (p. ej. un
+ * intento anterior suspendido): no hace falta tocarlas. */
 export function freezeApproval(subject, { nota, cursosNecesarios, fechaAprobacion = isoToday() }) {
   return {
     ...subject,
@@ -639,7 +626,7 @@ export function freezeApproval(subject, { nota, cursosNecesarios, fechaAprobacio
 
 /** Cifras de clasificación histórica de una asignatura YA aprobada,
  * calculadas siempre al vuelo a partir del historial combinado actual
- * (ella misma + las fusionadas que a su vez ya estén aprobada). */
+ * (ella misma + todas las fusionadas en ella). */
 export function computeClassification(subject, entries, subjects) {
   const combinedAsc = getApprovedCombinedEntries(entries, subjects, subject.id);
   const firstDate = combinedAsc[0]?.date ?? null;
