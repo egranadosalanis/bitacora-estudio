@@ -188,7 +188,7 @@ function UsernameScreen({ userId, avatarUrl, pendingInvite, online, onCreated, o
       <div className="panel-title">Crea tu perfil</div>
       <p className="panel-subtitle">
         Elige el nombre con el que te verán tus amigos en Clever: entre 3 y 20 caracteres (letras, números, punto o guion bajo),
-        sin distinguir mayúsculas, y no puede repetirse.
+        sin distinguir mayúsculas, y no puede repetirse. Tu nombre y tu foto serán visibles para otros usuarios de Clever cuando te busquen.
       </p>
       <div className="sc-photo-pick">
         <Avatar name={name || "?"} url={preview || googlePhoto} size={56} />
@@ -1304,7 +1304,7 @@ export default function SocialTab({ userId, avatarUrl, onOwnPhoto, carreraId, su
   // Guarda en el perfil la foto de Google (una sola vez por sesión) para que los demás puedan verla.
   const syncedGoogle = useRef(false);
   useEffect(() => {
-    if (!perfil || !googlePhoto || perfil.avatar_url === googlePhoto || syncedGoogle.current) return;
+    if (!perfil || !perfil.share_metrics_ok || !googlePhoto || perfil.avatar_url === googlePhoto || syncedGoogle.current) return;
     syncedGoogle.current = true;
     api.establecerAvatar(googlePhoto).then(() => setPerfil((p) => (p ? { ...p, avatar_url: googlePhoto } : p))).catch(() => {});
   }, [perfil, googlePhoto]);
