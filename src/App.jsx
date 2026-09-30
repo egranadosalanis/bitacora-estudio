@@ -3161,7 +3161,6 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             pendingInvite={pendingInvite}
             onInviteHandled={() => { clearPendingInvite(); setPendingInvite(null); }}
             onBack={isMobile ? () => setMoreOpen(true) : null}
-            onLeave={() => setTab("bitacora")}
             isMobile={isMobile}
           />
         )}

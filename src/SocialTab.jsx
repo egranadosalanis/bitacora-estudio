@@ -145,7 +145,7 @@ function ErrorPanel({ message, onRetry }) {
 
 /* ---------- entrada: nombre de usuario y consentimiento ---------- */
 
-function UsernameScreen({ pendingInvite, online, onCreated }) {
+function UsernameScreen({ pendingInvite, online, onCreated, onCancel }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -198,6 +198,7 @@ function UsernameScreen({ pendingInvite, online, onCreated }) {
         <button className="btn-primary" type="submit" disabled={busy || !online || name.trim() === ""}>
           {busy ? "Guardando…" : "Continuar"}
         </button>
+        <button className="btn-ghost" type="button" onClick={onCancel} disabled={busy}>Ahora no</button>
       </div>
     </form>
   );
@@ -948,10 +949,12 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
     return () => { cancelled = true; };
   }, [selected, rankingOk]);
 
-  // Pregunta por el listado una sola vez (solo si ya tiene nombre de usuario).
-  useEffect(() => {
-    if (perfil && !perfil.share_ranking_ok && !asked) setAskRanking(true);
-  }, [perfil, asked]);
+  // Pregunta por el listado una sola vez, la primera vez que el usuario elige él
+  // mismo una asignatura (solo si ya tiene nombre de usuario).
+  function chooseSubject(id) {
+    setSelected(id);
+    if (id && perfil && !perfil.share_ranking_ok && !asked) setAskRanking(true);
+  }
 
   function markAsked() {
     try { window.localStorage.setItem(rankingAskedKey(userId), "1"); } catch { /* nada */ }
@@ -975,7 +978,7 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
       {!online && <OfflineBar />}
       <div className="panel">
         <label className="panel-title" htmlFor="sc-guia-select">Asignatura</label>
-        <select id="sc-guia-select" className="input-field" value={selected} onChange={(e) => setSelected(e.target.value)}>
+        <select id="sc-guia-select" className="input-field" value={selected} onChange={(e) => chooseSubject(e.target.value)}>
           <option value="">Elige una asignatura…</option>
           {groups.map((g) => (
             <optgroup key={g.label} label={g.label}>
@@ -1181,11 +1184,11 @@ export function SocialSettingsModal({ userId, onClose }) {
 
 /* ---------- pestaña ---------- */
 
-export default function SocialTab({ userId, carreraId, subjects, entries, logs, pendingInvite, onInviteHandled, onBack, onLeave, onOpenSettings, isMobile }) {
+export default function SocialTab({ userId, carreraId, subjects, entries, logs, pendingInvite, onInviteHandled, onBack, onOpenSettings, isMobile }) {
   const online = useOnline();
   const [perfil, setPerfil] = useState(undefined); // undefined = cargando, null = sin perfil
   const [loadError, setLoadError] = useState(null);
-  const [section, setSection] = useState("amigos");
+  const [section, setSection] = useState(pendingInvite ? "amigos" : "guia");
 
   const loadPerfil = useCallback(async () => {
     setLoadError(null);
@@ -1216,10 +1219,10 @@ export default function SocialTab({ userId, carreraId, subjects, entries, logs, 
   } else if (perfil === undefined) {
     body = <div className="sc-hint">Cargando…</div>;
   } else if (perfil === null) {
-    body = <UsernameScreen pendingInvite={pendingInvite} online={online} onCreated={loadPerfil} />;
+    body = <UsernameScreen pendingInvite={pendingInvite} online={online} onCreated={loadPerfil} onCancel={() => setSection("guia")} />;
   } else if (!perfil.share_metrics_ok) {
     body = (
-      <ConsentModal text={CONSENT_METRICAS} online={online} onAccept={acceptMetrics} onDecline={onLeave} />
+      <ConsentModal text={CONSENT_METRICAS} online={online} onAccept={acceptMetrics} onDecline={() => setSection("guia")} />
     );
   } else {
     body = (
