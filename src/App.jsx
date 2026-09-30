@@ -3880,6 +3880,9 @@ export const CSS = `
     position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--rt-border); min-height: 340px;
     margin-bottom: 12px; background: #0a0f1a; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
   }
+  @media (min-width: 720px) {
+    .rt-hero:not(.rt-hero-share), .rt-scene:not(.rt-scene-share) { max-width: 640px; margin-left: auto; margin-right: auto; }
+  }
   .rt-hero .rt-sc { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .94; }
   .rt-hero .rt-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,10,18,.08) 0%, rgba(6,10,18,.05) 40%, rgba(6,10,18,.55) 72%, rgba(6,10,18,.88) 100%); }
   .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #d7e3f5; text-shadow: 0 1px 6px rgba(0,0,0,.9); z-index: 2; margin: 0; }
