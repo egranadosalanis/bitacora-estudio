@@ -685,7 +685,7 @@ export function computeDesgaste(subjectId, entries) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  RANGOS — seasons, rango (h/crédito) y racha                        */
+/*  RANGOS — seasons, rango (puntos = horas) y racha                        */
 /*                                                                      */
 /*  Las seasons son fechas fijas, iguales para todos los usuarios       */
 /*  (como en Rocket League) — las fija quien mantiene la app, no cada   */
@@ -737,52 +737,40 @@ export const RANK_QUIPS = [
   "Los pájaros te piden permiso.", "Vas a un Mach que da miedo.", "La gravedad ya es opcional.",
   "Sujetas el firmamento con tus manos.",
 ];
-// h/crédito mínimas de cada rango (el último, "Atlas", no tiene techo).
-export const RANK_THRESHOLDS = [0, 4, 10, 20, 32, 47, 60];
+// Puntos mínimos de cada rango (el último, "Atlas", no tiene techo). 1 punto = 1 hora
+// estudiada dentro de la season.
+export const RANK_THRESHOLDS = [0, 20, 50, 100, 195, 250, 300];
 
-export function rankTierForHoursPerCredit(hpc) {
+export function rankTierForPoints(points) {
   let k = 0;
-  for (let i = 0; i < RANK_THRESHOLDS.length; i++) if (hpc >= RANK_THRESHOLDS[i]) k = i;
+  for (let i = 0; i < RANK_THRESHOLDS.length; i++) if (points >= RANK_THRESHOLDS[i]) k = i;
   return k;
 }
 
 /** Cifras de rango de una season concreta, calculadas siempre al vuelo a
- * partir de los registros reales (sin "cerrar" nada): h/crédito = suma,
- * asignatura por asignatura, de sus propias horas ÷ créditos dentro de la
- * season (no minutos totales ÷ créditos totales) — así cada asignatura en
- * la que inviertes tiempo suma su propio ritmo al rango, en vez de que las
- * asignaturas casi sin tocar diluyan la media arrastrando el total hacia
- * abajo por sus créditos. */
+ * partir de los registros reales (sin "cerrar" nada): los puntos son las
+ * horas estudiadas dentro de la season, de todas las asignaturas (1 punto =
+ * 1 hora), así todos suman lo mismo por cada hora que estudian. */
 export function computeSeasonRango(subjects, entries, logs, season) {
-  // Las asignaturas sin créditos (marca del admin) no cuentan en Rangos:
-  // ni sus minutos ni sus créditos.
-  const contables = subjects.filter((s) => !s.sinCreditos);
-  const contablesIds = new Set(contables.map((s) => s.id));
-  const activeSubjects = subjectsWithActivityInRange(contables, entries, season.startDate, season.endDate);
+  const ids = new Set(subjects.map((s) => s.id));
+  const activeSubjects = subjectsWithActivityInRange(subjects, entries, season.startDate, season.endDate);
   const seasonEntries = entriesInRange(entries, season.startDate, season.endDate);
-  const minutosPorAsignatura = {};
   let minutosTotales = 0;
   Object.values(seasonEntries).forEach((bySubject) => {
     Object.entries(bySubject).forEach(([subjectId, m]) => {
-      if (!m || !contablesIds.has(subjectId)) return;
-      minutosTotales += m;
-      minutosPorAsignatura[subjectId] = (minutosPorAsignatura[subjectId] || 0) + m;
+      if (m && ids.has(subjectId)) minutosTotales += m;
     });
   });
-  const creditosTotales = activeSubjects.reduce((a, s) => a + (s.credits || 0), 0);
-  const hoursPerCredit = activeSubjects.reduce((sum, s) => {
-    const minutosAsignatura = minutosPorAsignatura[s.id] || 0;
-    return sum + (s.credits > 0 ? minutosAsignatura / 60 / s.credits : 0);
-  }, 0);
+  const puntos = minutosTotales / 60;
   let mejorSesion = 0;
   (logs || []).forEach((l) => {
-    if (!contablesIds.has(l.subjectId)) return;
+    if (!ids.has(l.subjectId)) return;
     if (l.date >= season.startDate && l.date <= season.endDate && l.minutes > mejorSesion) mejorSesion = l.minutes;
   });
   return {
-    season, minutosTotales, hoursPerCredit, mejorSesion, creditosTotales,
+    season, minutosTotales, puntos, mejorSesion,
     numAsignaturas: activeSubjects.length,
-    tier: rankTierForHoursPerCredit(hoursPerCredit),
+    tier: rankTierForPoints(puntos),
   };
 }
 

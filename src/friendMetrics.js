@@ -20,7 +20,7 @@ export function summarizeStudy(subjects, entries, logs) {
   return {
     season, live, rango,
     tier: rango.tier,
-    hpcSeason: rango.hoursPerCredit,
+    puntos: rango.puntos,
     streak: stats.current,
     bestStreak: stats.longest,
     weekMinutes,
@@ -55,10 +55,10 @@ export function buildFriendModel(resumen) {
   };
 }
 
-/** Orden de la clasificación: mayor rango primero y, a igualdad, más h/crédito. */
+/** Orden de la clasificación: mayor rango primero y, a igualdad, más puntos. */
 export function compareByRank(a, b) {
   if (b.tier !== a.tier) return b.tier - a.tier;
-  return b.hpcSeason - a.hpcSeason;
+  return b.puntos - a.puntos;
 }
 
 /** Celdas del mapa de calor: `weeks` semanas completas terminando esta semana
