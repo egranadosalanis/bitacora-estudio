@@ -6,6 +6,7 @@ import * as api from "./socialData.js";
 import { USERNAME_RE, GOOGLE_AVATAR_RE } from "./socialData.js";
 import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, STATS_PRIVACY_NOTE } from "./socialTexts.js";
 import Avatar from "./Avatar.jsx";
+import SeasonEnd from "./SeasonEnd.jsx";
 import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
@@ -1004,9 +1005,12 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
           </div>
           {shareMsg && <div className="sc-hint">{shareMsg}</div>}
 
-          <div className="sc-seg">
-            <button className={`tab-btn ${rankMode === "season" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("season")}>Season</button>
-            <button className={`tab-btn ${rankMode === "week" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("week")}>Semanal</button>
+          <div className="sc-seg-row">
+            <div className="sc-seg">
+              <button className={`tab-btn ${rankMode === "season" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("season")}>Season</button>
+              <button className={`tab-btn ${rankMode === "week" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("week")}>Semanal</button>
+            </div>
+            <SeasonEnd season={own.season} live={own.live} size="sm" />
           </div>
 
           {rankMode === "week" && (() => {
@@ -1669,6 +1673,7 @@ export const SOCIAL_CSS = `
   .sc-title { flex: 1; margin: 0; font-size: 26px; font-weight: 700; }
   .sc-backbtn { margin-left: -10px; }
   .sc-seg { display: flex; gap: 6px; }
+  .sc-seg-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap; }
   .sc-weekbar { display: flex; align-items: center; gap: 6px; }
   .sc-weekbar .input-field { flex: 1; min-width: 0; }
   .sc-weekbar .sc-iconbtn { font-size: 22px; line-height: 1; }
