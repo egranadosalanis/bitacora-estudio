@@ -19,6 +19,7 @@ import {
 import { supabase } from "./supabaseClient.js";
 import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from "./offline.js";
 import SocialTab, { SOCIAL_CSS, SocialSettingsModal } from "./SocialTab.jsx";
+import { SEASON_END_CSS } from "./SeasonEnd.jsx";
 import { readPendingInvite, clearPendingInvite, getMiPerfilSocial, photoUrl, GOOGLE_AVATAR_RE } from "./socialData.js";
 import { AccountAvatar, AVATAR_CSS } from "./Avatar.jsx";
 import RangosTab, { prefetchRangosImages } from "./RangosTab.jsx";
@@ -3490,6 +3491,7 @@ export const CSS = `
   .app-main { max-width: 1080px; margin: 0 auto; }
 
   ${SOCIAL_CSS}
+  ${SEASON_END_CSS}
   ${AVATAR_CSS}
 
   /* ---- Menú de cuenta en PC: mismas secciones que el panel "Más" del móvil ---- */

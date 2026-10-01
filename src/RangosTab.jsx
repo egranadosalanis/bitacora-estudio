@@ -1,8 +1,9 @@
 import React, { useMemo, useRef, useState } from "react";
+import SeasonEnd from "./SeasonEnd.jsx";
 import {
   computeStats, getCurrentSeason, computeSeasonRango, getSeasonHistory,
   RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS,
-  STREAK_TIERS, streakTierForDays, hm, addDays, APP_SHARE_URL,
+  STREAK_TIERS, streakTierForDays, hm, APP_SHARE_URL,
 } from "./domain.js";
 
 /* ------------------------------------------------------------------ */
@@ -21,12 +22,6 @@ function fmtNum(n, decimals = 1) {
 
 function fmtThreshold(n) {
   return Number.isInteger(n) ? String(n) : fmtNum(n, 1);
-}
-
-// D/M/AAAA — el mismo formato corto que usa el aviso de fecha de cierre de season.
-function fmtShortDate(iso) {
-  const [y, m, d] = iso.split("-").map(Number);
-  return `${d}/${m}/${y}`;
 }
 
 function ShareIcon() {
@@ -129,7 +124,6 @@ function RangoView({ subjects, entries, logs }) {
   const hi = isMax ? null : RANK_THRESHOLDS[cur + 1];
   const progressPct = isMax ? 100 : Math.max(0, Math.min(100, ((rango.puntos - lo) / (hi - lo)) * 100));
   const puntosFaltantes = isMax ? 0 : Math.max(0, hi - rango.puntos);
-  const seasonEndDisplay = fmtShortDate(addDays(season.endDate, 1));
 
   async function handleShare() {
     if (sharing || !shareRef.current) return;
@@ -157,6 +151,7 @@ function RangoView({ subjects, entries, logs }) {
 
   return (
     <div>
+      <SeasonEnd season={season} live={live} size="lg" />
       <div className="rt-hero">
         <img className="rt-sc" decoding="async" src={`/rangos/rank-bg/rank-${previewTier}.webp`} alt="" />
         <div className="rt-tint" />
@@ -201,9 +196,6 @@ function RangoView({ subjects, entries, logs }) {
           {isMax
             ? "No hay rango más alto — sigue estudiando para mantenerlo."
             : `Te faltan ${fmtNum(puntosFaltantes)} puntos para el siguiente rango.`}
-        </p>
-        <p className="rt-proghelp">
-          La season actual termina el día {seasonEndDisplay}{!live ? " (esta season ya ha terminado)" : ""}.
         </p>
       </div>
 
