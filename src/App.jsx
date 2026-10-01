@@ -1776,7 +1776,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
 const WEAR_FACTOR_INFO = {
   volumen: {
     label: "Volumen",
-    explain: "Horas totales que estudiaste en ese tramo (tope 90 h = 18 días × 5 h) — cuánto esfuerzo acumulaste sostenido en el tiempo.",
+    explain: "Horas totales que estudiaste en ese tramo (tope 70 h) — cuánto esfuerzo acumulaste sostenido en el tiempo.",
     raw: (f) => `${f.volumen.toFixed(0)} h`,
   },
   intensidad: {
@@ -1956,7 +1956,7 @@ function DesgasteTab({ cursoSubjects, subjects, entries }) {
           <div>
             <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
               Mide el tramo de estudio más exigente de cada asignatura de este curso, normalizado contra un tope fijo
-              por factor (Volumen 90 h, Intensidad 300 min/día, Compresión 90%, Racha interna 10 días), así que el
+              por factor (Volumen 70 h, Intensidad 270 min/día, Compresión 90%, Racha interna 10 días), así que el
               índice de una asignatura no cambia según apruebes otras. Para las que siguen en curso se muestra además
               una vista previa de lo que saldría si las aprobaras hoy.
             </div>
