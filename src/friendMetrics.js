@@ -61,6 +61,32 @@ export function compareByRank(a, b) {
   return b.puntos - a.puntos;
 }
 
+/** Lunes (fecha ISO) de la semana a la que pertenece `iso`. Las semanas van de lunes a domingo. */
+export function weekStartOf(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dow = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7; // 0 = lunes
+  return addDays(iso, -dow);
+}
+
+/** Minutos estudiados y días con estudio de cada semana (clave = lunes), a partir del mapa de
+ * entradas `{ fecha: { asignaturaId: minutos } }`. Igual que los puntos de rango, no cuentan las
+ * asignaturas «sin créditos». Todo se calcula al vuelo: no se guarda nada por semana. */
+export function weeklyMinutes(subjects, entries) {
+  const counted = new Set(subjects.filter((s) => !s.sinCreditos).map((s) => s.id));
+  const out = new Map();
+  Object.entries(entries).forEach(([date, bySubject]) => {
+    let day = 0;
+    Object.entries(bySubject).forEach(([id, m]) => { if (m > 0 && counted.has(id)) day += m; });
+    if (day <= 0) return;
+    const wk = weekStartOf(date);
+    const cur = out.get(wk) || { minutes: 0, days: 0 };
+    cur.minutes += day;
+    cur.days += 1;
+    out.set(wk, cur);
+  });
+  return out;
+}
+
 /** Celdas del mapa de calor: `weeks` semanas completas terminando esta semana
  * (lunes a domingo), con los minutos de cada día. Las fechas futuras salen a null. */
 export function heatmapCells(dailyTotals, weeks = 12) {

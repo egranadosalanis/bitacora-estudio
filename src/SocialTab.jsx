@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
-import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup } from "./domain.js";
+import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup, isoToday, addDays, formatShort, buildEntriesFromLogs } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
 import { USERNAME_RE, GOOGLE_AVATAR_RE } from "./socialData.js";
 import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, STATS_PRIVACY_NOTE } from "./socialTexts.js";
 import Avatar from "./Avatar.jsx";
-import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells } from "./friendMetrics.js";
+import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
 /*  Pestaña Social — sección Amigos                                    */
@@ -781,6 +781,22 @@ function InviteModal({ from, online, onClose }) {
 
 /* ---------- sección Amigos ---------- */
 
+function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, onClick }) {
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag type={onClick ? "button" : undefined} className={`sc-row ${isMe ? "sc-me" : ""}`} onClick={onClick}>
+      <span className="sc-pos mono">{pos}</span>
+      <Avatar name={name} url={avatarUrl} size={30} />
+      <span className="sc-who">
+        <Username name={name} verified={verified} />
+        {isMe && <span className="sc-you mono">TÚ</span>}
+        <span className="sc-note mono">{days > 0 ? `${days} ${days === 1 ? "día" : "días"} de estudio` : "sin estudio"}</span>
+      </span>
+      <span className="sc-weekval mono">{minutes > 0 ? hm(minutes) : "—"}</span>
+    </Tag>
+  );
+}
+
 function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, logs, pendingInvite, onInviteHandled, isMobile, online, onNeedConsent }) {
   const [amistades, setAmistades] = useState([]);
   const [models, setModels] = useState({});
@@ -790,6 +806,8 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
   const [fichaUser, setFichaUser] = useState(null);
   const [selfModel, setSelfModel] = useState(null);
   const [selfBusy, setSelfBusy] = useState(false);
+  const [rankMode, setRankMode] = useState("season"); // season | week
+  const [weekKey, setWeekKey] = useState(null); // lunes de la semana elegida; null = la actual
   const [busyId, setBusyId] = useState(null);
   const [reqError, setReqError] = useState(null);
   const [shareMsg, setShareMsg] = useState(null);
@@ -844,6 +862,31 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
     return { ok, locked };
   }, [amistades, models, own, perfil.username, perfil.verificado, ownPhoto]);
 
+  // Clasificación semanal (lunes a domingo): se calcula al vuelo con los registros diarios que ya
+  // llegan de cada amigo, así que no hace falta guardar nada nuevo por semana.
+  const currentWeek = weekStartOf(isoToday());
+  const weekly = useMemo(() => {
+    const people = ranking.ok.map((r) => ({
+      ...r,
+      weeks: r.me ? weeklyMinutes(subjects, entries) : weeklyMinutes(r.summary.subjects, buildEntriesFromLogs(r.summary.logs)),
+    }));
+    const available = new Set([currentWeek]);
+    people.forEach((p) => p.weeks.forEach((_, wk) => available.add(wk)));
+    const weeks = [...available].sort().reverse(); // de la más reciente a la más antigua
+    const selected = weekKey && available.has(weekKey) ? weekKey : currentWeek;
+    const rows = people
+      .map((p) => ({ ...p, minutes: p.weeks.get(selected)?.minutes ?? 0, days: p.weeks.get(selected)?.days ?? 0 }))
+      .sort((a, b) => b.minutes - a.minutes || a.username.localeCompare(b.username));
+    return { weeks, selected, rows };
+  }, [ranking.ok, subjects, entries, weekKey, currentWeek]);
+
+  function weekName(wk) {
+    const range = `${formatShort(wk)} – ${formatShort(addDays(wk, 6))}`;
+    if (wk === currentWeek) return `Esta semana · ${range}`;
+    if (wk === addDays(currentWeek, -7)) return `Semana pasada · ${range}`;
+    return range;
+  }
+
   async function openSelf() {
     setSelfBusy(true);
     setError(null);
@@ -885,7 +928,9 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
 
   async function shareInvite() {
     const link = `${APP_URL}/?invitar=${encodeURIComponent(perfil.username)}`;
-    const text = `Te invito a Clever, la bitácora de estudio. Únete y seremos amigos: ${link}`;
+    // El enlace va solo en `url`: las apps (WhatsApp...) lo añaden detrás del texto. Si además
+    // estuviera dentro de `text`, saldría dos veces.
+    const text = "Añádeme como amigo en Clever y estudiemos juntos 📚";
     setShareMsg(null);
     try {
       if (navigator.share) {
@@ -959,8 +1004,41 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
           </div>
           {shareMsg && <div className="sc-hint">{shareMsg}</div>}
 
+          <div className="sc-seg">
+            <button className={`tab-btn ${rankMode === "season" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("season")}>Season</button>
+            <button className={`tab-btn ${rankMode === "week" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("week")}>Semanal</button>
+          </div>
+
+          {rankMode === "week" && (() => {
+            const i = weekly.weeks.indexOf(weekly.selected);
+            return (
+              <>
+                <div className="sc-weekbar">
+                  <button className="sc-iconbtn" disabled={i >= weekly.weeks.length - 1} onClick={() => setWeekKey(weekly.weeks[i + 1])} aria-label="Semana anterior">‹</button>
+                  <select className="input-field" value={weekly.selected} onChange={(e) => setWeekKey(e.target.value)} aria-label="Semana">
+                    {weekly.weeks.map((wk) => <option key={wk} value={wk}>{weekName(wk)}</option>)}
+                  </select>
+                  <button className="sc-iconbtn" disabled={i <= 0} onClick={() => setWeekKey(weekly.weeks[i - 1])} aria-label="Semana siguiente">›</button>
+                </div>
+                <div className="sc-list">
+                  {weekly.rows.map((r, k) => (
+                    <WeekRow
+                      key={r.username} pos={k + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar}
+                      minutes={r.minutes} days={r.days} isMe={r.me}
+                      onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
+                    />
+                  ))}
+                </div>
+                {weekly.rows.every((r) => r.minutes === 0) && (
+                  <div className="sc-hint">Nadie ha registrado estudio esta semana todavía.</div>
+                )}
+                <div className="sc-hint">Semanas de lunes a domingo. Solo cuentan las horas de las asignaturas con créditos, como en los puntos de rango.</div>
+              </>
+            );
+          })()}
+
           <div className="sc-list">
-            {ranking.ok.map((r, i) => (
+            {rankMode === "season" && ranking.ok.map((r, i) => (
               <RankRow
                 key={r.username} pos={i + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar} summary={r.summary} isMe={r.me}
                 onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
@@ -1591,6 +1669,11 @@ export const SOCIAL_CSS = `
   .sc-title { flex: 1; margin: 0; font-size: 26px; font-weight: 700; }
   .sc-backbtn { margin-left: -10px; }
   .sc-seg { display: flex; gap: 6px; }
+  .sc-weekbar { display: flex; align-items: center; gap: 6px; }
+  .sc-weekbar .input-field { flex: 1; min-width: 0; }
+  .sc-weekbar .sc-iconbtn { font-size: 22px; line-height: 1; }
+  .sc-weekbar .sc-iconbtn:disabled { opacity: 0.35; cursor: default; }
+  .sc-weekval { font-size: 14px; font-weight: 700; color: var(--cyan-text); white-space: nowrap; }
   .sc-hint { color: var(--text-dim); font-size: 13px; line-height: 1.5; }
   .sc-offline { color: var(--amber); font-size: 12px; letter-spacing: 0.04em; margin: 6px 0; }
   .sc-empty { text-align: center; }
