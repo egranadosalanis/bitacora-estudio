@@ -1774,15 +1774,15 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
 /* ------------------------------------------------------------------ */
 
 const WEAR_FACTOR_INFO = {
+  volumen: {
+    label: "Volumen",
+    explain: "Horas totales que estudiaste en ese tramo (tope 90 h = 18 días × 5 h) — cuánto esfuerzo acumulaste sostenido en el tiempo.",
+    raw: (f) => `${f.volumen.toFixed(0)} h`,
+  },
   intensidad: {
     label: "Intensidad",
-    explain: "Minutos de media que estudiaste cada día activo, durante el tramo más exigente de esta asignatura.",
+    explain: "Minutos de media que estudiaste cada día activo, durante ese tramo.",
     raw: (f) => `${f.intensidad.toFixed(0)} min/día`,
-  },
-  duracion: {
-    label: "Duración",
-    explain: "Cuántos días activos duró ese tramo — indica si fue un sprint corto o un esfuerzo sostenido en el tiempo.",
-    raw: (f) => `${f.duracion} días`,
   },
   compresion: {
     label: "Compresión",
@@ -1956,7 +1956,7 @@ function DesgasteTab({ cursoSubjects, subjects, entries }) {
           <div>
             <div className="panel-subtitle" style={{ margin: "0 0 16px", padding: "0 4px" }}>
               Mide el tramo de estudio más exigente de cada asignatura de este curso, normalizado contra un tope fijo
-              por factor (Intensidad 300 min/día, Duración 18 días, Compresión 90%, Racha interna 10 días), así que el
+              por factor (Volumen 90 h, Intensidad 300 min/día, Compresión 90%, Racha interna 10 días), así que el
               índice de una asignatura no cambia según apruebes otras. Para las que siguen en curso se muestra además
               una vista previa de lo que saldría si las aprobaras hoy.
             </div>
@@ -3764,9 +3764,11 @@ export const CSS = `
   }
   .wear-index-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; max-width: 440px; }
   .wear-label { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .wear-label-llevadero { color: var(--green); background: rgba(61,220,132,0.1); }
+  .wear-label-ligero { color: var(--green); background: rgba(61,220,132,0.1); }
   .wear-label-moderado { color: var(--cyan); background: rgba(79,216,234,0.1); }
+  .wear-label-exigente { color: #E6C229; background: rgba(230,194,41,0.1); }
   .wear-label-duro { color: var(--amber); background: rgba(245,166,35,0.1); }
+  .wear-label-brutal { color: #FF7A3D; background: rgba(255,122,61,0.1); }
   .wear-label-extremo { color: var(--red); background: rgba(255,92,92,0.1); }
   .wear-factors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   @media (max-width: 560px) { .wear-factors { grid-template-columns: 1fr; } }

@@ -571,12 +571,13 @@ export function computeClassification(subject, entries, subjects, cursos = []) {
 const BLOQUE_UMBRAL_DESCANSO = 2; // días de descanso que aún no rompen el bloque
 const BLOQUE_MIN_DIAS_ACTIVOS = 3; // mínimo para ser candidato a "peor bloque"
 
-export const WEAR_WEIGHTS = { intensidad: 0.30, duracion: 0.30, compresion: 0.20, racha: 0.20 };
+export const WEAR_WEIGHTS = { volumen: 0.50, intensidad: 0.25, compresion: 0.125, racha: 0.125 };
 /** Topes fijos (valor 10/10) de cada factor — ya no dependen del historial
  * de otras asignaturas, así el índice de una asignatura es siempre el mismo
  * número pase lo que pase con el resto. */
-export const WEAR_TOPES = { intensidad: 300, duracion: 18, racha: 10, compresion: 0.9 };
-export const WEAR_FORMULA_VERSION = "v2";
+// volumen en horas totales del tramo (90 h = 18 días × 5 h), intensidad en min/día.
+export const WEAR_TOPES = { volumen: 90, intensidad: 300, racha: 10, compresion: 0.9 };
+export const WEAR_FORMULA_VERSION = "v3";
 
 /** Agrupa el historial (ascendente) de una asignatura en bloques de estudio
  * consecutivos o casi consecutivos (corte: más de 2 días de descanso). */
@@ -616,17 +617,10 @@ export function detectBlocks(subjectEntriesAsc) {
   });
 }
 
-/** El "bloque peor": mayor intensidad entre los bloques con >= 3 días activos. */
-export function selectWorstBlock(blocks) {
-  const candidates = blocks.filter((b) => b.dias_activos >= BLOQUE_MIN_DIAS_ACTIVOS);
-  if (candidates.length === 0) return null;
-  return candidates.reduce((best, b) => (b.intensidad > best.intensidad ? b : best), candidates[0]);
-}
-
 function rawFactorsOf(block) {
   return {
+    volumen: block.minutos_totales / 60,
     intensidad: block.intensidad,
-    duracion: block.dias_activos,
     compresion: block.compresion,
     racha: block.racha_interna,
   };
@@ -637,10 +631,32 @@ function normalizeFactor(raw, tope) {
   return Math.min(raw / tope, 1) * 10;
 }
 
+function scoreOfFactors(raw) {
+  return (
+    WEAR_WEIGHTS.volumen * normalizeFactor(raw.volumen, WEAR_TOPES.volumen) +
+    WEAR_WEIGHTS.intensidad * normalizeFactor(raw.intensidad, WEAR_TOPES.intensidad) +
+    WEAR_WEIGHTS.compresion * normalizeFactor(raw.compresion, WEAR_TOPES.compresion) +
+    WEAR_WEIGHTS.racha * normalizeFactor(raw.racha, WEAR_TOPES.racha)
+  );
+}
+
+/** El "bloque peor": el que da la puntuación de desgaste más alta entre los
+ * bloques con >= 3 días activos (a igualdad, el más antiguo). */
+export function selectWorstBlock(blocks) {
+  const candidates = blocks.filter((b) => b.dias_activos >= BLOQUE_MIN_DIAS_ACTIVOS);
+  if (candidates.length === 0) return null;
+  return candidates.reduce(
+    (best, b) => (scoreOfFactors(rawFactorsOf(b)) > scoreOfFactors(rawFactorsOf(best)) ? b : best),
+    candidates[0]
+  );
+}
+
 export function wearLabel(score) {
-  if (score < 2.5) return "Llevadero";
-  if (score < 5) return "Moderado";
-  if (score < 7.5) return "Duro";
+  if (score < 5) return "Ligero";
+  if (score < 6) return "Moderado";
+  if (score < 7) return "Exigente";
+  if (score < 8) return "Duro";
+  if (score < 9) return "Brutal";
   return "Extremo";
 }
 
@@ -659,17 +675,12 @@ export function computeDesgaste(subjectId, entries) {
 
   const rawFactors = rawFactorsOf(worst);
   const normalized = {
+    volumen: normalizeFactor(rawFactors.volumen, WEAR_TOPES.volumen),
     intensidad: normalizeFactor(rawFactors.intensidad, WEAR_TOPES.intensidad),
-    duracion: normalizeFactor(rawFactors.duracion, WEAR_TOPES.duracion),
     compresion: normalizeFactor(rawFactors.compresion, WEAR_TOPES.compresion),
     racha: normalizeFactor(rawFactors.racha, WEAR_TOPES.racha),
   };
-  const indice = +(
-    WEAR_WEIGHTS.intensidad * normalized.intensidad +
-    WEAR_WEIGHTS.duracion * normalized.duracion +
-    WEAR_WEIGHTS.compresion * normalized.compresion +
-    WEAR_WEIGHTS.racha * normalized.racha
-  ).toFixed(2);
+  const indice = +scoreOfFactors(rawFactors).toFixed(2);
 
   return {
     comparable: true,

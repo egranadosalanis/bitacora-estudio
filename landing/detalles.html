@@ -59,9 +59,11 @@
       font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 20px;
       border: 1px solid var(--border);
     }
-    .scale-llevadero { color: var(--green); border-color: rgba(61,220,132,0.4); background: rgba(61,220,132,0.08); }
-    .scale-moderado { color: var(--amber); border-color: rgba(245,166,35,0.4); background: rgba(245,166,35,0.08); }
+    .scale-ligero { color: var(--green); border-color: rgba(61,220,132,0.4); background: rgba(61,220,132,0.08); }
+    .scale-moderado { color: var(--cyan, #4FD8EA); border-color: rgba(79,216,234,0.4); background: rgba(79,216,234,0.08); }
+    .scale-exigente { color: #E6C229; border-color: rgba(230,194,41,0.4); background: rgba(230,194,41,0.08); }
     .scale-duro { color: var(--amber); border-color: rgba(245,166,35,0.4); background: rgba(245,166,35,0.08); }
+    .scale-brutal { color: #FF7A3D; border-color: rgba(255,122,61,0.4); background: rgba(255,122,61,0.08); }
     .scale-extremo { color: var(--red); border-color: rgba(255,92,92,0.4); background: rgba(255,92,92,0.08); }
   </style>
 </head>
@@ -178,30 +180,30 @@
           <div class="detail-shot-wrap">
             <picture>
               <source media="(max-width: 680px)" srcset="img/detalles/desgaste-mobile.png">
-              <img class="detail-shot" src="img/detalles/desgaste.png" alt="Pestaña Desgaste de Clever, con el desglose de intensidad, duración, compresión y racha interna de una asignatura" loading="lazy" />
+              <img class="detail-shot" src="img/detalles/desgaste.png" alt="Pestaña Desgaste de Clever, con el desglose de volumen, intensidad, compresión y racha interna de una asignatura" loading="lazy" />
             </picture>
           </div>
           <p>Los cuatro factores y su peso en el resultado final:</p>
           <div class="tope-grid">
             <div class="tope-item">
-              <div class="tope-label">Intensidad</div>
-              <div class="tope-value">300 min/día</div>
-              <div class="tope-weight">peso 30% · minutos de media al día en tu peor tramo</div>
+              <div class="tope-label">Volumen</div>
+              <div class="tope-value">90 horas</div>
+              <div class="tope-weight">peso 50% · horas totales de estudio en tu peor tramo</div>
             </div>
             <div class="tope-item">
-              <div class="tope-label">Duración</div>
-              <div class="tope-value">18 días</div>
-              <div class="tope-weight">peso 30% · cuántos días activos duró ese tramo</div>
+              <div class="tope-label">Intensidad</div>
+              <div class="tope-value">300 min/día</div>
+              <div class="tope-weight">peso 25% · minutos de media al día en tu peor tramo</div>
             </div>
             <div class="tope-item">
               <div class="tope-label">Compresión</div>
               <div class="tope-value">90%</div>
-              <div class="tope-weight">peso 20% · % de días de ese tramo sin descanso</div>
+              <div class="tope-weight">peso 12,5% · % de días de ese tramo sin descanso</div>
             </div>
             <div class="tope-item">
               <div class="tope-label">Racha interna</div>
               <div class="tope-value">10 días</div>
-              <div class="tope-weight">peso 20% · máximo de días seguidos sin fallar ninguno</div>
+              <div class="tope-weight">peso 12,5% · máximo de días seguidos sin fallar ninguno</div>
             </div>
           </div>
           <p>
@@ -210,10 +212,12 @@
             10, que se traduce en una etiqueta:
           </p>
           <div class="scale-row">
-            <span class="scale-pill scale-llevadero">&lt; 2.5 · Llevadero</span>
-            <span class="scale-pill scale-moderado">2.5–5 · Moderado</span>
-            <span class="scale-pill scale-duro">5–7.5 · Duro</span>
-            <span class="scale-pill scale-extremo">≥ 7.5 · Extremo</span>
+            <span class="scale-pill scale-ligero">&lt; 5 · Ligero</span>
+            <span class="scale-pill scale-moderado">5–6 · Moderado</span>
+            <span class="scale-pill scale-exigente">6–7 · Exigente</span>
+            <span class="scale-pill scale-duro">7–8 · Duro</span>
+            <span class="scale-pill scale-brutal">8–9 · Brutal</span>
+            <span class="scale-pill scale-extremo">≥ 9 · Extremo</span>
           </div>
           <p>
             La vista <strong>"Clasificación de desgaste"</strong> dentro de esta misma pestaña ordena todas tus
