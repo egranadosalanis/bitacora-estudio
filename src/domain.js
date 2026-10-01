@@ -750,7 +750,7 @@ export const RANK_QUIPS = [
 ];
 // Puntos mínimos de cada rango (el último, "Atlas", no tiene techo). 1 punto = 1 hora
 // estudiada dentro de la season.
-export const RANK_THRESHOLDS = [0, 15, 40, 90, 165, 255, 350];
+export const RANK_THRESHOLDS = [0, 12, 32, 72, 137, 220, 310];
 
 export function rankTierForPoints(points) {
   let k = 0;
