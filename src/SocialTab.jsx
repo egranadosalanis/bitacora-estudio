@@ -928,7 +928,9 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
 
   async function shareInvite() {
     const link = `${APP_URL}/?invitar=${encodeURIComponent(perfil.username)}`;
-    const text = `Te invito a Clever, la bitácora de estudio. Únete y seremos amigos: ${link}`;
+    // El enlace va solo en `url`: las apps (WhatsApp...) lo añaden detrás del texto. Si además
+    // estuviera dentro de `text`, saldría dos veces.
+    const text = "Te invito a Clever, la bitácora de estudio. Únete y seremos amigos:";
     setShareMsg(null);
     try {
       if (navigator.share) {
