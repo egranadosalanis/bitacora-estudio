@@ -571,13 +571,13 @@ export function computeClassification(subject, entries, subjects, cursos = []) {
 const BLOQUE_UMBRAL_DESCANSO = 2; // días de descanso que aún no rompen el bloque
 const BLOQUE_MIN_DIAS_ACTIVOS = 3; // mínimo para ser candidato a "peor bloque"
 
-export const WEAR_WEIGHTS = { volumen: 0.50, intensidad: 0.25, compresion: 0.125, racha: 0.125 };
+export const WEAR_WEIGHTS = { volumen: 0.30, intensidad: 0.45, compresion: 0.125, racha: 0.125 };
 /** Topes fijos (valor 10/10) de cada factor — ya no dependen del historial
  * de otras asignaturas, así el índice de una asignatura es siempre el mismo
  * número pase lo que pase con el resto. */
-// volumen en horas totales del tramo (90 h = 18 días × 5 h), intensidad en min/día.
-export const WEAR_TOPES = { volumen: 90, intensidad: 300, racha: 10, compresion: 0.9 };
-export const WEAR_FORMULA_VERSION = "v3";
+// volumen en horas totales del tramo, intensidad en min/día (270 = 4,5 h).
+export const WEAR_TOPES = { volumen: 70, intensidad: 270, racha: 10, compresion: 0.9 };
+export const WEAR_FORMULA_VERSION = "v4";
 
 /** Agrupa el historial (ascendente) de una asignatura en bloques de estudio
  * consecutivos o casi consecutivos (corte: más de 2 días de descanso). */
