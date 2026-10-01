@@ -6,7 +6,7 @@ import {
 import {
   PALETTE, SUBJECT_COLORS, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
-  computeDesgaste, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase,
+  computeDesgaste, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase, groupEstado,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
   APP_SHARE_URL,
 } from "./domain.js";
@@ -1797,8 +1797,10 @@ const WEAR_FACTOR_INFO = {
   },
 };
 
-function DesgasteCard({ subject, desgaste, bare }) {
-  const isEnCurso = subject.estado !== "aprobada";
+function DesgasteCard({ subject, desgaste, bare, estado: estadoGrupo }) {
+  // `estado`: el del grupo de combinadas, si se muestra el desgaste de una asignatura de un grupo.
+  const estado = estadoGrupo ?? subject.estado;
+  const isEnCurso = estado !== "aprobada";
   const wb = desgaste.worstBlock;
   return (
     <div className={bare ? "" : "panel wear-card"}>
@@ -1808,7 +1810,7 @@ function DesgasteCard({ subject, desgaste, bare }) {
           <strong>{subject.name}</strong>
           {isEnCurso && <span className="wear-provisional">vista previa, aún sin aprobar</span>}
         </div>
-        <EstadoBadge estado={subject.estado} />
+        <EstadoBadge estado={estado} />
       </div>
       {!desgaste.comparable && (
         <div className="empty-hint">No comparable — datos insuficientes (ningún tramo de ≥3 días activos todavía).</div>
@@ -1853,13 +1855,13 @@ function buildDesgasteRanking(subjects, entries) {
     if (seen.has(s.id)) return;
     const members = getMergeGroup(subjects, s.id);
     members.forEach((m) => seen.add(m.id));
-    groups.push({ target: pickGroupBase(members), members });
+    groups.push({ target: pickGroupBase(members), members, estado: groupEstado(members) });
   });
-  return groups.map(({ target, members }) => {
+  return groups.map(({ target, members, estado }) => {
     const computed = members.map((m) => ({ subject: m, desgaste: computeDesgaste(m.id, entries) }));
     const ranked = computed.filter((c) => c.desgaste.comparable);
     const best = ranked.length > 0 ? ranked.reduce((a, b) => (b.desgaste.indice > a.desgaste.indice ? b : a)) : null;
-    return { target, best };
+    return { target, best, estado };
   }).sort((a, b) => {
     if (!a.best && !b.best) return a.target.name.localeCompare(b.target.name);
     if (!a.best) return 1;
@@ -1899,10 +1901,10 @@ function DesgasteRankingTab({ subjects, entries }) {
                     <span className="dot" style={{ background: g.target.color }} />
                     {g.target.name}
                     {g.best && g.best.subject.id !== g.target.id && (
-                      <div className="gauge-sub">Desgaste mostrado: {g.best.subject.name}</div>
+                      <div className="gauge-sub">Desgaste mostrado: {g.best.subject.name}{g.best.subject.esErasmus ? " (Erasmus)" : ""}</div>
                     )}
                   </td>
-                  <td><EstadoBadge estado={g.target.estado} /></td>
+                  <td><EstadoBadge estado={g.estado} /></td>
                   <td>
                     {g.best ? (
                       <span className={`wear-label wear-label-${g.best.desgaste.etiqueta.toLowerCase()}`}>
@@ -1921,7 +1923,7 @@ function DesgasteRankingTab({ subjects, entries }) {
 
       {detailGroup && detailGroup.best && (
         <Modal title={detailGroup.target.name} onClose={() => setDetailId(null)} wide>
-          <DesgasteCard subject={detailGroup.best.subject} desgaste={detailGroup.best.desgaste} bare />
+          <DesgasteCard subject={detailGroup.best.subject} desgaste={detailGroup.best.desgaste} estado={detailGroup.estado} bare />
         </Modal>
       )}
     </div>

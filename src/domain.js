@@ -512,6 +512,14 @@ export function pickGroupBase(members) {
   return list[list.length - 1];
 }
 
+/** Estado "de la asignatura" de un grupo de combinadas: aprobada si lo está alguna (p. ej. la
+ * cursada en Erasmus), aunque la de su universidad siga suspendida; si no, el de la asignatura
+ * de su universidad. */
+export function groupEstado(members) {
+  if (members.some((m) => m.estado === "aprobada")) return "aprobada";
+  return pickGroupBase(members).estado;
+}
+
 /* ------------------------------------------------------------------ */
 /*  CONGELAR ASIGNATURA (marcar "aprobada")                            */
 /* ------------------------------------------------------------------ */
