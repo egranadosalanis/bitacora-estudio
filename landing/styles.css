@@ -562,6 +562,7 @@ h3 {
   white-space: nowrap;
 }
 .rank-score.extreme { color: #FF8FA3; background: rgba(255, 92, 92, 0.14); }
+.rank-score.brutal { color: #FF9F6B; background: rgba(255, 122, 61, 0.14); }
 .rank-score.hard { color: var(--amber); background: rgba(245, 166, 35, 0.14); }
 .rank-score.moderate { color: var(--green); background: rgba(61, 220, 132, 0.14); }
 

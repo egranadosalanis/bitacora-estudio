@@ -3764,9 +3764,11 @@ export const CSS = `
   }
   .wear-index-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; max-width: 440px; }
   .wear-label { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .wear-label-llevadero { color: var(--green); background: rgba(61,220,132,0.1); }
+  .wear-label-ligero { color: var(--green); background: rgba(61,220,132,0.1); }
   .wear-label-moderado { color: var(--cyan); background: rgba(79,216,234,0.1); }
+  .wear-label-exigente { color: #E6C229; background: rgba(230,194,41,0.1); }
   .wear-label-duro { color: var(--amber); background: rgba(245,166,35,0.1); }
+  .wear-label-brutal { color: #FF7A3D; background: rgba(255,122,61,0.1); }
   .wear-label-extremo { color: var(--red); background: rgba(255,92,92,0.1); }
   .wear-factors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   @media (max-width: 560px) { .wear-factors { grid-template-columns: 1fr; } }

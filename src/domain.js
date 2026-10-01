@@ -638,9 +638,11 @@ function normalizeFactor(raw, tope) {
 }
 
 export function wearLabel(score) {
-  if (score < 2.5) return "Llevadero";
-  if (score < 5) return "Moderado";
-  if (score < 7.5) return "Duro";
+  if (score < 5) return "Ligero";
+  if (score < 6) return "Moderado";
+  if (score < 7) return "Exigente";
+  if (score < 8) return "Duro";
+  if (score < 9) return "Brutal";
   return "Extremo";
 }
 
