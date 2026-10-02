@@ -92,8 +92,9 @@ function RankLadderRow({ tier, cur, previewTier, onPreview }) {
   );
 }
 
-// Proporción (ancho/alto) de la foto de fondo de cada rango, para dimensionar el emblema sin recortar la foto.
-const RANK_BG_ASPECT = [4 / 3, 4 / 3, 4 / 3, 4 / 3, 3 / 2, 4 / 3, 16 / 9];
+// Tamaño del emblema en la tarjeta de rango, como fracción del ancho de la foto: crece con el rango
+// y ATLAS es el mayor.
+const RANK_EMBLEM_SCALE = [0.17, 0.19, 0.21, 0.23, 0.25, 0.27, 0.33];
 
 function RangoShareCard({ shareRef, rango, season }) {
   const { tier, puntos } = rango;
@@ -155,7 +156,7 @@ function RangoView({ subjects, entries, logs }) {
   return (
     <div>
       <SeasonEnd season={season} live={live} size="lg" />
-      <div className="rt-hero" style={{ "--ar": RANK_BG_ASPECT[previewTier] }}>
+      <div className="rt-hero" style={{ "--es": RANK_EMBLEM_SCALE[previewTier] }}>
         <img className="rt-sc" decoding="async" src={`/rangos/rank-bg/rank-${previewTier}.webp`} alt="" />
         <div className="rt-tint" />
         <p className="rt-season rt-mono">{season.label.toUpperCase()}</p>
@@ -283,7 +284,7 @@ function RachaView({ subjects, entries, logs }) {
         <img className="rt-bg" decoding="async" src={`/rangos/streak-bg/${t.img}.webp`} alt="" />
         <div className="rt-top" /><div className="rt-fade" />
         <div className="rt-fg">
-          <p className="rt-bignum" style={{ fontSize: `${Math.min(96, 62 + Math.min(days, 20) * 1.7)}px` }}>{days}</p>
+          <p className="rt-bignum" style={{ fontSize: `min(${Math.min(96, 62 + Math.min(days, 20) * 1.7)}px, 20cqw)` }}>{days}</p>
           <p className="rt-cap">días seguidos</p>
         </div>
         <p className="rt-qline">{t.quip}</p>
@@ -371,6 +372,14 @@ function HistorialView({ subjects, entries, logs }) {
     </div>;
   }
 
+  // Una fila por curso (el más reciente primero): Season 1 a la izquierda y Season 2 a la derecha.
+  const byCourse = [];
+  history.forEach((entry) => {
+    let row = byCourse.find((r) => r.academicYear === entry.season.academicYear);
+    if (!row) { row = { academicYear: entry.season.academicYear, s1: null, s2: null }; byCourse.push(row); }
+    row[entry.season.number === 1 ? "s1" : "s2"] = entry;
+  });
+
   const completed = history.filter((h) => !h.live);
   const best = (completed.length ? completed : history).reduce((a, b) => (b.tier > a.tier || (b.tier === a.tier && b.puntos > a.puntos) ? b : a));
 
@@ -387,7 +396,12 @@ function HistorialView({ subjects, entries, logs }) {
         </div>
       </div>
       <div className="rt-hgrid">
-        {history.map((entry) => <HistorialTile key={entry.season.id} entry={entry} />)}
+        {byCourse.map(({ academicYear, s1, s2 }) => (
+          <React.Fragment key={academicYear}>
+            {s1 ? <HistorialTile entry={s1} /> : <div aria-hidden="true" />}
+            {s2 ? <HistorialTile entry={s2} /> : <div aria-hidden="true" />}
+          </React.Fragment>
+        ))}
       </div>
     </div>
   );

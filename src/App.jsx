@@ -3888,11 +3888,11 @@ export const CSS = `
   /* La foto de fondo se ve entera, con su proporción original (sin recortes, zoom ni degradados). */
   .rt-hero .rt-sc { display: block; width: 100%; height: auto; }
   .rt-hero .rt-tint { display: none; }
-  .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #fff; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 12px rgba(255,255,255,.28); z-index: 2; margin: 0; }
+  .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #fff; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 12px rgba(255,255,255,.28); z-index: 3; margin: 0; }
   .rt-hero .rt-prevtag { position: absolute; top: 12px; right: 14px; z-index: 2; }
-  .rt-herocard { position: absolute; inset: 0; z-index: 2; text-align: center; padding: 36px 12px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .rt-herocard { position: absolute; inset: 0; z-index: 2; text-align: center; padding: 22px 12px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .rt-emwrap { position: relative; z-index: 2; display: flex; justify-content: center; margin-bottom: 2px; }
-  .rt-emwrap img { width: min(168px, calc(50cqw / var(--ar, 1.333))); height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
+  .rt-emwrap img { width: min(240px, calc(100cqw * var(--es, 0.28))); height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
   .rt-rname { font-family: "Manrope", sans-serif; font-size: clamp(20px, 7cqw, 25px); font-weight: 700; line-height: 1.12; margin-top: 4px; color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.8); }
   .rt-rquip { font-size: 12.5px; font-weight: 600; color: #fff; margin-top: 5px; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 14px rgba(255,255,255,.3); }
 
@@ -3933,6 +3933,14 @@ export const CSS = `
   .rt-scene .rt-cap { font-size: 12.5px; letter-spacing: 3px; text-transform: uppercase; color: #fff; margin-top: 4px; text-shadow: 0 1px 10px rgba(0,0,0,.95); font-family: "IBM Plex Mono", monospace; }
   .rt-scene .rt-tiertag { position: absolute; top: 12px; left: 12px; z-index: 3; background: rgba(6,20,32,.72); color: #fff; border-color: rgba(255,255,255,.35); }
   .rt-scene .rt-qline { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; z-index: 3; font-size: 12.5px; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.95); margin: 0; }
+  /* Vista de Racha: la foto se ve entera, con su proporción original (sin recorte, zoom, oscurecido ni degradados). */
+  .rt-scene:not(.rt-scene-share) { height: auto; display: block; container-type: inline-size; }
+  .rt-scene:not(.rt-scene-share) .rt-bg { position: static; display: block; width: 100%; height: auto; opacity: 1; }
+  .rt-scene:not(.rt-scene-share) .rt-fade, .rt-scene:not(.rt-scene-share) .rt-top { display: none; }
+  .rt-scene:not(.rt-scene-share) .rt-fg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 12px 30px; }
+  .rt-scene:not(.rt-scene-share) .rt-bignum { text-shadow: 0 2px 20px rgba(0,0,0,.95), 0 0 6px rgba(0,0,0,.9); }
+  .rt-scene:not(.rt-scene-share) .rt-cap { font-weight: 700; color: #fff; text-shadow: 0 0 5px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(255,255,255,.55), 0 0 22px rgba(255,255,255,.3); }
+  .rt-scene .rt-qline { font-weight: 600; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 14px rgba(255,255,255,.3); }
 
   .rt-hgrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
   .rt-hc { background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: 16px; padding: 14px 10px 12px; text-align: center; position: relative; }
