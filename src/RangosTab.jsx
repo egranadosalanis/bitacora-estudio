@@ -92,6 +92,9 @@ function RankLadderRow({ tier, cur, previewTier, onPreview }) {
   );
 }
 
+// Proporción (ancho/alto) de la foto de fondo de cada rango, para dimensionar el emblema sin recortar la foto.
+const RANK_BG_ASPECT = [4 / 3, 4 / 3, 4 / 3, 4 / 3, 3 / 2, 4 / 3, 16 / 9];
+
 function RangoShareCard({ shareRef, rango, season }) {
   const { tier, puntos } = rango;
   return (
@@ -152,7 +155,7 @@ function RangoView({ subjects, entries, logs }) {
   return (
     <div>
       <SeasonEnd season={season} live={live} size="lg" />
-      <div className="rt-hero">
+      <div className="rt-hero" style={{ "--ar": RANK_BG_ASPECT[previewTier] }}>
         <img className="rt-sc" decoding="async" src={`/rangos/rank-bg/rank-${previewTier}.webp`} alt="" />
         <div className="rt-tint" />
         <p className="rt-season rt-mono">{season.label.toUpperCase()}</p>
