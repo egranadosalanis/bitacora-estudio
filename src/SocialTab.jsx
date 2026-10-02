@@ -802,6 +802,14 @@ function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, onClick 
 
 const SHARE_MAX_ROWS = 10;
 
+/** «Semana 5» = la semana de la season en la que estamos (la primera es la que contiene su inicio);
+ * si la season ya terminó, «Final». */
+function seasonWeekLabel(season, live) {
+  if (!live) return "Final";
+  const days = Math.floor((Date.parse(`${isoToday()}T00:00:00Z`) - Date.parse(`${season.startDate}T00:00:00Z`)) / 86400000);
+  return `Semana ${Math.max(1, Math.floor(days / 7) + 1)}`;
+}
+
 /** Tarjeta (ancho fijo, fondo propio) que se pinta fuera de pantalla solo para capturarla como imagen
  * al compartir la clasificación de amigos. Sin fotos de perfil, para no depender de imágenes externas. */
 function FriendsShareCard({ shareRef, mode, title, subtitle, rows }) {
@@ -991,7 +999,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
     }
     return {
       title: "Clasificación de la season",
-      subtitle: `${own.season.label} · Top ${Math.min(ranking.ok.length, SHARE_MAX_ROWS)}`,
+      subtitle: `${own.season.label} · ${seasonWeekLabel(own.season, own.live)} · Top ${Math.min(ranking.ok.length, SHARE_MAX_ROWS)}`,
       rows: ranking.ok.slice(0, SHARE_MAX_ROWS).map((r) => ({ username: r.username, tier: r.summary.tier, value: `${fmtNum(r.summary.puntos, 1)} pts` })),
       fileName: "clever-clasificacion-season.png",
       text: "Así va la clasificación de la season entre amigos en Clever 🏆",
