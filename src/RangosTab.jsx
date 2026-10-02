@@ -372,6 +372,14 @@ function HistorialView({ subjects, entries, logs }) {
     </div>;
   }
 
+  // Una fila por curso (el más reciente primero): Season 1 a la izquierda y Season 2 a la derecha.
+  const byCourse = [];
+  history.forEach((entry) => {
+    let row = byCourse.find((r) => r.academicYear === entry.season.academicYear);
+    if (!row) { row = { academicYear: entry.season.academicYear, s1: null, s2: null }; byCourse.push(row); }
+    row[entry.season.number === 1 ? "s1" : "s2"] = entry;
+  });
+
   const completed = history.filter((h) => !h.live);
   const best = (completed.length ? completed : history).reduce((a, b) => (b.tier > a.tier || (b.tier === a.tier && b.puntos > a.puntos) ? b : a));
 
@@ -388,7 +396,12 @@ function HistorialView({ subjects, entries, logs }) {
         </div>
       </div>
       <div className="rt-hgrid">
-        {history.map((entry) => <HistorialTile key={entry.season.id} entry={entry} />)}
+        {byCourse.map(({ academicYear, s1, s2 }) => (
+          <React.Fragment key={academicYear}>
+            {s1 ? <HistorialTile entry={s1} /> : <div aria-hidden="true" />}
+            {s2 ? <HistorialTile entry={s2} /> : <div aria-hidden="true" />}
+          </React.Fragment>
+        ))}
       </div>
     </div>
   );
