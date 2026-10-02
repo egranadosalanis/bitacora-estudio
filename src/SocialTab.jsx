@@ -1375,7 +1375,7 @@ function ComunidadSection({ perfil, carreraId, subjects, online, onGoSocial, rel
             </>
           ) : (
             <>
-              <p className="panel-subtitle">Solo lo ven quienes han aceptado aparecer en él: si lo activas, tú también saldrás. Puedes cambiarlo cuando quieras en Ajustes de Social.</p>
+              <p className="panel-subtitle">Solo lo ven quienes han aceptado aparecer en él: si lo activas, tú también saldrás en todas las asignaturas que hayas aprobado. Puedes cambiarlo cuando quieras en Ajustes de Social.</p>
               <button className="btn-ghost btn-small" onClick={() => setAskRanking(true)}>Ver listado</button>
             </>
           )}

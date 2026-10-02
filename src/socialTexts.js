@@ -17,7 +17,7 @@ export const CONSENT_METRICAS = {
 export const CONSENT_RANKING = {
   title: "Aparecer en el listado de aprobados",
   paragraphs: [
-    "Si aceptas, aparecerás en el listado de aprobados de las asignaturas que hayas aprobado, con tu nombre de usuario, tus horas por crédito, tu nota, tu desgaste máximo y los cursos que necesitaste.",
+    "Si aceptas, aparecerás en el listado de aprobados de todas las asignaturas que hayas aprobado (no se te volverá a preguntar), con tu nombre de usuario, tus horas por crédito, tu nota, tu desgaste máximo y los cursos que necesitaste.",
     "Solo verán el listado los usuarios que también hayan aceptado aparecer en él. Puedes retirar este permiso cuando quieras desde Ajustes y desaparecerás al instante.",
   ],
   accept: "Aceptar",
