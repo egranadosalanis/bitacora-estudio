@@ -18,11 +18,11 @@ import {
 } from "./supabaseData.js";
 import { supabase } from "./supabaseClient.js";
 import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from "./offline.js";
-import SocialTab, { SOCIAL_CSS, SocialSettingsModal } from "./SocialTab.jsx";
+import SocialTab, { ComunidadTab, SOCIAL_CSS, SocialSettingsModal } from "./SocialTab.jsx";
 import { SEASON_END_CSS } from "./SeasonEnd.jsx";
 import { readPendingInvite, clearPendingInvite, getMiPerfilSocial, photoUrl, GOOGLE_AVATAR_RE } from "./socialData.js";
 import { AccountAvatar, AVATAR_CSS } from "./Avatar.jsx";
-import RangosTab, { prefetchRangosImages } from "./RangosTab.jsx";
+import { prefetchRangosImages } from "./RangosTab.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  COMPONENTES DE UI GENERICOS                                        */
@@ -92,6 +92,7 @@ const NAV_ICON_PATHS = {
   trayectoria: <><path d="M3 17l6-6 4 4 8-9" /><path d="M15 6h6v6" /></>,
   panel: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>,
   rangos: <path d="M6 11l6-6 6 6M6 19l6-6 6 6" />,
+  comunidad: <><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.4" /><path d="M3 19a6 6 0 0 1 12 0" /><path d="M15 15.2a4.6 4.6 0 0 1 6 3.8" /></>,
   mas: <><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></>,
   desgaste: <path d="M3 12h4l3-7 4 14 3-7h4" />,
   clasificacion: <><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4" /></>,
@@ -123,9 +124,10 @@ const BOTTOM_TABS = [
   { id: "trayectoria", label: "Trayect." },
   { id: "panel", label: "Panel" },
   { id: "social", label: "Social" },
+  { id: "comunidad", label: "Comunidad" },
 ];
 
-/** Barra inferior fija del móvil: 4 secciones + "Más". */
+/** Barra inferior fija del móvil: 5 secciones + "Más". */
 function BottomNav({ tab, moreOpen, newsDot, onSelect, onMore }) {
   const masActive = moreOpen || !BOTTOM_TABS.some((t) => t.id === tab);
   return (
@@ -188,7 +190,6 @@ function MoreSheet({ onClose, onGo, newsDot, isPremium, exportBusy, onExport, on
       <div className="more-sheet" role="dialog" aria-label="Más" onClick={(e) => e.stopPropagation()}>
         <div className="more-handle" />
         <div className="more-section">SECCIONES</div>
-        <MoreRow icon="rangos" onClick={() => onGo("rangos")}>Rangos</MoreRow>
         <MoreRow icon="desgaste" onClick={() => onGo("desgaste")}>Desgaste</MoreRow>
         <MoreRow icon="clasificacion" onClick={() => onGo("clasificacion")}>Clasificación</MoreRow>
         <div className="more-divider" />
@@ -2405,7 +2406,7 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
 const SUPPORT_EMAIL = "cleverapp2026@gmail.com";
 
 const TAB_LABELS = {
-  bitacora: "Bitácora", rangos: "Rangos", panel: "Panel", trayectoria: "Trayectoria", desgaste: "Desgaste",
+  bitacora: "Bitácora", comunidad: "Comunidad", panel: "Panel", trayectoria: "Trayectoria", desgaste: "Desgaste",
   clasificacion: "Clasificación", social: "Social", asignaturas: "Asignaturas",
 };
 
@@ -3226,10 +3227,10 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           <Tab id="bitacora" active={tab === "bitacora"} onClick={setTab}>Bitácora</Tab>
           <Tab id="trayectoria" active={tab === "trayectoria"} onClick={setTab}>Trayectoria</Tab>
           <Tab id="panel" active={tab === "panel"} onClick={setTab}>Panel</Tab>
-          <Tab id="rangos" active={tab === "rangos"} onClick={setTab}>Rangos</Tab>
           <Tab id="desgaste" active={tab === "desgaste"} onClick={setTab}>Desgaste</Tab>
           <Tab id="clasificacion" active={tab === "clasificacion"} onClick={setTab}>Clasificación</Tab>
           <Tab id="social" active={tab === "social"} onClick={setTab}>Social</Tab>
+          <Tab id="comunidad" active={tab === "comunidad"} onClick={setTab}>Comunidad</Tab>
           <Tab id="asignaturas" active={tab === "asignaturas"} onClick={setTab}>Asignaturas</Tab>
         </nav>
       )}
@@ -3247,7 +3248,14 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             curso={curso}
           />
         )}
-        {tab === "rangos" && <RangosTab subjects={data.subjects} entries={data.entries} logs={data.logs} />}
+        {tab === "comunidad" && (
+          <ComunidadTab
+            userId={userId}
+            carreraId={profile?.carrera_canonica_id ?? null}
+            subjects={data.subjects}
+            onGoSocial={() => setTab("social")}
+          />
+        )}
         {tab === "panel" && <PanelTab stats={stats} />}
         {tab === "trayectoria" && <TrayectoriaTab cursoSubjects={cursoSubjects} entries={cursoEntries} stats={stats} curso={curso} />}
         {tab === "desgaste" && <DesgasteTab cursoSubjects={cursoSubjects} subjects={data.subjects} entries={data.entries} />}
@@ -3262,7 +3270,6 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             userId={userId}
             avatarUrl={googleAvatar}
             onOwnPhoto={setSocialPhoto}
-            carreraId={profile?.carrera_canonica_id ?? null}
             onOpenSettings={() => setSocialSettingsOpen(true)}
             subjects={data.subjects}
             entries={data.entries}
@@ -3547,8 +3554,8 @@ export const CSS = `
       flex: 1 1 0; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
       background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0;
     }
-    .bn-icon { position: relative; width: 52px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; }
-    .bn-label { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .bn-icon { position: relative; width: 44px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; }
+    .bn-label { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 9px; letter-spacing: 0.02em; text-transform: uppercase; }
     .bn-active { color: var(--cyan); }
     .bn-active .bn-icon { background: #12314a; }
     .bn-active .bn-label { font-weight: 600; }
