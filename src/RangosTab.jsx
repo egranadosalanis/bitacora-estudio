@@ -284,7 +284,7 @@ function RachaView({ subjects, entries, logs }) {
         <img className="rt-bg" decoding="async" src={`/rangos/streak-bg/${t.img}.webp`} alt="" />
         <div className="rt-top" /><div className="rt-fade" />
         <div className="rt-fg">
-          <p className="rt-bignum" style={{ fontSize: `${Math.min(96, 62 + Math.min(days, 20) * 1.7)}px` }}>{days}</p>
+          <p className="rt-bignum" style={{ fontSize: `min(${Math.min(96, 62 + Math.min(days, 20) * 1.7)}px, 20cqw)` }}>{days}</p>
           <p className="rt-cap">días seguidos</p>
         </div>
         <p className="rt-qline">{t.quip}</p>

@@ -3933,6 +3933,14 @@ export const CSS = `
   .rt-scene .rt-cap { font-size: 12.5px; letter-spacing: 3px; text-transform: uppercase; color: #fff; margin-top: 4px; text-shadow: 0 1px 10px rgba(0,0,0,.95); font-family: "IBM Plex Mono", monospace; }
   .rt-scene .rt-tiertag { position: absolute; top: 12px; left: 12px; z-index: 3; background: rgba(6,20,32,.72); color: #fff; border-color: rgba(255,255,255,.35); }
   .rt-scene .rt-qline { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; z-index: 3; font-size: 12.5px; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,.95); margin: 0; }
+  /* Vista de Racha: la foto se ve entera, con su proporción original (sin recorte, zoom, oscurecido ni degradados). */
+  .rt-scene:not(.rt-scene-share) { height: auto; display: block; container-type: inline-size; }
+  .rt-scene:not(.rt-scene-share) .rt-bg { position: static; display: block; width: 100%; height: auto; opacity: 1; }
+  .rt-scene:not(.rt-scene-share) .rt-fade, .rt-scene:not(.rt-scene-share) .rt-top { display: none; }
+  .rt-scene:not(.rt-scene-share) .rt-fg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 12px 30px; }
+  .rt-scene:not(.rt-scene-share) .rt-bignum { text-shadow: 0 2px 20px rgba(0,0,0,.95), 0 0 6px rgba(0,0,0,.9); }
+  .rt-scene:not(.rt-scene-share) .rt-cap { text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 12px rgba(0,0,0,.7); }
+  .rt-scene .rt-qline { font-weight: 600; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 14px rgba(255,255,255,.3); }
 
   .rt-hgrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
   .rt-hc { background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: 16px; padding: 14px 10px 12px; text-align: center; position: relative; }
