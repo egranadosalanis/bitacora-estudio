@@ -749,7 +749,7 @@ export function getCurrentSeason(today = isoToday()) {
 
 export const RANK_NAMES = [
   "Becario de Ryanair", "Piloto de Cessna alquilada", "Copiloto con café", "Capitán de Iberia",
-  "Piloto de caza", "Astronauta de la NASA", "Atlas",
+  "Piloto de caza", "Astronauta de la NASA", "ATLAS",
 ];
 export const RANK_QUIPS = [
   "Sí, te hacen pagar por la maleta.", "Despegas, aterrizas y rezas.", "Ya tocas botones que importan.",
