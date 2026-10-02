@@ -1,3 +1,4 @@
+// Despliegue: incluye los emblemas definitivos de Rangos
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
