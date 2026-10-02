@@ -92,8 +92,9 @@ function RankLadderRow({ tier, cur, previewTier, onPreview }) {
   );
 }
 
-// Proporción (ancho/alto) de la foto de fondo de cada rango, para dimensionar el emblema sin recortar la foto.
-const RANK_BG_ASPECT = [4 / 3, 4 / 3, 4 / 3, 4 / 3, 3 / 2, 4 / 3, 16 / 9];
+// Tamaño del emblema en la tarjeta de rango, como fracción del ancho de la foto: crece con el rango
+// y ATLAS es el mayor.
+const RANK_EMBLEM_SCALE = [0.17, 0.19, 0.21, 0.23, 0.25, 0.27, 0.33];
 
 function RangoShareCard({ shareRef, rango, season }) {
   const { tier, puntos } = rango;
@@ -155,7 +156,7 @@ function RangoView({ subjects, entries, logs }) {
   return (
     <div>
       <SeasonEnd season={season} live={live} size="lg" />
-      <div className="rt-hero" style={{ "--ar": RANK_BG_ASPECT[previewTier] }}>
+      <div className="rt-hero" style={{ "--es": RANK_EMBLEM_SCALE[previewTier] }}>
         <img className="rt-sc" decoding="async" src={`/rangos/rank-bg/rank-${previewTier}.webp`} alt="" />
         <div className="rt-tint" />
         <p className="rt-season rt-mono">{season.label.toUpperCase()}</p>

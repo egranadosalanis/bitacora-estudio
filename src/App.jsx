@@ -3888,11 +3888,11 @@ export const CSS = `
   /* La foto de fondo se ve entera, con su proporción original (sin recortes, zoom ni degradados). */
   .rt-hero .rt-sc { display: block; width: 100%; height: auto; }
   .rt-hero .rt-tint { display: none; }
-  .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #fff; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 12px rgba(255,255,255,.28); z-index: 2; margin: 0; }
+  .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #fff; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 12px rgba(255,255,255,.28); z-index: 3; margin: 0; }
   .rt-hero .rt-prevtag { position: absolute; top: 12px; right: 14px; z-index: 2; }
-  .rt-herocard { position: absolute; inset: 0; z-index: 2; text-align: center; padding: 36px 12px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .rt-herocard { position: absolute; inset: 0; z-index: 2; text-align: center; padding: 22px 12px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .rt-emwrap { position: relative; z-index: 2; display: flex; justify-content: center; margin-bottom: 2px; }
-  .rt-emwrap img { width: min(168px, calc(50cqw / var(--ar, 1.333))); height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
+  .rt-emwrap img { width: min(240px, calc(100cqw * var(--es, 0.28))); height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
   .rt-rname { font-family: "Manrope", sans-serif; font-size: clamp(20px, 7cqw, 25px); font-weight: 700; line-height: 1.12; margin-top: 4px; color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.8); }
   .rt-rquip { font-size: 12.5px; font-weight: 600; color: #fff; margin-top: 5px; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 14px rgba(255,255,255,.3); }
 
