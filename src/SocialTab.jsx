@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
-import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup, isoToday, addDays, formatShort, buildEntriesFromLogs, APP_SHARE_URL } from "./domain.js";
+import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup, isoToday, addDays, formatShort, buildEntriesFromLogs, APP_SHARE_URL, rankTierForPoints } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
 import { USERNAME_RE, GOOGLE_AVATAR_RE } from "./socialData.js";
-import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, STATS_PRIVACY_NOTE } from "./socialTexts.js";
+import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, CONSENT_GLOBAL, STATS_PRIVACY_NOTE } from "./socialTexts.js";
 import Avatar from "./Avatar.jsx";
 import SeasonEnd from "./SeasonEnd.jsx";
 import RangosTab from "./RangosTab.jsx";
@@ -289,16 +289,16 @@ function ConsentModal({ text, online, onAccept, onDecline }) {
 
 /* ---------- clasificación ---------- */
 
-function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, note, hint, onClick }) {
+function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, staticRow, note, hint, onClick }) {
   const tier = summary?.tier ?? 0;
   const color = TIER_COLORS[tier];
-  const Tag = locked ? "div" : "button";
+  const Tag = locked || staticRow ? "div" : "button";
   return (
     <Tag
-      type={locked ? undefined : "button"}
+      type={locked || staticRow ? undefined : "button"}
       className={`sc-row ${isMe ? "sc-me" : ""} ${locked ? "sc-locked" : ""}`}
       style={{ "--rc": color }}
-      onClick={locked ? undefined : onClick}
+      onClick={locked || staticRow ? undefined : onClick}
     >
       <span className="sc-pos mono">{pos ?? "–"}</span>
       <Avatar name={name} url={avatarUrl} size={30} />
@@ -311,7 +311,7 @@ function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, note, 
         <span className="sc-rank">
           <span className="sc-rank-txt">
             <span className="sc-rank-name">{fmtNum(summary.puntos, 1)} pts</span>
-            <span className="sc-streak mono"><Flame /> {summary.streak} {summary.streak === 1 ? "día" : "días"}</span>
+            {summary.streak != null && <span className="sc-streak mono"><Flame /> {summary.streak} {summary.streak === 1 ? "día" : "días"}</span>}
           </span>
           <RankEmblem tier={tier} size={38} />
         </span>
@@ -850,6 +850,10 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
   const [busyId, setBusyId] = useState(null);
   const [reqError, setReqError] = useState(null);
   const [shareMsg, setShareMsg] = useState(null);
+  const [scope, setScope] = useState("amigos"); // amigos | global
+  const [askGlobal, setAskGlobal] = useState(false);
+  const [globalData, setGlobalData] = useState(null);
+  const [globalErr, setGlobalErr] = useState(null);
   const [sharingRank, setSharingRank] = useState(false);
   const rankShareRef = useRef(null);
   const [inviteOpen, setInviteOpen] = useState(Boolean(pendingInvite) && pendingInvite.toLowerCase() !== perfil.username.toLowerCase());
@@ -921,6 +925,34 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
     return { weeks, selected, rows };
   }, [ranking.ok, subjects, entries, weekKey, currentWeek]);
 
+  // Clasificación general (todos los usuarios): solo si la persona ha aceptado aparecer en ella.
+  const globalOn = scope === "global" && perfil.share_global_ok === true;
+  const globalFrom = rankMode === "week" ? weekly.selected : own.season.startDate;
+  const globalTo = rankMode === "week" ? addDays(weekly.selected, 6) : own.season.endDate;
+  useEffect(() => {
+    if (!globalOn) return undefined;
+    let cancelled = false;
+    setGlobalData(null);
+    setGlobalErr(null);
+    api.clasificacionGlobal(globalFrom, globalTo)
+      .then((r) => { if (!cancelled) setGlobalData(r); })
+      .catch((e) => { if (!cancelled) setGlobalErr(e.message); });
+    return () => { cancelled = true; };
+  }, [globalOn, globalFrom, globalTo]);
+
+  // Cada vez que se elige «general» sin permiso, se vuelve a preguntar.
+  function changeScope(next) {
+    if (next === "global" && perfil.share_global_ok !== true) { setAskGlobal(true); return; }
+    setScope(next);
+  }
+
+  async function acceptGlobal() {
+    await api.setConsentimiento("global", true, CONSENT_VERSION);
+    await onNeedConsent();
+    setAskGlobal(false);
+    setScope("global");
+  }
+
   function weekName(wk) {
     const range = `${formatShort(wk)} – ${formatShort(addDays(wk, 6))}`;
     if (wk === currentWeek) return `Esta semana · ${range}`;
@@ -988,6 +1020,22 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
 
   // Datos de la tarjeta para compartir: lo mismo que se ve en pantalla (season o semana elegida).
   const shareCard = useMemo(() => {
+    if (globalOn) {
+      const filas = (globalData?.filas ?? []).slice(0, SHARE_MAX_ROWS);
+      const sub = rankMode === "week"
+        ? `${formatShort(weekly.selected)} – ${formatShort(addDays(weekly.selected, 6))}`
+        : `${own.season.label} · ${seasonWeekLabel(own.season, own.live)}`;
+      return {
+        title: rankMode === "week" ? "Clasificación general semanal" : "Clasificación general de la season",
+        subtitle: `${sub} · Top ${filas.length}`,
+        rows: filas.map((r) => ({
+          username: r.username, tier: rankTierForPoints(r.minutos / 60),
+          value: rankMode === "week" ? hm(r.minutos) : `${fmtNum(r.minutos / 60, 1)} pts`,
+        })),
+        fileName: rankMode === "week" ? "clever-general-semanal.png" : "clever-general-season.png",
+        text: "Así va la clasificación general de Clever 🏆",
+      };
+    }
     if (rankMode === "week") {
       return {
         title: "Clasificación semanal",
@@ -1004,10 +1052,10 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
       fileName: "clever-clasificacion-season.png",
       text: "Así va la clasificación de la season entre amigos en Clever 🏆",
     };
-  }, [rankMode, weekly, ranking.ok, own.season]);
+  }, [rankMode, weekly, ranking.ok, own.season, own.live, globalOn, globalData]);
 
   async function shareRanking() {
-    if (sharingRank || !rankShareRef.current) return;
+    if (sharingRank || !rankShareRef.current || (globalOn && !globalData)) return;
     setSharingRank(true);
     setShareMsg(null);
     try {
@@ -1028,6 +1076,35 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
     setInviteOpen(false);
     onInviteHandled();
     load();
+  }
+
+  function renderGlobal() {
+    if (globalErr) return <div className="auth-error">{globalErr}</div>;
+    if (!globalData) return <div className="sc-hint">Cargando clasificación…</div>;
+    const filas = globalData.filas ?? [];
+    if (filas.length === 0) return <div className="sc-hint">Todavía nadie ha registrado estudio en este periodo.</div>;
+    const rowEl = (r) => rankMode === "week" ? (
+      <WeekRow
+        key={r.username} pos={r.pos} name={r.username} verified={r.verificado} avatarUrl={api.avatarSrc(r)}
+        minutes={r.minutos} days={r.dias} isMe={r.yo}
+      />
+    ) : (
+      <RankRow
+        key={r.username} pos={r.pos} name={r.username} verified={r.verificado} avatarUrl={api.avatarSrc(r)}
+        summary={{ puntos: r.minutos / 60, tier: rankTierForPoints(r.minutos / 60) }} isMe={r.yo} staticRow
+      />
+    );
+    return (
+      <div className="sc-list">
+        {filas.map(rowEl)}
+        {globalData.yo && !filas.some((f) => f.yo) && (
+          <>
+            <div className="sc-hint" style={{ textAlign: "center", margin: 0 }}>···</div>
+            {rowEl(globalData.yo)}
+          </>
+        )}
+      </div>
+    );
   }
 
   if (loading && amistades.length === 0 && !error) return <div className="sc-hint">Cargando amigos…</div>;
@@ -1073,7 +1150,13 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
       {view === "ranking" && (
         <>
           <div className="sc-toolbar">
-            <div className="panel-title" style={{ margin: 0, flex: 1 }}>Clasificación de amigos</div>
+            <select
+              className="input-field sc-scope" value={globalOn ? "global" : "amigos"}
+              onChange={(e) => changeScope(e.target.value)} aria-label="Tipo de clasificación"
+            >
+              <option value="amigos">Clasificación de amigos</option>
+              <option value="global">Clasificación general</option>
+            </select>
             <button className="sc-iconbtn" onClick={() => setView("search")} aria-label="Buscar usuarios"><Icon name="search" /></button>
             <button className="sc-iconbtn" onClick={() => { setReqError(null); setView("requests"); }} aria-label={`Solicitudes${recibidas.length ? `, ${recibidas.length} pendientes` : ""}`}>
               <Icon name="bell" />
@@ -1103,16 +1186,18 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
                   </select>
                   <button className="sc-iconbtn" disabled={i <= 0} onClick={() => setWeekKey(weekly.weeks[i - 1])} aria-label="Semana siguiente">›</button>
                 </div>
-                <div className="sc-list">
-                  {weekly.rows.map((r, k) => (
-                    <WeekRow
-                      key={r.username} pos={k + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar}
-                      minutes={r.minutes} days={r.days} isMe={r.me}
-                      onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
-                    />
-                  ))}
-                </div>
-                {weekly.rows.every((r) => r.minutes === 0) && (
+                {globalOn ? renderGlobal() : (
+                  <div className="sc-list">
+                    {weekly.rows.map((r, k) => (
+                      <WeekRow
+                        key={r.username} pos={k + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar}
+                        minutes={r.minutes} days={r.days} isMe={r.me}
+                        onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {!globalOn && weekly.rows.every((r) => r.minutes === 0) && (
                   <div className="sc-hint">Nadie ha registrado estudio esta semana todavía.</div>
                 )}
                 <div className="sc-hint">Semanas de lunes a domingo. Solo cuentan las horas de las asignaturas con créditos, como en los puntos de rango.</div>
@@ -1120,15 +1205,17 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
             );
           })()}
 
+          {globalOn && rankMode === "season" && renderGlobal()}
+
           <div className="sc-list">
-            {rankMode === "season" && ranking.ok.map((r, i) => (
+            {!globalOn && rankMode === "season" && ranking.ok.map((r, i) => (
               <RankRow
                 key={r.username} pos={i + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar} summary={r.summary} isMe={r.me}
                 onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
                 hint={r.me && selfBusy ? "abriendo…" : null}
               />
             ))}
-            {ranking.locked.map((r) => (
+            {!globalOn && ranking.locked.map((r) => (
               <RankRow
                 key={r.username} name={r.username} verified={r.verified} avatarUrl={r.avatar} locked
                 note={r.state === "noaccess" ? "no comparte sus datos" : r.state === "loading" ? "cargando…" : "no se pudo cargar"}
@@ -1136,13 +1223,14 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
             ))}
           </div>
 
-          {ranking.ok.length + ranking.locked.length === 1 && (
+          {!globalOn && ranking.ok.length + ranking.locked.length === 1 && (
             <div className="panel sc-empty">
               <div className="panel-title">Aún no tienes amigos</div>
-              <p className="panel-subtitle" style={{ marginBottom: 12 }}>Añade a tu primer amigo con la lupa o comparte el enlace.</p>
+              <p className="panel-subtitle" style={{ marginBottom: 12 }}>Invita a algún amigo para ver la clasificación, o echa un vistazo a la clasificación general.</p>
               <div className="btn-row" style={{ justifyContent: "center" }}>
-                <button className="btn-primary" onClick={() => setView("search")}>Buscar amigos</button>
-                <button className="btn-ghost" onClick={shareInvite}>Invitar por enlace</button>
+                <button className="btn-primary" onClick={shareInvite}>Invitar por enlace</button>
+                <button className="btn-ghost" onClick={() => setView("search")}>Buscar amigos</button>
+                <button className="btn-ghost" onClick={() => changeScope("global")}>Ver clasificación general</button>
               </div>
             </div>
           )}
@@ -1152,6 +1240,10 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
       <div className="share-card-offscreen" aria-hidden="true">
         <FriendsShareCard shareRef={rankShareRef} mode={rankMode} title={shareCard.title} subtitle={shareCard.subtitle} rows={shareCard.rows} />
       </div>
+
+      {askGlobal && (
+        <ConsentModal text={CONSENT_GLOBAL} online={online} onAccept={acceptGlobal} onDecline={() => setAskGlobal(false)} />
+      )}
 
       {inviteOpen && <InviteModal from={pendingInvite} online={online} onClose={closeInvite} />}
     </>
@@ -1498,7 +1590,7 @@ export function SocialSettingsModal({ userId, googleAvatarUrl, onClose }) {
   const [busy, setBusy] = useState(false);
   const [newName, setNewName] = useState("");
   const [nameMsg, setNameMsg] = useState(null);
-  const [consentFor, setConsentFor] = useState(null); // "metricas" | "ranking"
+  const [consentFor, setConsentFor] = useState(null); // "metricas" | "ranking" | "global"
   const [photoBusy, setPhotoBusy] = useState(false);
   const photoRef = useRef(null);
 
@@ -1628,6 +1720,11 @@ export function SocialSettingsModal({ userId, googleAvatarUrl, onClose }) {
             on={perfil.share_ranking_ok} disabled={busy || !online} onChange={(v) => toggleConsent("ranking", v)}
           />
           <SettingSwitch
+            label="Aparecer en la clasificación general"
+            hint="Apareces, con tu nombre de usuario y tus puntos, en la clasificación de todos los usuarios (semanal y de season). Si lo desactivas, ni la ves ni sales en ella."
+            on={perfil.share_global_ok === true} disabled={busy || !online} onChange={(v) => toggleConsent("global", v)}
+          />
+          <SettingSwitch
             label="Mostrar mis notas a mis amigos"
             hint="Tus notas se ven en tu ficha (para tus amigos) y en el listado de aprobados de Comunidad. Si lo desactivas, aparecen ocultas en los dos sitios."
             on={perfil.show_grades} disabled={busy || !online} onChange={(v) => run(() => api.setMostrarNotas(v))}
@@ -1648,7 +1745,7 @@ export function SocialSettingsModal({ userId, googleAvatarUrl, onClose }) {
 
       {consentFor && (
         <ConsentModal
-          text={consentFor === "metricas" ? CONSENT_METRICAS : CONSENT_RANKING}
+          text={consentFor === "metricas" ? CONSENT_METRICAS : consentFor === "global" ? CONSENT_GLOBAL : CONSENT_RANKING}
           online={online}
           onAccept={async () => { await api.setConsentimiento(consentFor, true, CONSENT_VERSION); setConsentFor(null); await load(); }}
           onDecline={() => setConsentFor(null)}
@@ -1786,6 +1883,12 @@ export const SOCIAL_CSS = `
     background: var(--red); color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;
   }
   .sc-toolbar { display: flex; align-items: center; gap: 2px; }
+  .sc-scope { flex: 1; min-width: 0; margin-right: 6px; font-weight: 700; }
+  /* En móvil el selector no cabe junto a los cuatro iconos: ocupa su fila y los iconos van debajo. */
+  @media (max-width: 480px) {
+    .sc-toolbar { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
+    .sc-scope { flex: 1 1 100%; margin-right: 0; }
+  }
 
   .sc-uname { display: flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; }
   .sc-uname-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

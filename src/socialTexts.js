@@ -24,5 +24,16 @@ export const CONSENT_RANKING = {
   decline: "Ahora no",
 };
 
+export const CONSENT_GLOBAL = {
+  title: "Aparecer en la clasificación general",
+  paragraphs: [
+    "Si aceptas, aparecerás en la clasificación general de todos los usuarios de Clever que también hayan aceptado, tanto en la semanal como en la de la season, con tu nombre de usuario, tu foto de perfil (si la tienes visible), tus puntos de rango y tus horas de estudio de ese periodo.",
+    "No se mostrará nada más: ni tu ficha, ni tus asignaturas, ni tus notas. Solo la ven quienes también han aceptado aparecer en ella.",
+    "Puedes retirar este permiso cuando quieras desde Ajustes y desaparecerás al instante.",
+  ],
+  accept: "Aceptar",
+  decline: "Ahora no",
+};
+
 export const STATS_PRIVACY_NOTE =
   "Las estadísticas de la comunidad se calculan de forma agregada y anónima a partir de los datos de todos los usuarios. Al principio pueden basarse en muy pocas personas.";

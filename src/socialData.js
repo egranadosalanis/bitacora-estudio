@@ -25,6 +25,7 @@ const MESSAGES = {
   solicitud_no_encontrada: "Esa solicitud ya no existe.",
   amistad_no_encontrada: "Esa amistad ya no existe.",
   consentimiento_propio_requerido: "Necesitas aceptar compartir tus métricas para usar esta función.",
+  consentimiento_global_requerido: "Necesitas aceptar aparecer en la clasificación general para verla.",
 };
 const CODES = Object.keys(MESSAGES);
 
@@ -86,6 +87,8 @@ export const miResumen = () => rpc("mi_resumen");
 export const resumenAmigo = (username) => rpc("resumen_amigo", { p_username: username });
 export const comunidadStats = (canonicaId) => rpc("comunidad_stats", { p_canonica: canonicaId });
 export const listadoAprobados = (canonicaId) => rpc("listado_aprobados", { p_canonica: canonicaId });
+export const clasificacionGlobal = (inicio, fin, limite = 50) =>
+  rpc("clasificacion_global", { p_inicio: inicio, p_fin: fin, p_limite: limite });
 export const detalleAprobado = (canonicaId, username) => rpc("detalle_aprobado", { p_canonica: canonicaId, p_username: username });
 
 /* ---------- invitaciones por enlace ---------- */
