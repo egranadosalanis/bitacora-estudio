@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
-import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup, isoToday, addDays, formatShort, buildEntriesFromLogs } from "./domain.js";
+import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup, isoToday, addDays, formatShort, buildEntriesFromLogs, APP_SHARE_URL } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
@@ -110,6 +110,7 @@ const ICONS = {
   back: <path d="M15 5l-7 7 7 7" />,
   more: <><circle cx="5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="19" cy="12" r="1.3" /></>,
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  share: <><circle cx="6" cy="12" r="2.4" /><circle cx="18" cy="6" r="2.4" /><circle cx="18" cy="18" r="2.4" /><path d="M8.2 10.9l7.6-3.8M8.2 13.1l7.6 3.8" /></>,
 };
 
 function Icon({ name, size = 20 }) {
@@ -799,6 +800,34 @@ function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, onClick 
   );
 }
 
+const SHARE_MAX_ROWS = 10;
+
+/** Tarjeta (ancho fijo, fondo propio) que se pinta fuera de pantalla solo para capturarla como imagen
+ * al compartir la clasificación de amigos. Sin fotos de perfil, para no depender de imágenes externas. */
+function FriendsShareCard({ shareRef, mode, title, subtitle, rows }) {
+  return (
+    <div ref={shareRef} className="share-card">
+      <div className="share-card-header">
+        <img src="/icon-192.png" alt="" width="30" height="30" className="share-card-logo" />
+        <span className="share-card-brand">Clever</span>
+      </div>
+      <div className="share-card-title">{title}</div>
+      <div className="share-card-subtitle">{subtitle}</div>
+      <div className="share-card-list">
+        {rows.map((r, i) => (
+          <div className="share-card-row" key={r.username}>
+            <span className={`share-card-rank${i < 3 ? ` share-card-rank-${i + 1}` : ""}`}>{i + 1}</span>
+            {mode === "season" && <img src={`/rangos/rank-badges/badge-${r.tier}.webp`} alt="" width="26" height="26" style={{ flex: "none" }} />}
+            <span className="share-card-name">{r.username}</span>
+            <span className="share-card-value">{r.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="share-card-footer">Bitácora de vuelo — Clever</div>
+    </div>
+  );
+}
+
 function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, logs, pendingInvite, onInviteHandled, isMobile, online, onNeedConsent }) {
   const [amistades, setAmistades] = useState([]);
   const [models, setModels] = useState({});
@@ -813,6 +842,8 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
   const [busyId, setBusyId] = useState(null);
   const [reqError, setReqError] = useState(null);
   const [shareMsg, setShareMsg] = useState(null);
+  const [sharingRank, setSharingRank] = useState(false);
+  const rankShareRef = useRef(null);
   const [inviteOpen, setInviteOpen] = useState(Boolean(pendingInvite) && pendingInvite.toLowerCase() !== perfil.username.toLowerCase());
 
   const own = useMemo(() => summarizeStudy(subjects, entries, logs), [subjects, entries, logs]);
@@ -947,6 +978,44 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
     }
   }
 
+  // Datos de la tarjeta para compartir: lo mismo que se ve en pantalla (season o semana elegida).
+  const shareCard = useMemo(() => {
+    if (rankMode === "week") {
+      return {
+        title: "Clasificación semanal",
+        subtitle: `${formatShort(weekly.selected)} – ${formatShort(addDays(weekly.selected, 6))} · Top ${Math.min(weekly.rows.length, SHARE_MAX_ROWS)}`,
+        rows: weekly.rows.slice(0, SHARE_MAX_ROWS).map((r) => ({ username: r.username, value: r.minutes > 0 ? hm(r.minutes) : "—" })),
+        fileName: "clever-clasificacion-semanal.png",
+        text: "Así va la clasificación semanal entre amigos en Clever 🏆",
+      };
+    }
+    return {
+      title: "Clasificación de la season",
+      subtitle: `${own.season.label} · Top ${Math.min(ranking.ok.length, SHARE_MAX_ROWS)}`,
+      rows: ranking.ok.slice(0, SHARE_MAX_ROWS).map((r) => ({ username: r.username, tier: r.summary.tier, value: `${fmtNum(r.summary.puntos, 1)} pts` })),
+      fileName: "clever-clasificacion-season.png",
+      text: "Así va la clasificación de la season entre amigos en Clever 🏆",
+    };
+  }, [rankMode, weekly, ranking.ok, own.season]);
+
+  async function shareRanking() {
+    if (sharingRank || !rankShareRef.current) return;
+    setSharingRank(true);
+    setShareMsg(null);
+    try {
+      const { shareNodeAsImage } = await import("./shareImage.js");
+      await shareNodeAsImage(rankShareRef.current, {
+        fileName: shareCard.fileName,
+        title: `${shareCard.title} — Clever`,
+        text: `${shareCard.text}\n${APP_SHARE_URL}`,
+      });
+    } catch (e) {
+      if (!(e && e.name === "AbortError")) setShareMsg(`No se pudo generar la imagen: ${String((e && e.message) || e)}`);
+    } finally {
+      setSharingRank(false);
+    }
+  }
+
   function closeInvite() {
     setInviteOpen(false);
     onInviteHandled();
@@ -1003,6 +1072,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
               {recibidas.length > 0 && <span className="sc-count mono">{recibidas.length}</span>}
             </button>
             <button className="sc-iconbtn" onClick={shareInvite} aria-label="Invitar a un amigo a Clever"><Icon name="invite" /></button>
+            <button className="sc-iconbtn" onClick={shareRanking} disabled={sharingRank} aria-label={rankMode === "week" ? "Compartir la clasificación semanal" : "Compartir la clasificación de la season"}><Icon name="share" /></button>
           </div>
           {shareMsg && <div className="sc-hint">{shareMsg}</div>}
 
@@ -1070,6 +1140,10 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
           )}
         </>
       )}
+
+      <div className="share-card-offscreen" aria-hidden="true">
+        <FriendsShareCard shareRef={rankShareRef} mode={rankMode} title={shareCard.title} subtitle={shareCard.subtitle} rows={shareCard.rows} />
+      </div>
 
       {inviteOpen && <InviteModal from={pendingInvite} online={online} onClose={closeInvite} />}
     </>
