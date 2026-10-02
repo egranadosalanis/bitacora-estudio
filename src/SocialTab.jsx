@@ -14,7 +14,7 @@ import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells, weekStar
 /* ------------------------------------------------------------------ */
 
 // Colores de cada rango (elegidos para que se lean bien en modo claro y oscuro).
-const TIER_COLORS = ["#7A8AA6", "#2FB36D", "#1AA5BC", "#D98A0B", "#E8681C", "#8B6DF0", "#E5484D"];
+const TIER_COLORS = ["#7A8AA6", "#4F86D9", "#2FB36D", "#D98A0B", "#E8681C", "#A855D6", "#E5484D"];
 
 function fmtNum(n, d = 2) {
   return Number(n).toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
