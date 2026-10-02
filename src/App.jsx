@@ -3939,7 +3939,7 @@ export const CSS = `
   .rt-scene:not(.rt-scene-share) .rt-fade, .rt-scene:not(.rt-scene-share) .rt-top { display: none; }
   .rt-scene:not(.rt-scene-share) .rt-fg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 12px 30px; }
   .rt-scene:not(.rt-scene-share) .rt-bignum { text-shadow: 0 2px 20px rgba(0,0,0,.95), 0 0 6px rgba(0,0,0,.9); }
-  .rt-scene:not(.rt-scene-share) .rt-cap { text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 12px rgba(0,0,0,.7); }
+  .rt-scene:not(.rt-scene-share) .rt-cap { font-weight: 700; color: #fff; text-shadow: 0 0 5px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(255,255,255,.55), 0 0 22px rgba(255,255,255,.3); }
   .rt-scene .rt-qline { font-weight: 600; text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 3px rgba(0,0,0,.95), 0 0 14px rgba(255,255,255,.3); }
 
   .rt-hgrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
