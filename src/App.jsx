@@ -124,9 +124,10 @@ const BOTTOM_TABS = [
   { id: "trayectoria", label: "Trayect." },
   { id: "panel", label: "Panel" },
   { id: "social", label: "Social" },
+  { id: "comunidad", label: "Comunidad" },
 ];
 
-/** Barra inferior fija del móvil: 4 secciones + "Más". */
+/** Barra inferior fija del móvil: 5 secciones + "Más". */
 function BottomNav({ tab, moreOpen, newsDot, onSelect, onMore }) {
   const masActive = moreOpen || !BOTTOM_TABS.some((t) => t.id === tab);
   return (
@@ -189,7 +190,6 @@ function MoreSheet({ onClose, onGo, newsDot, isPremium, exportBusy, onExport, on
       <div className="more-sheet" role="dialog" aria-label="Más" onClick={(e) => e.stopPropagation()}>
         <div className="more-handle" />
         <div className="more-section">SECCIONES</div>
-        <MoreRow icon="comunidad" onClick={() => onGo("comunidad")}>Comunidad</MoreRow>
         <MoreRow icon="desgaste" onClick={() => onGo("desgaste")}>Desgaste</MoreRow>
         <MoreRow icon="clasificacion" onClick={() => onGo("clasificacion")}>Clasificación</MoreRow>
         <div className="more-divider" />
@@ -3554,8 +3554,8 @@ export const CSS = `
       flex: 1 1 0; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
       background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0;
     }
-    .bn-icon { position: relative; width: 52px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; }
-    .bn-label { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .bn-icon { position: relative; width: 44px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; }
+    .bn-label { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 9px; letter-spacing: 0.02em; text-transform: uppercase; }
     .bn-active { color: var(--cyan); }
     .bn-active .bn-icon { background: #12314a; }
     .bn-active .bn-label { font-weight: 600; }
