@@ -64,7 +64,7 @@ begin
 end;
 $fn$;
 
-create or replace function public.clasificacion_global(p_inicio date, p_fin date, p_limite int default 50)
+create or replace function public.clasificacion_global(p_inicio date, p_fin date, p_limite int default 20)
 returns jsonb
 language plpgsql
 stable
@@ -73,7 +73,7 @@ set search_path = public
 as $fn$
 declare
   v_me uuid := auth.uid();
-  v_lim int := least(greatest(coalesce(p_limite, 50), 1), 100);
+  v_lim int := least(greatest(coalesce(p_limite, 20), 1), 100);
   v_res jsonb;
 begin
   if v_me is null then raise exception 'Hace falta iniciar sesión.' using errcode = '42501'; end if;

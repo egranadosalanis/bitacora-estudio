@@ -87,7 +87,7 @@ export const miResumen = () => rpc("mi_resumen");
 export const resumenAmigo = (username) => rpc("resumen_amigo", { p_username: username });
 export const comunidadStats = (canonicaId) => rpc("comunidad_stats", { p_canonica: canonicaId });
 export const listadoAprobados = (canonicaId) => rpc("listado_aprobados", { p_canonica: canonicaId });
-export const clasificacionGlobal = (inicio, fin, limite = 50) =>
+export const clasificacionGlobal = (inicio, fin, limite = 20) =>
   rpc("clasificacion_global", { p_inicio: inicio, p_fin: fin, p_limite: limite });
 export const detalleAprobado = (canonicaId, username) => rpc("detalle_aprobado", { p_canonica: canonicaId, p_username: username });
 
