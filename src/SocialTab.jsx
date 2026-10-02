@@ -7,6 +7,7 @@ import { USERNAME_RE, GOOGLE_AVATAR_RE } from "./socialData.js";
 import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, STATS_PRIVACY_NOTE } from "./socialTexts.js";
 import Avatar from "./Avatar.jsx";
 import SeasonEnd from "./SeasonEnd.jsx";
+import RangosTab from "./RangosTab.jsx";
 import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
@@ -1076,11 +1077,10 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
 }
 
 
-/* ---------- sección Guía (estadísticas de la comunidad) ---------- */
+/* ---------- pestaña Comunidad (estadísticas por asignatura) ---------- */
 
 const CACHE_MS = 5 * 60 * 1000; // una asignatura ya consultada no se vuelve a pedir en 5 minutos
 const SMALL_SAMPLE = 5; // por debajo de este nº de aprobados se avisa de que la muestra es pequeña
-const rankingAskedKey = (userId) => `clever:social:ranking-preguntado:${userId}`;
 
 function plural(n, one, many) { return n === 1 ? one : many; }
 
@@ -1195,7 +1195,7 @@ function DetalleAprobado({ canonicaId, username }) {
   );
 }
 
-function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, onOpenSettings, reloadPerfil }) {
+function ComunidadSection({ perfil, carreraId, subjects, online, onGoSocial, reloadPerfil }) {
   const [catalog, setCatalog] = useState(null);
   const [catError, setCatError] = useState(null);
   const [selected, setSelected] = useState("");
@@ -1208,9 +1208,6 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
   const [openUser, setOpenUser] = useState(null);
   const statsCache = useRef(new Map());
   const rowsCache = useRef(new Map());
-  const [asked, setAsked] = useState(() => {
-    try { return window.localStorage.getItem(rankingAskedKey(userId)) === "1"; } catch { return false; }
-  });
 
   const loadCatalog = useCallback(async () => {
     if (!carreraId) return;
@@ -1288,22 +1285,16 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
     return () => { cancelled = true; };
   }, [selected, rankingOk]);
 
-  // Pregunta por el listado una sola vez, la primera vez que el usuario elige él
-  // mismo una asignatura (solo si ya tiene nombre de usuario).
   function chooseSubject(id) {
     setSelected(id);
     setOpenUser(null);
-    if (id && perfil && !perfil.share_ranking_ok && !asked) setAskRanking(true);
   }
 
-  function markAsked() {
-    try { window.localStorage.setItem(rankingAskedKey(userId), "1"); } catch { /* nada */ }
-    setAsked(true);
-    setAskRanking(false);
-  }
+  // El consentimiento es el mismo que el de Ajustes de Social: quien lo acepta ve el listado y
+  // aparece en él; quien lo rechaza ni lo ve ni aparece. Se pregunta al pulsar «Ver listado».
   async function acceptRanking() {
     await api.setConsentimiento("ranking", true, CONSENT_VERSION);
-    markAsked();
+    setAskRanking(false);
     await reloadPerfil();
   }
 
@@ -1317,8 +1308,8 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
     <>
       {!online && <OfflineBar />}
       <div className="panel">
-        <label className="panel-title" htmlFor="sc-guia-select">Asignatura</label>
-        <select id="sc-guia-select" className="input-field" value={selected} onChange={(e) => chooseSubject(e.target.value)}>
+        <label className="panel-title" htmlFor="sc-comunidad-select">Asignatura</label>
+        <select id="sc-comunidad-select" className="input-field" value={selected} onChange={(e) => chooseSubject(e.target.value)}>
           <option value="">Elige una asignatura…</option>
           {groups.map((g) => (
             <optgroup key={g.label} label={g.label}>
@@ -1380,12 +1371,12 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
           ) : perfil === null ? (
             <>
               <p className="panel-subtitle">Para aparecer en el listado y verlo, primero elige tu nombre de usuario.</p>
-              <button className="btn-ghost btn-small" onClick={onGoAmigos}>Elegir nombre de usuario</button>
+              <button className="btn-ghost btn-small" onClick={onGoSocial}>Elegir nombre de usuario</button>
             </>
           ) : (
             <>
-              <p className="panel-subtitle">Solo lo ven quienes han aceptado aparecer en él. Puedes activarlo cuando quieras en Ajustes de Social.</p>
-              <button className="btn-ghost btn-small" onClick={onOpenSettings}>Abrir ajustes de Social</button>
+              <p className="panel-subtitle">Solo lo ven quienes han aceptado aparecer en él: si lo activas, tú también saldrás. Puedes cambiarlo cuando quieras en Ajustes de Social.</p>
+              <button className="btn-ghost btn-small" onClick={() => setAskRanking(true)}>Ver listado</button>
             </>
           )}
         </div>
@@ -1394,7 +1385,7 @@ function GuiaSection({ userId, perfil, carreraId, subjects, online, onGoAmigos, 
       <p className="sc-hint sc-legal-note">{STATS_PRIVACY_NOTE}</p>
 
       {askRanking && perfil && (
-        <ConsentModal text={CONSENT_RANKING} online={online} onAccept={acceptRanking} onDecline={markAsked} />
+        <ConsentModal text={CONSENT_RANKING} online={online} onAccept={acceptRanking} onDecline={() => setAskRanking(false)} />
       )}
     </>
   );
@@ -1556,7 +1547,7 @@ export function SocialSettingsModal({ userId, googleAvatarUrl, onClose }) {
           />
           <SettingSwitch
             label="Mostrar mis notas a mis amigos"
-            hint="Tus notas se ven en tu ficha (para tus amigos) y en el listado de aprobados de la Guía. Si lo desactivas, aparecen ocultas en los dos sitios."
+            hint="Tus notas se ven en tu ficha (para tus amigos) y en el listado de aprobados de Comunidad. Si lo desactivas, aparecen ocultas en los dos sitios."
             on={perfil.show_grades} disabled={busy || !online} onChange={(v) => run(() => api.setMostrarNotas(v))}
           />
 
@@ -1585,14 +1576,12 @@ export function SocialSettingsModal({ userId, googleAvatarUrl, onClose }) {
   );
 }
 
-/* ---------- pestaña ---------- */
+/* ---------- pestañas ---------- */
 
-export default function SocialTab({ userId, avatarUrl, onOwnPhoto, carreraId, subjects, entries, logs, pendingInvite, onInviteHandled, onBack, onOpenSettings, isMobile }) {
-  const online = useOnline();
-  const [perfil, setPerfil] = useState(undefined); // undefined = cargando, null = sin perfil
+/** Carga el perfil social del usuario (undefined = cargando, null = sin perfil). */
+function usePerfilSocial(userId) {
+  const [perfil, setPerfil] = useState(undefined);
   const [loadError, setLoadError] = useState(null);
-  const [section, setSection] = useState(pendingInvite ? "amigos" : "guia");
-
   const loadPerfil = useCallback(async () => {
     setLoadError(null);
     try {
@@ -1601,8 +1590,32 @@ export default function SocialTab({ userId, avatarUrl, onOwnPhoto, carreraId, su
       setLoadError(e.message);
     }
   }, [userId]);
-
   useEffect(() => { loadPerfil(); }, [loadPerfil]);
+  return { perfil, setPerfil, loadError, loadPerfil };
+}
+
+/** Pestaña Comunidad: estadísticas por asignatura y listado de aprobados. No exige ningún
+ * consentimiento para entrar; solo se pide al pulsar «Ver listado». */
+export function ComunidadTab({ userId, carreraId, subjects, onGoSocial }) {
+  const online = useOnline();
+  const { perfil, loadError, loadPerfil } = usePerfilSocial(userId);
+  return (
+    <div className="sc-wrap">
+      <div className="sc-head">
+        <h2 className="sc-title">Comunidad</h2>
+      </div>
+      <ComunidadSection
+        perfil={loadError ? undefined : perfil} carreraId={carreraId} subjects={subjects} online={online}
+        onGoSocial={onGoSocial} reloadPerfil={loadPerfil}
+      />
+    </div>
+  );
+}
+
+export default function SocialTab({ userId, avatarUrl, onOwnPhoto, subjects, entries, logs, pendingInvite, onInviteHandled, onBack, onOpenSettings, isMobile }) {
+  const online = useOnline();
+  const { perfil, setPerfil, loadError, loadPerfil } = usePerfilSocial(userId);
+  const [section, setSection] = useState("amigos");
 
   // Foto propia (la subida por el usuario y, si no, la de Google) y aviso a la app para la cabecera.
   const googlePhoto = avatarUrl && GOOGLE_AVATAR_RE.test(avatarUrl) ? avatarUrl : null;
@@ -1623,22 +1636,17 @@ export default function SocialTab({ userId, avatarUrl, onOwnPhoto, carreraId, su
   }
 
   let body;
-  if (section === "guia") {
-    body = (
-      <GuiaSection
-        userId={userId} perfil={loadError ? undefined : perfil} carreraId={carreraId} subjects={subjects} online={online}
-        onGoAmigos={() => setSection("amigos")} onOpenSettings={onOpenSettings} reloadPerfil={loadPerfil}
-      />
-    );
+  if (section === "rangos") {
+    body = <RangosTab subjects={subjects} entries={entries} logs={logs} />;
   } else if (loadError) {
     body = <ErrorPanel message={loadError} onRetry={loadPerfil} />;
   } else if (perfil === undefined) {
     body = <div className="sc-hint">Cargando…</div>;
   } else if (perfil === null) {
-    body = <UsernameScreen userId={userId} avatarUrl={avatarUrl} pendingInvite={pendingInvite} online={online} onCreated={loadPerfil} onCancel={() => setSection("guia")} />;
+    body = <UsernameScreen userId={userId} avatarUrl={avatarUrl} pendingInvite={pendingInvite} online={online} onCreated={loadPerfil} onCancel={() => setSection("rangos")} />;
   } else if (!perfil.share_metrics_ok) {
     body = (
-      <ConsentModal text={CONSENT_METRICAS} online={online} onAccept={acceptMetrics} onDecline={() => setSection("guia")} />
+      <ConsentModal text={CONSENT_METRICAS} online={online} onAccept={acceptMetrics} onDecline={() => setSection("rangos")} />
     );
   } else {
     body = (
@@ -1660,7 +1668,7 @@ export default function SocialTab({ userId, avatarUrl, onOwnPhoto, carreraId, su
       </div>
       <div className="sc-seg">
         <button className={`tab-btn ${section === "amigos" ? "tab-btn-active" : ""}`} onClick={() => setSection("amigos")}>Amigos</button>
-        <button className={`tab-btn ${section === "guia" ? "tab-btn-active" : ""}`} onClick={() => setSection("guia")}>Guía</button>
+        <button className={`tab-btn ${section === "rangos" ? "tab-btn-active" : ""}`} onClick={() => setSection("rangos")}>Rangos</button>
       </div>
       {body}
     </div>
