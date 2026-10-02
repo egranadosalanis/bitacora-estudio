@@ -3879,8 +3879,8 @@ export const CSS = `
   .rt-panel-actions { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 
   .rt-hero {
-    position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--rt-border); min-height: 340px;
-    margin-bottom: 12px; background: #0a0f1a; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--rt-border); min-height: 400px;
+    margin-bottom: 12px; background: #0a0f1a; display: flex; flex-direction: column; align-items: center; justify-content: center;
   }
   @media (min-width: 720px) {
     .rt-hero:not(.rt-hero-share), .rt-scene:not(.rt-scene-share) { max-width: 640px; margin-left: auto; margin-right: auto; }
@@ -3889,9 +3889,9 @@ export const CSS = `
   .rt-hero .rt-tint { position: absolute; inset: 0; background: none; }
   .rt-hero .rt-season { position: absolute; top: 12px; left: 14px; font-size: 10.5px; letter-spacing: 2px; color: #d7e3f5; text-shadow: 0 1px 6px rgba(0,0,0,.9); z-index: 2; margin: 0; }
   .rt-hero .rt-prevtag { position: absolute; top: 12px; right: 14px; z-index: 2; }
-  .rt-herocard { position: relative; z-index: 2; text-align: center; padding: 16px 16px 20px; width: 100%; }
+  .rt-herocard { position: relative; z-index: 2; text-align: center; padding: 40px 16px 24px; width: 100%; }
   .rt-emwrap { position: relative; z-index: 2; display: flex; justify-content: center; margin-bottom: 2px; }
-  .rt-emwrap img { width: 104px; height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
+  .rt-emwrap img { width: 168px; height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
   .rt-rname { font-family: "Manrope", sans-serif; font-size: 25px; font-weight: 700; line-height: 1.12; margin-top: 4px; color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.9), 0 0 4px rgba(0,0,0,.8); }
   .rt-rquip { font-size: 12.5px; color: #dbe6f5; margin-top: 5px; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
 
@@ -3948,6 +3948,8 @@ export const CSS = `
      compartir (ver shareImage.js) — ancho fijo, nunca visibles. */
   .rt-share-offscreen { position: fixed; top: 0; left: -10000px; pointer-events: none; }
   .rt-hero-share, .rt-scene-share { width: 420px; min-height: 280px; height: 420px; }
+  .rt-hero-share .rt-herocard { padding: 36px 16px 16px; }
+  .rt-hero-share .rt-emwrap img { width: 150px; }
   .rt-share-stat { font-size: 15px; color: var(--rt-accent); margin-top: 8px; }
   .rt-share-brand {
     position: absolute; top: 12px; right: 14px; z-index: 3; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
