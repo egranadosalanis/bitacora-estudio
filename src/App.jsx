@@ -12,7 +12,7 @@ import {
 } from "./domain.js";
 import {
   loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
-  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCurso,
+  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCursoConDatos,
   searchUniversidades, searchCarreras, searchAsignaturasCanonicas,
   createUniversidadPendiente, createCarreraPendiente, createAsignaturaPendiente,
 } from "./supabaseData.js";
@@ -2964,14 +2964,52 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     withCloudWrite(() => updateCursoEstado(userId, id, nextEstado));
   }
 
+  // Borrar un curso borra también sus datos: las entradas de estudio de su
+  // rango de fechas (salvo los días que cubre otro curso que se queda, por si
+  // se solapan) y las asignaturas que se quedan sin ninguna entrada — así no
+  // sobreviven "intentos" fantasma combinados con la asignatura anterior. Una
+  // asignatura que también tiene registros en otros cursos se conserva.
   function handleRemoveCurso(id) {
     if (data.cursos.length === 1) return;
+    const removed = data.cursos.find((c) => c.id === id);
+    if (!removed) return;
+    const remaining = data.cursos.filter((c) => c.id !== id);
+    const inCurso = (date, c) => date >= c.startDate && date <= c.endDate;
+    const removedLogs = data.logs.filter(
+      (l) => inCurso(l.date, removed) && !remaining.some((c) => inCurso(l.date, c))
+    );
+    const removedLogIds = new Set(removedLogs.map((l) => l.id));
+    const logsLeft = data.logs.filter((l) => !removedLogIds.has(l.id));
+    const subjectsWithEntriesLeft = new Set(logsLeft.filter((l) => l.minutes > 0).map((l) => l.subjectId));
+    const touchedSubjectIds = new Set(removedLogs.map((l) => l.subjectId));
+    const removedSubjectIds = new Set(
+      data.subjects
+        .filter((s) => !subjectsWithEntriesLeft.has(s.id) && (touchedSubjectIds.has(s.id) || s.originCursoId === id))
+        .map((s) => s.id)
+    );
     setData((d) => {
       if (d.cursos.length === 1) return d;
       const cursos = d.cursos.filter((c) => c.id !== id);
-      return { ...d, activeCursoId: d.activeCursoId === id ? cursos[0].id : d.activeCursoId, cursos };
+      const logs = d.logs.filter((l) => !removedLogIds.has(l.id));
+      return {
+        ...d,
+        activeCursoId: d.activeCursoId === id ? cursos[0].id : d.activeCursoId,
+        cursos,
+        logs,
+        entries: buildEntriesFromLogs(logs),
+        subjects: d.subjects
+          .filter((s) => !removedSubjectIds.has(s.id))
+          .map((s) => ({
+            ...s,
+            mergedInto: removedSubjectIds.has(s.mergedInto) ? null : s.mergedInto,
+            originCursoId: s.originCursoId === id ? null : s.originCursoId,
+          })),
+      };
     });
-    withCloudWrite(() => deleteCurso(userId, id));
+    withCloudWrite(() => deleteCursoConDatos(userId, id, {
+      entryIds: [...removedLogIds],
+      subjectIds: [...removedSubjectIds],
+    }));
   }
 
   if (data && data.cursos.length === 0) {

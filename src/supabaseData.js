@@ -226,6 +226,25 @@ export async function deleteCurso(userId, cursoId) {
   if (error) throw error;
 }
 
+/** Borra un curso junto con sus datos: primero las entradas de estudio
+ * indicadas, luego las asignaturas que se quedan sin nada, y al final el
+ * curso. (`asignaturas.origin_curso_id` es `on delete set null`, así que
+ * borrar solo el curso dejaría las asignaturas y sus intentos huérfanos.) */
+export async function deleteCursoConDatos(userId, cursoId, { entryIds, subjectIds }) {
+  const CHUNK = 200;
+  for (let i = 0; i < entryIds.length; i += CHUNK) {
+    const { error } = await supabase
+      .from("entradas_estudio").delete().eq("user_id", userId).in("id", entryIds.slice(i, i + CHUNK));
+    if (error) throw error;
+  }
+  for (let i = 0; i < subjectIds.length; i += CHUNK) {
+    const { error } = await supabase
+      .from("asignaturas").delete().eq("user_id", userId).in("id", subjectIds.slice(i, i + CHUNK));
+    if (error) throw error;
+  }
+  await deleteCurso(userId, cursoId);
+}
+
 /* ---------- normalización: búsqueda ---------- */
 
 export async function searchUniversidades(query, { limit = 20 } = {}) {
