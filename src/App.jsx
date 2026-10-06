@@ -1186,6 +1186,7 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
   });
 
   const pieData = stats.perSubject.filter((s) => s.total > 0).map((s) => ({ name: s.name, value: s.total, color: s.color }));
+  const pieTotal = pieData.reduce((a, d) => a + d.value, 0);
 
   const barData = stats.perSubject.filter((s) => !s.sinCreditos).map((s) => ({
     name: s.name.length > 12 ? s.name.slice(0, 12) + "…" : s.name,
@@ -1287,10 +1288,14 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
           <div className="panel-title">Distribución del esfuerzo</div>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
-              <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={70} paddingAngle={2}>
+              <Pie
+                data={pieData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={70} paddingAngle={2}
+                label={({ percent }) => `${(percent * 100).toFixed(percent < 0.1 ? 1 : 0)} %`}
+                labelLine={{ stroke: "#8291AC" }}
+              >
                 {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
-              <Tooltip contentStyle={TOOLTIP_STYLE} wrapperStyle={TOOLTIP_WRAPPER} labelStyle={{ color: "#E7ECF5" }} itemStyle={{ color: "#E7ECF5" }} formatter={(v) => hm(v)} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} wrapperStyle={TOOLTIP_WRAPPER} labelStyle={{ color: "#E7ECF5" }} itemStyle={{ color: "#E7ECF5" }} formatter={(v) => `${hm(v)} (${((v / pieTotal) * 100).toFixed(1)} %)`} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#8291AC" }} />
             </PieChart>
           </ResponsiveContainer>
