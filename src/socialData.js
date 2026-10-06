@@ -83,6 +83,8 @@ export const quitarAmistad = (username) => rpc("quitar_amistad", { p_username: u
 export const bloquearUsuario = (username) => rpc("bloquear_usuario", { p_username: username });
 export const desbloquearUsuario = (username) => rpc("desbloquear_usuario", { p_username: username });
 export const misAmistades = () => rpc("mis_amistades");
+/** Avisa a tus amigos de que tienes el contador en marcha (activo=true) o de que lo has parado. */
+export const latidoEstudio = (activo) => rpc("latido_estudio", { p_activo: activo });
 export const miResumen = () => rpc("mi_resumen");
 export const resumenAmigo = (username) => rpc("resumen_amigo", { p_username: username });
 export const comunidadStats = (canonicaId) => rpc("comunidad_stats", { p_canonica: canonicaId });

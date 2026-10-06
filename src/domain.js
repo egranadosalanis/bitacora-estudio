@@ -414,9 +414,15 @@ export function computeStats(subjects, entries, logs) {
     };
   });
 
+  // Más minutos que una sola asignatura ha sumado en un día (todas sus sesiones de ese día).
+  let maxSubjectDay = { minutes: 0, date: null, subjectId: null };
+  perSubject.forEach((s) => {
+    if (s.maxDay > maxSubjectDay.minutes) maxSubjectDay = { minutes: s.maxDay, date: s.maxDayDate, subjectId: s.id };
+  });
+
   return {
     dailyTotals, dailyBySubject, activeDates, globalTotal, longest, current,
-    lastActiveDate, daysSinceLast, maxSession, maxDayTotal, perSubject,
+    lastActiveDate, daysSinceLast, maxSession, maxDayTotal, maxSubjectDay, perSubject,
     totalDaysLogged: activeDates.length,
   };
 }
@@ -751,6 +757,8 @@ export const RANK_NAMES = [
   "Becario de Ryanair", "Piloto de Cessna alquilada", "Copiloto con café", "Capitán de Iberia",
   "Piloto de caza", "Astronauta de la NASA", "ATLAS",
 ];
+// Colores de cada rango (elegidos para que se lean bien en modo claro y oscuro).
+export const TIER_COLORS = ["#7A8AA6", "#4F86D9", "#2FB36D", "#D98A0B", "#E8681C", "#A855D6", "#D4A81F"];
 export const RANK_QUIPS = [
   "Sí, te hacen pagar por la maleta.", "Despegas, aterrizas y rezas.", "Ya tocas botones que importan.",
   "Los pájaros te piden permiso.", "Vas a un Mach que da miedo.", "La gravedad ya es opcional.",

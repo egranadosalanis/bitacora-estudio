@@ -8,7 +8,7 @@ import {
   computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
   computeDesgaste, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase, groupEstado,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
-  APP_SHARE_URL,
+  APP_SHARE_URL, TIER_COLORS, RANK_NAMES, RANK_QUIPS, getCurrentSeason, computeSeasonRango,
 } from "./domain.js";
 import {
   loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
@@ -20,9 +20,9 @@ import { supabase } from "./supabaseClient.js";
 import { OFFLINE_MESSAGE, friendlyError, isNetworkError } from "./offline.js";
 import SocialTab, { ComunidadTab, SOCIAL_CSS, SocialSettingsModal } from "./SocialTab.jsx";
 import { SEASON_END_CSS } from "./SeasonEnd.jsx";
-import { readPendingInvite, clearPendingInvite, getMiPerfilSocial, photoUrl, GOOGLE_AVATAR_RE } from "./socialData.js";
+import { readPendingInvite, clearPendingInvite, getMiPerfilSocial, photoUrl, GOOGLE_AVATAR_RE, latidoEstudio } from "./socialData.js";
 import { AccountAvatar, AVATAR_CSS } from "./Avatar.jsx";
-import { prefetchRangosImages } from "./RangosTab.jsx";
+import { prefetchRangosImages, RankEmblem } from "./RangosTab.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  COMPONENTES DE UI GENERICOS                                        */
@@ -213,6 +213,32 @@ const ESTADO_LABELS = { en_curso: "En curso", suspendida: "Suspendida", aprobada
 
 function EstadoBadge({ estado }) {
   return <span className={`badge-estado badge-estado-${estado}`}>{ESTADO_LABELS[estado] || estado}</span>;
+}
+
+/** Aviso a pantalla completa al subir de rango tras guardar un registro. Se cierra al tocar o a los 6 s. */
+function RankUpOverlay({ tier, puntos, onClose }) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const id = setTimeout(() => onCloseRef.current(), 6000);
+    return () => clearTimeout(id);
+  }, []);
+  const color = TIER_COLORS[tier];
+  return (
+    <div className="rankup-overlay" onClick={onClose} role="dialog" aria-label="Has subido de rango" style={{ "--rc": color }}>
+      <div className="rankup-box">
+        <div className="rankup-kicker mono">¡HAS SUBIDO DE RANGO!</div>
+        <div className="rankup-emblem">
+          <span className="rankup-glow" />
+          <RankEmblem tier={tier} size={190} />
+        </div>
+        <h2 className="rankup-name">{RANK_NAMES[tier]}</h2>
+        <p className="rankup-quip">{RANK_QUIPS[tier]}</p>
+        <p className="rankup-pts mono">{Number(puntos).toLocaleString("es-ES", { maximumFractionDigits: 1 })} puntos</p>
+        <span className="rankup-tap mono">toca para continuar</span>
+      </div>
+    </div>
+  );
 }
 
 function Modal({ title, onClose, children, wide }) {
@@ -486,6 +512,24 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
   useEffect(() => {
     if (!timerRunning) return;
     const id = setInterval(() => setTimerTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [timerRunning]);
+
+  // Mientras el contador corre, avisa a los amigos ("LIVE" en su clasificación) con un latido
+  // cada minuto; al pausarlo o terminarlo se retira al momento. Si la app se cierra o se cambia
+  // de pestaña, la marca caduca sola en el servidor (3 min). Sin perfil social no hace nada.
+  const wasTimerRunningRef = useRef(false);
+  useEffect(() => {
+    if (DISABLE_CLOUD_SAVE) return undefined;
+    if (!timerRunning) {
+      if (wasTimerRunningRef.current) latidoEstudio(false).catch(() => {});
+      wasTimerRunningRef.current = false;
+      return undefined;
+    }
+    wasTimerRunningRef.current = true;
+    const beat = () => { latidoEstudio(true).catch(() => {}); };
+    beat();
+    const id = setInterval(beat, 60000);
     return () => clearInterval(id);
   }, [timerRunning]);
 
@@ -941,6 +985,8 @@ function PanelTab({ stats }) {
   const conRatio = stats.perSubject.filter((s) => !s.sinCreditos);
   const maxHoursPerCredit = Math.max(0.5, ...conRatio.map((s) => s.hoursPerCredit), ...conRatio.map((s) => s.target || 0)) * 1.15;
   const maxSessionSub = stats.perSubject.find((s) => s.id === stats.maxSession.subjectId) || null;
+  // Lo más que has estudiado UNA asignatura en un solo día (suma de todas sus sesiones de ese día).
+  const maxSubjectDaySub = stats.perSubject.find((s) => s.id === stats.maxSubjectDay.subjectId) || null;
 
   return (
     <div>
@@ -956,8 +1002,8 @@ function PanelTab({ stats }) {
         />
         <StatCard
           label="Día con más minutos"
-          value={stats.maxDayTotal.date ? hm(stats.maxDayTotal.minutes) : "—"}
-          hint={stats.maxDayTotal.date ? formatShort(stats.maxDayTotal.date) : "sin datos"}
+          value={maxSubjectDaySub ? hm(stats.maxSubjectDay.minutes) : "—"}
+          hint={maxSubjectDaySub ? `${maxSubjectDaySub.name} · ${formatShort(stats.maxSubjectDay.date)}` : "sin datos"}
           accent="#3DDC84"
         />
         <StatCard
@@ -2878,6 +2924,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     }
   }
 
+  const [rankUp, setRankUp] = useState(null); // { tier, puntos } al subir de rango tras un registro
   const curso = useMemo(() => data && data.cursos.find((c) => c.id === data.activeCursoId), [data]);
   const cursoEntries = useMemo(
     () => (data && curso ? entriesInRange(data.entries, curso.startDate, curso.endDate) : {}),
@@ -2921,6 +2968,14 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     if (!DISABLE_CLOUD_SAVE) await insertEntries(userId, newLogs, deviceId);
     const createdAt = new Date().toISOString();
     const ids = new Set(newLogs.map((l) => l.id));
+    // ¿Este registro te sube de rango? Se compara el rango de la season antes y después.
+    const { season, live: seasonLive } = getCurrentSeason();
+    if (seasonLive) {
+      const nextLogs = [...data.logs.filter((l) => !ids.has(l.id)), ...newLogs];
+      const before = computeSeasonRango(data.subjects, data.entries, data.logs, season);
+      const after = computeSeasonRango(data.subjects, buildEntriesFromLogs(nextLogs), nextLogs, season);
+      if (after.tier > before.tier) setRankUp({ tier: after.tier, puntos: after.puntos });
+    }
     applyLogs((logs) => [
       ...logs.filter((l) => !ids.has(l.id)),
       ...newLogs.map((l) => ({ ...l, createdAt, deviceId, migrated: false })),
@@ -3331,6 +3386,8 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
           Vista previa de solo lectura: los cambios que hagas aquí no se guardan en la nube compartida.
         </div>
       )}
+
+      {rankUp && <RankUpOverlay tier={rankUp.tier} puntos={rankUp.puntos} onClose={() => setRankUp(null)} />}
 
       {!isMobile && (
         <nav className="tab-bar">
@@ -3804,6 +3861,23 @@ export const CSS = `
   /* Tarjeta para compartir la Clasificación (ver ClassificationShareCard):
      ancho fijo y fondo propio con degradado — pensada solo para hacerle
      una foto, nunca para enseñarse en pantalla. */
+  .rankup-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; cursor: pointer;
+    background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--rc) 28%, rgba(4, 10, 24, 0.94)), rgba(4, 10, 24, 0.96) 70%);
+    animation: rankup-fade 0.35s ease-out both; }
+  .rankup-box { display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 380px; color: #fff; }
+  .rankup-kicker { font-size: 12px; letter-spacing: 0.28em; color: var(--rc); font-weight: 700; animation: rankup-rise 0.5s 0.15s ease-out both; }
+  .rankup-emblem { position: relative; margin: 22px 0 14px; display: flex; align-items: center; justify-content: center; }
+  .rankup-emblem img { position: relative; z-index: 1; filter: drop-shadow(0 0 28px var(--rc)); animation: rankup-pop 0.9s 0.2s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+  .rankup-glow { position: absolute; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, var(--rc), transparent 65%); opacity: 0.55; animation: rankup-pulse 2.2s 0.6s ease-in-out infinite; }
+  .rankup-name { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 800; animation: rankup-rise 0.5s 0.7s ease-out both; }
+  .rankup-quip { margin: 8px 0 0; font-size: 14px; opacity: 0.85; animation: rankup-rise 0.5s 0.85s ease-out both; }
+  .rankup-pts { margin: 14px 0 0; font-size: 16px; color: var(--rc); font-weight: 700; animation: rankup-rise 0.5s 1s ease-out both; }
+  .rankup-tap { margin-top: 26px; font-size: 11px; letter-spacing: 0.12em; opacity: 0.55; animation: rankup-rise 0.5s 1.4s ease-out both; }
+  @keyframes rankup-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes rankup-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @keyframes rankup-pop { 0% { opacity: 0; transform: scale(0.2) rotate(-12deg); } 100% { opacity: 1; transform: none; } }
+  @keyframes rankup-pulse { 0%, 100% { transform: scale(0.9); opacity: 0.4; } 50% { transform: scale(1.12); opacity: 0.7; } }
+  @media (prefers-reduced-motion: reduce) { .rankup-overlay *, .rankup-overlay { animation: none !important; } }
   .share-card-offscreen { position: fixed; top: 0; left: -10000px; pointer-events: none; }
   .share-card {
     width: 420px; box-sizing: border-box; padding: 30px 26px 22px;
@@ -4071,7 +4145,7 @@ export const CSS = `
   .rt-hero-share .rt-sc { position: absolute; inset: 0; height: 100%; object-fit: cover; }
   .rt-hero-share .rt-herocard { padding: 36px 16px 16px; }
   .rt-hero-share .rt-emwrap img { width: 150px; }
-  .rt-share-stat { font-size: 15px; color: var(--rt-accent); margin-top: 8px; }
+  .rt-share-stat { font-size: 17px; font-weight: 700; color: var(--rt-accent); margin-top: 8px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 10px rgba(0, 0, 0, 0.6); }
   .rt-share-brand {
     position: absolute; top: 12px; right: 14px; z-index: 3; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
     color: rgba(255,255,255,.85); text-shadow: 0 1px 6px rgba(0,0,0,.9); font-family: "IBM Plex Mono", monospace;

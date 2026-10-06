@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import SeasonEnd from "./SeasonEnd.jsx";
 import {
   computeStats, getCurrentSeason, computeSeasonRango, getSeasonHistory,
-  RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS,
+  RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, TIER_COLORS,
   STREAK_TIERS, streakTierForDays, hm, APP_SHARE_URL,
 } from "./domain.js";
 
@@ -55,7 +55,7 @@ export function prefetchRangosImages() {
   urls.forEach((u) => { const im = new Image(); im.decoding = "async"; im.src = u; });
 }
 
-function RankEmblem({ tier, size }) {
+export function RankEmblem({ tier, size }) {
   return (
     <img
       src={`/rangos/rank-badges/badge-${tier}.webp`}
@@ -107,7 +107,7 @@ function RangoShareCard({ shareRef, rango, season }) {
         <div className="rt-emwrap"><RankEmblem tier={tier} size={104} /></div>
         <h2 className="rt-rname">{RANK_NAMES[tier]}</h2>
         <p className="rt-rquip">{RANK_QUIPS[tier]}</p>
-        <p className="rt-share-stat rt-mono">{fmtNum(puntos)} puntos</p>
+        <p className="rt-share-stat rt-mono" style={{ color: TIER_COLORS[tier] }}>{fmtNum(puntos)} puntos</p>
       </div>
       <div className="rt-share-brand">Clever · Bitácora de vuelo</div>
     </div>

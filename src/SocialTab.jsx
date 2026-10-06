@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
-import { RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup, isoToday, addDays, formatShort, buildEntriesFromLogs, APP_SHARE_URL, rankTierForPoints } from "./domain.js";
+import { TIER_COLORS, RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup, isoToday, addDays, formatShort, buildEntriesFromLogs, APP_SHARE_URL, rankTierForPoints } from "./domain.js";
 import { searchAsignaturasCanonicas } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
@@ -14,8 +14,6 @@ import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells, weekStar
 /*  Pestaña Social — sección Amigos                                    */
 /* ------------------------------------------------------------------ */
 
-// Colores de cada rango (elegidos para que se lean bien en modo claro y oscuro).
-const TIER_COLORS = ["#7A8AA6", "#4F86D9", "#2FB36D", "#D98A0B", "#E8681C", "#A855D6", "#D4A81F"];
 
 function fmtNum(n, d = 2) {
   return Number(n).toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -289,7 +287,12 @@ function ConsentModal({ text, online, onAccept, onDecline }) {
 
 /* ---------- clasificación ---------- */
 
-function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, staticRow, note, hint, onClick }) {
+/** Etiqueta "LIVE": esa persona tiene el contador de estudio en marcha ahora mismo. */
+function LiveBadge() {
+  return <span className="sc-live mono" title="Está estudiando ahora mismo"><span className="sc-live-dot" />LIVE</span>;
+}
+
+function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, staticRow, note, hint, live, onClick }) {
   const tier = summary?.tier ?? 0;
   const color = TIER_COLORS[tier];
   const Tag = locked || staticRow ? "div" : "button";
@@ -305,6 +308,7 @@ function RankRow({ pos, name, verified, avatarUrl, summary, isMe, locked, static
       <span className="sc-who">
         <Username name={name} verified={verified} />
         {isMe && <span className="sc-you mono">TÚ</span>}
+        {live && <LiveBadge />}
         {(note || hint) && <span className="sc-note mono">{note || hint}</span>}
       </span>
       {summary && (
@@ -784,7 +788,7 @@ function InviteModal({ from, online, onClose }) {
 
 /* ---------- sección Amigos ---------- */
 
-function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, onClick }) {
+function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, live, onClick }) {
   const Tag = onClick ? "button" : "div";
   return (
     <Tag type={onClick ? "button" : undefined} className={`sc-row ${isMe ? "sc-me" : ""}`} onClick={onClick}>
@@ -793,6 +797,7 @@ function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, onClick 
       <span className="sc-who">
         <Username name={name} verified={verified} />
         {isMe && <span className="sc-you mono">TÚ</span>}
+        {live && <LiveBadge />}
         <span className="sc-note mono">{days > 0 ? `${days} ${days === 1 ? "día" : "días"} de estudio` : "sin estudio"}</span>
       </span>
       <span className="sc-weekval mono">{minutes > 0 ? hm(minutes) : "—"}</span>
@@ -892,6 +897,21 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
 
   useEffect(() => { load(); return () => { loadSeq.current++; }; }, [load]);
 
+  // Cada minuto se refresca solo la lista de amigos (barata) para que la etiqueta LIVE se mantenga al día.
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const list = (await api.misAmistades()) ?? [];
+        setAmistades((prev) => {
+          const live = new Map(list.map((a) => [a.id, a.estudiando === true]));
+          return prev.map((a) => (live.has(a.id) && (a.estudiando === true) !== live.get(a.id) ? { ...a, estudiando: live.get(a.id) } : a));
+        });
+      } catch { /* sin conexión: se queda como estaba */ }
+    }, 60000);
+    return () => clearInterval(id);
+  }, []);
+
   const recibidas = amistades.filter((a) => a.estado === "pendiente" && a.direccion === "recibida");
 
   const ranking = useMemo(() => {
@@ -899,7 +919,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
     const locked = [];
     amistades.filter((a) => a.estado === "aceptada").forEach((a) => {
       const m = models[a.username];
-      if (m?.state === "ok") ok.push({ username: a.username, verified: m.model.verified, avatar: api.avatarSrc(m.model), summary: m.model, me: false });
+      if (m?.state === "ok") ok.push({ username: a.username, verified: m.model.verified, avatar: api.avatarSrc(m.model), summary: m.model, me: false, live: a.estudiando === true });
       else if (m) locked.push({ username: a.username, verified: a.verificado, avatar: api.avatarSrc(a), state: m.state, message: m.message });
       else locked.push({ username: a.username, verified: a.verificado, avatar: api.avatarSrc(a), state: "loading" });
     });
@@ -1191,7 +1211,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
                     {weekly.rows.map((r, k) => (
                       <WeekRow
                         key={r.username} pos={k + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar}
-                        minutes={r.minutes} days={r.days} isMe={r.me}
+                        minutes={r.minutes} days={r.days} isMe={r.me} live={r.live}
                         onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
                       />
                     ))}
@@ -1210,7 +1230,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
           <div className="sc-list">
             {!globalOn && rankMode === "season" && ranking.ok.map((r, i) => (
               <RankRow
-                key={r.username} pos={i + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar} summary={r.summary} isMe={r.me}
+                key={r.username} pos={i + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar} summary={r.summary} isMe={r.me} live={r.live}
                 onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
                 hint={r.me && selfBusy ? "abriendo…" : null}
               />
@@ -1907,6 +1927,10 @@ export const SOCIAL_CSS = `
   .sc-rowerr { grid-column: 1 / -1; margin: 4px 0 0; }
   .sc-pos { font-size: 12px; color: var(--text-dim); text-align: center; }
   .sc-who { max-width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; font-weight: 600; font-size: 15px; }
+  .sc-live { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; letter-spacing: 0.14em; font-weight: 700; color: #fff; background: #E5484D; border-radius: 999px; padding: 2px 7px 2px 6px; }
+  .sc-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: sc-live-pulse 1.4s ease-in-out infinite; }
+  @keyframes sc-live-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+  @media (prefers-reduced-motion: reduce) { .sc-live-dot { animation: none; } }
   .sc-you { font-size: 9px; letter-spacing: 0.14em; color: var(--cyan-text); border: 1px solid var(--cyan); border-radius: 999px; padding: 1px 6px; font-weight: 600; }
   .sc-note { font-size: 10px; color: var(--text-dim); font-weight: 400; }
   .sc-rank { display: flex; align-items: center; gap: 8px; }
