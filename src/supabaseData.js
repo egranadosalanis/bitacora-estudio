@@ -221,6 +221,12 @@ export async function updateCursoEstado(userId, cursoId, estado) {
   if (error) throw error;
 }
 
+export async function updateCursoFechas(userId, cursoId, startDate, endDate) {
+  const { error } = await supabase
+    .from("cursos").update({ start_date: startDate, end_date: endDate }).eq("user_id", userId).eq("id", cursoId);
+  if (error) throw error;
+}
+
 export async function deleteCurso(userId, cursoId) {
   const { error } = await supabase.from("cursos").delete().eq("user_id", userId).eq("id", cursoId);
   if (error) throw error;

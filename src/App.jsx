@@ -12,7 +12,7 @@ import {
 } from "./domain.js";
 import {
   loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
-  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, deleteCursoConDatos,
+  updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, updateCursoFechas, deleteCursoConDatos,
   searchUniversidades, searchCarreras, searchAsignaturasCanonicas,
   createUniversidadPendiente, createCarreraPendiente, createAsignaturaPendiente,
 } from "./supabaseData.js";
@@ -546,8 +546,17 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
     setFormMsg({ type: "ok", text: `Tu último guardado sí se completó (${pending.logs.length} entrada(s), +${hm(added)}).` });
   }, [logs, values]);
 
+  // La fecha tiene que caer dentro del curso: si no, la entrada se guardaría
+  // pero no se vería en ningún curso (ni se podría borrar la asignatura).
+  const dateOutsideCurso = !date || date < curso.startDate || date > curso.endDate;
+  const dateInFuture = !dateOutsideCurso && date > todayIso;
+
   async function handleSave() {
     if (savingRef.current) return;
+    if (dateOutsideCurso || dateInFuture) {
+      setFormMsg({ type: "error", text: "La fecha no es válida para este curso: cámbiala o ajusta las fechas del curso en Asignaturas." });
+      return;
+    }
     const { rows, errors, signature } = collectRows();
     if (errors.length > 0) {
       setFormMsg({ type: "error", text: errors.join(" · ") });
@@ -692,6 +701,17 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
           <label className="field-label">Fecha</label>
           <input type="date" value={date} min={minDate} max={maxDate} onChange={(e) => setDate(e.target.value)} className="input-field" disabled={saving} />
         </div>
+        {(dateOutsideCurso || dateInFuture) && (
+          <div className="auth-error" style={{ marginBottom: 12 }}>
+            {dateOutsideCurso
+              ? <>Esta fecha está fuera de <strong>{curso.name}</strong> ({curso.startDate} → {curso.endDate}). Cambia las fechas del curso en la pestaña Asignaturas o adecua la fecha a las de tu curso.</>
+              : <>No puedes registrar estudio en una fecha futura.</>}
+            {" "}
+            <button type="button" className="btn-ghost btn-small" onClick={() => setDate(clampDate(todayIso, minDate, maxDate))}>
+              Usar una fecha del curso
+            </button>
+          </div>
+        )}
         {loggableSubjects.length === 0 ? (
           <div className="empty-hint">No hay asignaturas activas (todas están aprobadas o no has añadido ninguna todavía).</div>
         ) : (
@@ -779,7 +799,7 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
               <span className="mono">{pendingTotal > 0 ? "+" : ""}{hm(pendingTotal)}</span>
             </div>
             <div className="btn-row">
-              <button className="btn-primary" onClick={handleSave} disabled={saving}>
+              <button className="btn-primary" onClick={handleSave} disabled={saving || dateOutsideCurso || dateInFuture}>
                 {saving ? "Guardando…" : "Guardar registro"}
               </button>
             </div>
@@ -1453,12 +1473,14 @@ function ApprovalForm({ subject, subjects, suggestedCursos, onConfirm, onCancel 
   );
 }
 
-function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado }) {
+function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado, onUpdateCursoFechas }) {
   const carreraCanonicaId = profile?.carrera_canonica_id ?? null;
   const [newSubject, setNewSubject] = useState({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: 0 });
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
   const [cursoToDeleteId, setCursoToDeleteId] = useState(null);
+  const [cursoToEditId, setCursoToEditId] = useState(null);
+  const [editDates, setEditDates] = useState({ startDate: "", endDate: "" });
   const [reviewingId, setReviewingId] = useState(null);
   const cursoNameById = new Map(cursos.map((c) => [c.id, c.name]));
   // A qué curso "pertenece" cada asignatura para mostrarlo en "Combinar
@@ -1518,6 +1540,17 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
   const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
   const curso = cursos.find((c) => c.id === activeCursoId);
+  const cursoToEdit = cursoToEditId ? cursos.find((c) => c.id === cursoToEditId) : null;
+  const editDatesInvalid = !editDates.startDate || !editDates.endDate || editDates.endDate < editDates.startDate;
+  // Días con registros del curso que quedarían fuera del rango nuevo (y de cualquier otro curso).
+  const editDatesLeftOut = cursoToEdit && !editDatesInvalid
+    ? Object.entries(entries).filter(([date, bySubject]) =>
+        date >= cursoToEdit.startDate && date <= cursoToEdit.endDate
+        && (date < editDates.startDate || date > editDates.endDate)
+        && !cursos.some((c) => c.id !== cursoToEdit.id && date >= c.startDate && date <= c.endDate)
+        && Object.values(bySubject).some((m) => m > 0)
+      ).length
+    : 0;
   const cursoToDelete = cursoToDeleteId ? cursos.find((c) => c.id === cursoToDeleteId) : null;
 
   return (
@@ -1535,6 +1568,11 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
                 {c.name}
                 {c.estado === "terminado" && <span className="curso-badge">terminado</span>}
               </button>
+              <span
+                className="curso-remove"
+                title="Cambiar las fechas del curso"
+                onClick={() => { setEditDates({ startDate: c.startDate, endDate: c.endDate }); setCursoToEditId(c.id); }}
+              >✎</span>
               {cursos.length > 1 && (
                 <span className="curso-remove" onClick={() => setCursoToDeleteId(c.id)}>×</span>
               )}
@@ -1747,6 +1785,35 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
             onCancel={() => setApprovingId(null)}
             onConfirm={({ nota, cursosNecesarios }) => { onApprove(approvingSubject.id, { nota, cursosNecesarios }); setApprovingId(null); }}
           />
+        </Modal>
+      )}
+
+      {cursoToEdit && (
+        <Modal title={`Fechas de ${cursoToEdit.name}`} onClose={() => setCursoToEditId(null)}>
+          <div className="field-row">
+            <label className="field-label">Inicio</label>
+            <input type="date" className="input-field" value={editDates.startDate} onChange={(e) => setEditDates((v) => ({ ...v, startDate: e.target.value }))} />
+          </div>
+          <div className="field-row">
+            <label className="field-label">Fin</label>
+            <input type="date" className="input-field" value={editDates.endDate} onChange={(e) => setEditDates((v) => ({ ...v, endDate: e.target.value }))} />
+          </div>
+          {editDatesInvalid && <div className="auth-error">La fecha de fin no puede ser anterior a la de inicio.</div>}
+          {editDatesLeftOut > 0 && (
+            <div className="auth-error">
+              Con estas fechas, {editDatesLeftOut} día(s) con registros de este curso quedarían fuera y dejarían de verse en él.
+            </div>
+          )}
+          <div className="btn-row" style={{ marginTop: 16, justifyContent: "flex-end" }}>
+            <button className="btn-ghost" onClick={() => setCursoToEditId(null)}>Cancelar</button>
+            <button
+              className="btn-primary"
+              disabled={editDatesInvalid}
+              onClick={() => { onUpdateCursoFechas(cursoToEdit.id, editDates.startDate, editDates.endDate); setCursoToEditId(null); }}
+            >
+              Guardar fechas
+            </button>
+          </div>
         </Modal>
       )}
 
@@ -2964,6 +3031,11 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     withCloudWrite(() => updateCursoEstado(userId, id, nextEstado));
   }
 
+  function handleUpdateCursoFechas(id, startDate, endDate) {
+    setData((d) => ({ ...d, cursos: d.cursos.map((c) => (c.id === id ? { ...c, startDate, endDate } : c)) }));
+    withCloudWrite(() => updateCursoFechas(userId, id, startDate, endDate));
+  }
+
   // Borrar un curso borra también sus datos: las entradas de estudio de su
   // rango de fechas (salvo los días que cubre otro curso que se queda, por si
   // se solapan) y las asignaturas que se quedan sin ninguna entrada — así no
@@ -3335,6 +3407,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             onAddCurso={handleAddCurso}
             onRemoveCurso={handleRemoveCurso}
             onToggleCursoEstado={handleToggleCursoEstado}
+            onUpdateCursoFechas={handleUpdateCursoFechas}
           />
         )}
       </main>
