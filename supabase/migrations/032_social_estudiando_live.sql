@@ -1,13 +1,14 @@
 -- ============================================================
 -- Migración 032: etiqueta "LIVE" — saber qué amigos tienen el contador de estudio en marcha.
 --   * perfil_social.estudiando_hasta: hasta cuándo se considera que la persona está estudiando.
---   * latido_estudio(p_activo): la app la llama cada minuto mientras el contador corre
---     (p_activo = true  -> estudiando_hasta = ahora + 3 min; p_activo = false -> se borra).
---     Si la app se cierra o pierde conexión, la marca caduca sola a los 3 minutos.
+--   * latido_estudio(p_activo): la app la llama al arrancar el contador y la renueva cada 20 min
+--     mientras sigue en marcha (p_activo = true  -> estudiando_hasta = ahora + 30 min), y al
+--     pausarlo o terminarlo (p_activo = false -> se borra). Si la app se cierra o pierde
+--     conexión con el contador en marcha, la marca caduca sola a los 30 minutos.
 --     No hace nada (sin error) si la persona no tiene perfil social o no comparte sus métricas.
 --   * mis_amistades(): devuelve además `estudiando` (true solo para amistades aceptadas que
 --     comparten métricas y tienen la marca vigente).
--- Es aditiva: una columna nueva (nullable) y una función nueva; mis_amistades se recrea con
+-- Es idempotente (se puede volver a ejecutar). Es aditiva: una columna nueva (nullable) y una función nueva; mis_amistades se recrea con
 -- una columna más. Rollback: supabase/rollback/032_volver_a_sin_live.sql
 -- ============================================================
 
@@ -22,7 +23,7 @@ as $fn$
 begin
   if auth.uid() is null then raise exception 'Hace falta iniciar sesión.' using errcode = '42501'; end if;
   update public.perfil_social
-  set estudiando_hasta = case when p_activo then now() + interval '3 minutes' else null end
+  set estudiando_hasta = case when p_activo then now() + interval '30 minutes' else null end
   where user_id = auth.uid() and share_metrics_ok;
 end;
 $fn$;

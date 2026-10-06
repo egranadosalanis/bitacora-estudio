@@ -897,7 +897,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
 
   useEffect(() => { load(); return () => { loadSeq.current++; }; }, [load]);
 
-  // Cada minuto se refresca solo la lista de amigos (barata) para que la etiqueta LIVE se mantenga al día.
+  // Mientras esta pantalla está abierta y visible, cada 2 min se refresca solo la lista de amigos (una consulta ligera) para que la etiqueta LIVE se mantenga al día.
   useEffect(() => {
     const id = setInterval(async () => {
       if (document.visibilityState !== "visible") return;
@@ -908,7 +908,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
           return prev.map((a) => (live.has(a.id) && (a.estudiando === true) !== live.get(a.id) ? { ...a, estudiando: live.get(a.id) } : a));
         });
       } catch { /* sin conexión: se queda como estaba */ }
-    }, 60000);
+    }, 120000);
     return () => clearInterval(id);
   }, []);
 

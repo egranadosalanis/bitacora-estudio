@@ -372,7 +372,7 @@ function draftHasContent(draft) {
   return typed || !!draft.timerRunning || draft.timerAccumulatedMs > 0 || !!draft.pendingSave;
 }
 
-function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEntries, onUpdateEntry, onDeleteEntry, curso }) {
+function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEntries, onUpdateEntry, onDeleteEntry, onStudyingChange, curso }) {
   const todayIso = isoToday();
   const cappedToday = todayIso < curso.endDate ? todayIso : curso.endDate;
   // Si el curso todavía no ha empezado, no hay "hoy" válido dentro de su rango:
@@ -515,23 +515,9 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
     return () => clearInterval(id);
   }, [timerRunning]);
 
-  // Mientras el contador corre, avisa a los amigos ("LIVE" en su clasificación) con un latido
-  // cada minuto; al pausarlo o terminarlo se retira al momento. Si la app se cierra o se cambia
-  // de pestaña, la marca caduca sola en el servidor (3 min). Sin perfil social no hace nada.
-  const wasTimerRunningRef = useRef(false);
-  useEffect(() => {
-    if (DISABLE_CLOUD_SAVE) return undefined;
-    if (!timerRunning) {
-      if (wasTimerRunningRef.current) latidoEstudio(false).catch(() => {});
-      wasTimerRunningRef.current = false;
-      return undefined;
-    }
-    wasTimerRunningRef.current = true;
-    const beat = () => { latidoEstudio(true).catch(() => {}); };
-    beat();
-    const id = setInterval(beat, 60000);
-    return () => clearInterval(id);
-  }, [timerRunning]);
+  // El interruptor "estudiando ahora" vive en App (así no depende de qué pestaña esté abierta):
+  // aquí solo se le dice si el contador corre o no.
+  useEffect(() => { onStudyingChange(timerRunning); }, [timerRunning]);
 
   const timerElapsedMs = timerAccumulatedMs + (timerRunning && timerStartedAt ? Date.now() - timerStartedAt : 0);
 
@@ -2924,6 +2910,25 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     }
   }
 
+  // Interruptor "estudiando ahora" (etiqueta LIVE para los amigos): se enciende al arrancar el
+  // contador y se apaga al pausarlo o terminarlo. Mientras está encendido se renueva cada 20 min
+  // (en el servidor caduca a los 30), así que solo hay 2 escrituras por sesión más 1 cada 20 min.
+  const [studying, setStudying] = useState(false);
+  const wasStudyingRef = useRef(false);
+  useEffect(() => {
+    if (DISABLE_CLOUD_SAVE) return undefined;
+    if (!studying) {
+      if (wasStudyingRef.current) latidoEstudio(false).catch(() => {});
+      wasStudyingRef.current = false;
+      return undefined;
+    }
+    wasStudyingRef.current = true;
+    const renew = () => { latidoEstudio(true).catch(() => {}); };
+    renew();
+    const id = setInterval(renew, 20 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [studying]);
+
   const [rankUp, setRankUp] = useState(null); // { tier, puntos } al subir de rango tras un registro
   const curso = useMemo(() => data && data.cursos.find((c) => c.id === data.activeCursoId), [data]);
   const cursoEntries = useMemo(
@@ -3410,6 +3415,7 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
             entries={cursoEntries}
             logs={cursoLogs}
             onSaveEntries={handleSaveEntries}
+            onStudyingChange={setStudying}
             onUpdateEntry={handleUpdateEntry}
             onDeleteEntry={handleDeleteEntry}
             curso={curso}
