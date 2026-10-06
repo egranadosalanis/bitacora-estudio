@@ -1138,18 +1138,32 @@ function TrayectoriaTab({ cursoSubjects, entries, stats, curso }) {
     setRange(isTerminado ? "1c" : 90);
   }, [curso?.id, isTerminado]);
 
+  // Días naturales del rango elegido, con los días sin estudio incluidos (salen a 0): así dos
+  // rachas de estudio separadas por una pausa no quedan pegadas una a otra en el eje X.
   const chartDates = useMemo(() => {
     const all = [...stats.activeDates].sort();
     if (all.length === 0) return [];
+    const courseEnd = curso.endDate < today ? curso.endDate : today;
+    let from;
+    let to;
     if (isTerminado) {
-      if (range === "all") return all;
-      if (range === "1c") return all.filter((d) => d < cuatrimestreSplit);
-      return all.filter((d) => d >= cuatrimestreSplit);
+      const inRange = range === "all" ? all
+        : range === "1c" ? all.filter((d) => d < cuatrimestreSplit)
+        : all.filter((d) => d >= cuatrimestreSplit);
+      if (inRange.length === 0) return [];
+      from = range === "all" ? all[0] : range === "1c" ? all[0] : cuatrimestreSplit;
+      to = range === "1c" ? addDays(cuatrimestreSplit, -1) : courseEnd;
+      if (range === "1c" && from > to) from = inRange[0];
+      if (from < curso.startDate) from = curso.startDate;
+    } else {
+      from = range === 0 ? all[0] : addDays(today, -range);
+      if (from < curso.startDate) from = curso.startDate;
+      to = courseEnd;
     }
-    if (range === 0) return all;
-    const from = addDays(today, -range);
-    return all.filter((d) => d >= from);
-  }, [stats.activeDates, range, isTerminado, cuatrimestreSplit, today]);
+    const days = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
+    return days;
+  }, [stats.activeDates, range, isTerminado, cuatrimestreSplit, today, curso.startDate, curso.endDate]);
 
   const areaData = chartDates.map((d) => {
     const row = { date: formatShort(d) };
