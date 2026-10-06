@@ -970,7 +970,6 @@ function BitacoraTab({ cursoSubjects, loggableSubjects, entries, logs, onSaveEnt
 function PanelTab({ stats }) {
   const conRatio = stats.perSubject.filter((s) => !s.sinCreditos);
   const maxHoursPerCredit = Math.max(0.5, ...conRatio.map((s) => s.hoursPerCredit), ...conRatio.map((s) => s.target || 0)) * 1.15;
-  const maxSessionSub = stats.perSubject.find((s) => s.id === stats.maxSession.subjectId) || null;
   // Lo más que has estudiado UNA asignatura en un solo día (suma de todas sus sesiones de ese día).
   const maxSubjectDaySub = stats.perSubject.find((s) => s.id === stats.maxSubjectDay.subjectId) || null;
 
@@ -982,14 +981,14 @@ function PanelTab({ stats }) {
         <StatCard label="Racha máxima" value={`${stats.longest} d`} hint="mejor marca del curso" accent="#F5A623" />
         <StatCard
           label="Sesión máxima"
-          value={maxSessionSub ? hm(stats.maxSession.minutes) : "—"}
-          hint={maxSessionSub ? `${maxSessionSub.name} · ${formatShort(stats.maxSession.date)}` : "sin datos"}
+          value={maxSubjectDaySub ? hm(stats.maxSubjectDay.minutes) : "—"}
+          hint={maxSubjectDaySub ? `${maxSubjectDaySub.name} · ${formatShort(stats.maxSubjectDay.date)}` : "sin datos"}
           accent="var(--purple)"
         />
         <StatCard
           label="Día con más minutos"
-          value={maxSubjectDaySub ? hm(stats.maxSubjectDay.minutes) : "—"}
-          hint={maxSubjectDaySub ? `${maxSubjectDaySub.name} · ${formatShort(stats.maxSubjectDay.date)}` : "sin datos"}
+          value={stats.maxDayTotal.date ? hm(stats.maxDayTotal.minutes) : "—"}
+          hint={stats.maxDayTotal.date ? `total del día · ${formatShort(stats.maxDayTotal.date)}` : "sin datos"}
           accent="#3DDC84"
         />
         <StatCard
