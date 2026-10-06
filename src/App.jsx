@@ -2926,7 +2926,11 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
     const renew = () => { latidoEstudio(true).catch(() => {}); };
     renew();
     const id = setInterval(renew, 20 * 60 * 1000);
-    return () => clearInterval(id);
+    // Con el móvil bloqueado o la app en segundo plano el sistema congela los temporizadores:
+    // al volver a primer plano se renueva al momento, sin esperar al siguiente turno.
+    const onVisible = () => { if (document.visibilityState === "visible") renew(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
   }, [studying]);
 
   const [rankUp, setRankUp] = useState(null); // { tier, puntos } al subir de rango tras un registro
