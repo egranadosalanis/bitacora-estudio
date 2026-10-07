@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { TIER_COLORS, RANK_NAMES, RANK_QUIPS, RANK_THRESHOLDS, APP_URL, hm, wearLabel, getMergeGroup, isoToday, addDays, formatShort, buildEntriesFromLogs, APP_SHARE_URL, rankTierForPoints } from "./domain.js";
-import { searchAsignaturasCanonicas } from "./supabaseData.js";
+import { searchAsignaturasCanonicas, searchUniversidades, searchCarreras } from "./supabaseData.js";
 import { OFFLINE_MESSAGE, friendlyError } from "./offline.js";
 import * as api from "./socialData.js";
 import { USERNAME_RE, GOOGLE_AVATAR_RE } from "./socialData.js";
@@ -279,7 +279,7 @@ function ConsentModal({ text, online, onAccept, onDecline }) {
       {!online && <OfflineBar />}
       <div className="btn-row" style={{ marginTop: 14 }}>
         <button className="btn-primary" onClick={accept} disabled={busy || !online}>{busy ? "Guardando…" : text.accept}</button>
-        <button className="btn-ghost" onClick={onDecline} disabled={busy}>{text.decline}</button>
+        <button className="btn-ghost btn-small" onClick={onDecline} disabled={busy}>{text.decline}</button>
       </div>
     </SocialModal>
   );
@@ -742,7 +742,7 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
             <button className="btn-primary btn-danger" onClick={doConfirm} disabled={busy || !online}>
               {busy ? "Un momento…" : confirm === "remove" ? "Quitar amigo" : "Bloquear"}
             </button>
-            <button className="btn-ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancelar</button>
+            <button className="btn-ghost btn-small" onClick={() => setConfirm(null)} disabled={busy}>Cancelar</button>
           </div>
         </SocialModal>
       )}
@@ -780,7 +780,7 @@ function InviteModal({ from, online, onClose }) {
             {state === "sending" ? "Enviando…" : "Enviar solicitud"}
           </button>
         )}
-        <button className="btn-ghost" onClick={onClose}>{state === "sent" || state === "error" ? "Cerrar" : "Ahora no"}</button>
+        <button className="btn-ghost btn-small" onClick={onClose}>{state === "sent" || state === "error" ? "Cerrar" : "Ahora no"}</button>
       </div>
     </SocialModal>
   );
@@ -1249,8 +1249,8 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
               <p className="panel-subtitle" style={{ marginBottom: 12 }}>Invita a algún amigo para ver la clasificación, o echa un vistazo a la clasificación general.</p>
               <div className="btn-row" style={{ justifyContent: "center" }}>
                 <button className="btn-primary" onClick={shareInvite}>Invitar por enlace</button>
-                <button className="btn-ghost" onClick={() => setView("search")}>Buscar amigos</button>
-                <button className="btn-ghost" onClick={() => changeScope("global")}>Ver clasificación general</button>
+                <button className="btn-ghost btn-small" onClick={() => setView("search")}>Buscar amigos</button>
+                <button className="btn-ghost btn-small" onClick={() => changeScope("global")}>Ver clasificación general</button>
               </div>
             </div>
           )}
@@ -1389,6 +1389,62 @@ function DetalleAprobado({ canonicaId, username }) {
   );
 }
 
+/* Buscador sencillo con resultados en lista: se usa para recorrer universidad → carrera → asignatura. */
+function SearchStep({ label, placeholder, disabled, searchFn, renderRow, onPick, picked, onClear }) {
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (disabled || picked || !open) return undefined;
+    let cancelled = false;
+    setLoading(true);
+    const t = setTimeout(() => {
+      searchFn(q.trim())
+        .then((r) => { if (!cancelled) { setRows(r ?? []); setError(null); } })
+        .catch((e) => { if (!cancelled) { setRows([]); setError(friendlyError(e)); } })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [q, disabled, picked, open, searchFn]);
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="sc-hint" style={{ margin: "0 0 4px" }}>{label}</div>
+      {picked ? (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+          <strong>{picked}</strong>
+          <button type="button" className="btn-ghost btn-small" onClick={() => { setQ(""); setOpen(false); onClear(); }}>Cambiar</button>
+        </div>
+      ) : (
+        <>
+          <input
+            className="input-field" value={q} placeholder={placeholder} disabled={disabled}
+            onFocus={() => setOpen(true)} onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          />
+          {open && !disabled && (
+            <div style={{ maxHeight: 220, overflowY: "auto", marginTop: 4 }}>
+              {loading && <div className="sc-hint">Buscando…</div>}
+              {error && <div className="auth-error">{error}</div>}
+              {!loading && !error && rows.length === 0 && <div className="sc-hint">Sin resultados.</div>}
+              {rows.map((r) => (
+                <button
+                  key={r.id} type="button" className="canonical-picker-option"
+                  style={{ display: "block", width: "100%", textAlign: "left" }}
+                  onClick={() => { setOpen(false); onPick(r); }}
+                >
+                  {renderRow(r)}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function ComunidadSection({ perfil, carreraId, subjects, online, onGoSocial, reloadPerfil }) {
   const [catalog, setCatalog] = useState(null);
   const [catError, setCatError] = useState(null);
@@ -1400,6 +1456,11 @@ function ComunidadSection({ perfil, carreraId, subjects, online, onGoSocial, rel
   const [rowsError, setRowsError] = useState(null);
   const [askRanking, setAskRanking] = useState(false);
   const [openUser, setOpenUser] = useState(null);
+  // Búsqueda en otra carrera (universidad → carrera → asignatura).
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [otherUni, setOtherUni] = useState(null);
+  const [otherCarrera, setOtherCarrera] = useState(null);
+  const [extra, setExtra] = useState(null); // asignatura elegida de otra carrera {id, nombre_oficial}
   const statsCache = useRef(new Map());
   const rowsCache = useRef(new Map());
 
@@ -1479,6 +1540,10 @@ function ComunidadSection({ perfil, carreraId, subjects, online, onGoSocial, rel
     return () => { cancelled = true; };
   }, [selected, rankingOk]);
 
+  const searchUnis = useCallback((q) => searchUniversidades(q, { limit: 20 }), []);
+  const searchCarrerasFn = useCallback((q) => searchCarreras(otherUni?.id, q, { limit: 20 }), [otherUni]);
+  const searchAsigsFn = useCallback((q) => searchAsignaturasCanonicas(otherCarrera?.id, q, { limit: 30 }), [otherCarrera]);
+
   function chooseSubject(id) {
     setSelected(id);
     setOpenUser(null);
@@ -1505,6 +1570,11 @@ function ComunidadSection({ perfil, carreraId, subjects, online, onGoSocial, rel
         <label className="panel-title" htmlFor="sc-comunidad-select">Asignatura</label>
         <select id="sc-comunidad-select" className="input-field" value={selected} onChange={(e) => chooseSubject(e.target.value)}>
           <option value="">Elige una asignatura…</option>
+          {extra && !catalog.some((c) => c.id === extra.id) && (
+            <optgroup label="Otra carrera">
+              <option value={extra.id}>{extra.nombre_oficial}</option>
+            </optgroup>
+          )}
           {groups.map((g) => (
             <optgroup key={g.label} label={g.label}>
               {g.items.map((c) => <option key={c.id} value={c.id}>{c.nombre_oficial}</option>)}
@@ -1512,6 +1582,41 @@ function ComunidadSection({ perfil, carreraId, subjects, online, onGoSocial, rel
           ))}
         </select>
         <p className="sc-hint" style={{ margin: "10px 0 0" }}>Solo cuentan alumnos que han aprobado la asignatura.</p>
+        <button type="button" className="btn-ghost" style={{ marginTop: 8 }} onClick={() => setOtherOpen((o) => !o)}>
+          {otherOpen ? "Ocultar búsqueda en otra carrera" : "Buscar en otra carrera"}
+        </button>
+        {otherOpen && (
+          <div>
+            <SearchStep
+              label="Universidad" placeholder="Busca una universidad" searchFn={searchUnis}
+              renderRow={(r) => r.nombre} picked={otherUni?.nombre}
+              onPick={(r) => setOtherUni(r)}
+              onClear={() => { setOtherUni(null); setOtherCarrera(null); }}
+            />
+            <SearchStep
+              key={otherUni?.id ?? "sin-uni"}
+              label="Carrera" placeholder={otherUni ? "Busca una carrera" : "Elige primero una universidad"}
+              disabled={!otherUni} searchFn={searchCarrerasFn}
+              renderRow={(r) => r.nombre} picked={otherCarrera?.nombre}
+              onPick={(r) => setOtherCarrera(r)}
+              onClear={() => setOtherCarrera(null)}
+            />
+            <SearchStep
+              key={otherCarrera?.id ?? "sin-carrera"}
+              label="Asignatura" placeholder={otherCarrera ? "Busca una asignatura" : "Elige primero una carrera"}
+              disabled={!otherCarrera} searchFn={searchAsigsFn}
+              renderRow={(r) => (
+                <>
+                  {r.nombre_oficial}
+                  {r.anio != null && <span className="canonical-picker-hint-inline"> · {r.anio}º curso</span>}
+                </>
+              )}
+              picked={extra && extra.carreraId === otherCarrera?.id ? extra.nombre_oficial : null}
+              onPick={(r) => { setExtra({ id: r.id, nombre_oficial: r.nombre_oficial, carreraId: otherCarrera.id }); chooseSubject(r.id); }}
+              onClear={() => setExtra(null)}
+            />
+          </div>
+        )}
       </div>
 
       {statsLoading && <div className="sc-hint">Cargando estadísticas…</div>}
