@@ -682,7 +682,9 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
               <span className="sc-bdot" style={{ background: s.color || "var(--cyan)" }} />
               <span className="sc-bname">{s.name}</span>
               <span className="sc-bval mono">
-                {s.estado === "aprobada" && s.hpc != null ? `${fmtNum(s.hpc)} h/cr` : hm(s.minutos || 0)}
+                {s.estado === "aprobada" && s.hpc != null
+                  ? `${fmtNum(s.hpc)} h/cr`
+                  : `${hm(s.minutos || 0)}${s.credits > 0 && !s.sinCreditos ? ` · ${fmtNum((s.minutos || 0) / 60 / s.credits)} h/cr` : ""}`}
                 {s.estado === "aprobada" && model.showGrades && s.nota != null ? ` · nota ${fmtNum(s.nota, 1)}` : ""}
               </span>
             </div>
