@@ -14,6 +14,7 @@ export function summarizeStudy(subjects, entries, logs) {
   const today = isoToday();
   const weekStart = addDays(today, -6);
   let weekMinutes = 0;
+  const todayMinutes = Object.values(entries[today] ?? {}).reduce((a, m) => a + (m || 0), 0);
   Object.entries(entries).forEach(([date, bySubject]) => {
     if (date >= weekStart && date <= today) weekMinutes += Object.values(bySubject).reduce((a, m) => a + (m || 0), 0);
   });
@@ -24,6 +25,7 @@ export function summarizeStudy(subjects, entries, logs) {
     streak: stats.current,
     bestStreak: stats.longest,
     weekMinutes,
+    todayMinutes,
     history: getSeasonHistory(subjects, entries, logs),
     dailyTotals: stats.dailyTotals,
   };
