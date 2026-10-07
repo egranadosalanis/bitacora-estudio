@@ -571,6 +571,27 @@ function StatCardSc({ label, value, hint, onClick, active }) {
   );
 }
 
+/* Barra con el progreso hacia el siguiente rango, con los umbrales a los lados. */
+function RankProgress({ puntos, tier, color }) {
+  const last = tier >= RANK_THRESHOLDS.length - 1;
+  const lo = RANK_THRESHOLDS[tier];
+  const hi = last ? null : RANK_THRESHOLDS[tier + 1];
+  const pct = last ? 100 : Math.max(0, Math.min(100, ((puntos - lo) / (hi - lo)) * 100));
+  const left = last ? 0 : hi - puntos;
+  return (
+    <div className="sc-rp" style={{ "--rc": color }}>
+      <div className="sc-rp-row mono">
+        <span>{lo}</span>
+        <div className="sc-rp-bar"><i style={{ width: `${pct}%` }} /></div>
+        <span>{last ? "∞" : hi}</span>
+      </div>
+      <div className="sc-rp-text">
+        {last ? "Rango máximo alcanzado" : `Faltan ${fmtNum(left, 1)} horas para ${RANK_NAMES[tier + 1]}`}
+      </div>
+    </div>
+  );
+}
+
 function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, onBlock, onOpenSettings }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState(null); // "remove" | "block"
@@ -603,6 +624,8 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
     ["Rango", RANK_NAMES[own.tier], RANK_NAMES[model.tier]],
     ["Puntos de rango (season)", fmtNum(own.puntos), fmtNum(model.puntos)],
     ["Racha actual", `${own.streak} d`, `${model.streak} d`],
+    ["Esta semana", hm(own.weekMinutes), hm(model.weekMinutes)],
+    ["Hoy", hm(own.todayMinutes), hm(model.todayMinutes)],
   ];
 
   return (
@@ -638,17 +661,12 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
           <span className="sc-hero-rank">{RANK_NAMES[model.tier]}</span>
         </button>
         <div className="sc-hero-quip">{RANK_QUIPS[model.tier]}</div>
-        <div className="sc-hero-more mono">Toca el rango para ver la clasificación</div>
-        <div className="sc-hero-streak mono">
-          <Flame size={15} /> {model.streak} {model.streak === 1 ? "día" : "días"} de racha
-          {model.bestStreak > model.streak && <span className="sc-dim"> · mejor: {model.bestStreak}</span>}
-        </div>
-        <div className="sc-hero-season mono">{model.season.label.toUpperCase()}</div>
+        <RankProgress puntos={model.puntos} tier={model.tier} color={color} />
       </div>
 
       <div className="sc-cards">
         <StatCardSc label="PUNTOS" value={fmtNum(model.puntos)} hint="season actual (en curso)" />
-        <StatCardSc label="MINUTOS TOTALES" value={hm(model.totalMinutes)} hint={`${model.totalMinutes.toLocaleString("es-ES")} min`} />
+        <StatCardSc label="HOY" value={hm(model.todayMinutes)} hint="estudiado hoy" />
         <StatCardSc
           label="ASIGNATURAS" value={model.numSubjects} hint={showSubjects ? "ocultar desglose" : "ver desglose"}
           onClick={() => setShowSubjects((v) => !v)} active={showSubjects}
@@ -2060,6 +2078,11 @@ export const SOCIAL_CSS = `
   .sc-hero { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 22px 16px; }
   .sc-hero-rank { font-size: 20px; font-weight: 800; color: var(--rc); }
   .sc-hero-quip { font-size: 13px; color: var(--text-dim); }
+  .sc-rp { width: 100%; max-width: 360px; margin: 10px auto 0; padding: 0 8px; box-sizing: border-box; }
+  .sc-rp-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #fff; }
+  .sc-rp-bar { flex: 1; height: 8px; border-radius: 99px; background: rgba(255,255,255,.22); overflow: hidden; }
+  .sc-rp-bar i { display: block; height: 100%; border-radius: 99px; background: var(--rc); }
+  .sc-rp-text { margin-top: 6px; text-align: center; font-size: 13px; color: #fff; }
   .sc-hero-streak { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: 13px; color: var(--amber); }
   .sc-hero-season { font-size: 10px; letter-spacing: 0.18em; color: var(--text-dim); margin-top: 2px; }
 
