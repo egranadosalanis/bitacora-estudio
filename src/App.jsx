@@ -1340,8 +1340,9 @@ function useDebouncedValue(value, delay = 250) {
   return debounced;
 }
 
-function CanonicalPickerBase({ placeholder, entityLabel, initialQuery, disabled, disabledHint, searchFn, renderResult, renderOption, onSelect, onCreatePendiente }) {
+function CanonicalPickerBase({ placeholder, entityLabel, initialQuery, disabled, disabledHint, searchFn, renderResult, renderOption, onSelect, onCreatePendiente, pendingNotice }) {
   const [query, setQuery] = useState(initialQuery || "");
+  const [created, setCreated] = useState(false);
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1361,6 +1362,7 @@ function CanonicalPickerBase({ placeholder, entityLabel, initialQuery, disabled,
   function select(row) {
     setQuery(renderResult(row));
     setOpen(false);
+    setCreated(false);
     onSelect(row);
   }
 
@@ -1371,6 +1373,7 @@ function CanonicalPickerBase({ placeholder, entityLabel, initialQuery, disabled,
     try {
       await onCreatePendiente(texto);
       setOpen(false);
+      setCreated(true);
     } finally {
       setLoading(false);
     }
@@ -1386,7 +1389,7 @@ function CanonicalPickerBase({ placeholder, entityLabel, initialQuery, disabled,
         className="input-field"
         placeholder={placeholder}
         value={query}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); setCreated(false); }}
         onFocus={() => setOpen(true)}
       />
       {open && (
@@ -1402,8 +1405,10 @@ function CanonicalPickerBase({ placeholder, entityLabel, initialQuery, disabled,
               Mi {entityLabel} no aparece aquí — introducirla manualmente: "{query.trim()}"
             </button>
           )}
+          {!loading && query.trim() && pendingNotice && <div className="canonical-picker-hint">{pendingNotice}</div>}
         </div>
       )}
+      {created && pendingNotice && <div className="canonical-picker-hint" role="status">✓ Solicitud enviada. {pendingNotice}</div>}
     </div>
   );
 }
@@ -1483,6 +1488,7 @@ export function CanonicalAsignaturaPicker({ carreraId, initialQuery, onSelect })
         </>
       )}
       onSelect={onSelect}
+      pendingNotice="Si la introduces a mano, se enviará una solicitud para añadirla a la aplicación y tiene que ser aprobada. Puedes usarla ya, pero puede tardar en aparecer en la pestaña Social (y en puntuar) hasta que se apruebe."
       onCreatePendiente={async (texto) => {
         const id = await createAsignaturaPendiente(carreraId, texto, null);
         onSelect({ id, nombre_oficial: texto, creditos: null, estado: "pendiente" });
@@ -1797,7 +1803,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
         </div>
         <div className="panel-subtitle" style={{ marginTop: 14 }}>
           {carreraCanonicaId
-            ? "Busca la asignatura en el listado de tu carrera. Si no aparece, se guarda como pendiente de revisión y puedes usarla ya."
+            ? "Busca la asignatura en el listado de tu carrera. Si no aparece, se envía una solicitud para añadirla; puedes usarla ya, pero no saldrá en Social ni puntuará hasta que se apruebe."
             : "Vincula tu universidad y carrera desde la pantalla de inicio para poder buscar asignaturas."}
         </div>
         <div className="btn-row" style={{ marginTop: 8, alignItems: "flex-start" }}>
@@ -2476,7 +2482,7 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
 
         <div className="panel-subtitle" style={{ marginTop: subjects.length > 0 ? 14 : 0 }}>
           {carreraCanonicaId
-            ? "Busca la asignatura en el listado de tu carrera. Si no aparece, se guarda como pendiente de revisión y puedes usarla ya."
+            ? "Busca la asignatura en el listado de tu carrera. Si no aparece, se envía una solicitud para añadirla; puedes usarla ya, pero no saldrá en Social ni puntuará hasta que se apruebe."
             : "Vincula tu universidad y carrera desde la pantalla de inicio para poder buscar asignaturas."}
         </div>
         <div className="btn-row" style={{ alignItems: "flex-start" }}>
