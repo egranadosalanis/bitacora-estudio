@@ -31,15 +31,16 @@ export function summarizeStudy(subjects, entries, logs) {
   };
 }
 
-/** ¿Cuenta esta asignatura en lo social (clasificación, fichas de amigos, comunidad)? Solo si su
- * canónica está aprobada por el admin o es de Erasmus. Igual que hace el servidor en
- * resumen_amigo / clasificacion_global: las creadas a mano no suman a nadie más que a su dueño. */
+/** ¿Cuenta esta asignatura en lo social (clasificación, rango, racha)? Solo si su canónica está
+ * aprobada por el admin o es de Erasmus. Las creadas a mano se ven, pero no puntúan. Para los
+ * amigos el servidor ya manda `cuenta`; para las asignaturas propias se deduce del estado de la canónica. */
 export function countsForSocial(subject) {
+  if (typeof subject.cuenta === "boolean") return subject.cuenta;
   return subject.esErasmus === true || subject.canonicalEstado === "aprobada";
 }
 
-/** summarizeStudy de lo que ven los demás de mí: sin las asignaturas que no cuentan en lo social
- * (ni sus minutos ni sus registros, para que tampoco alimenten rachas ni cifras de hoy/semana). */
+/** summarizeStudy sin las asignaturas que no cuentan en lo social (ni sus minutos ni sus registros,
+ * para que tampoco alimenten rachas ni cifras de hoy/semana). */
 export function summarizeSocial(subjects, entries, logs) {
   const ids = new Set(subjects.filter(countsForSocial).map((s) => s.id));
   const socialEntries = {};
@@ -54,7 +55,7 @@ export function summarizeSocial(subjects, entries, logs) {
 export function buildFriendModel(resumen) {
   const subjects = (resumen.asignaturas ?? []).map((a) => ({
     id: String(a.ref), name: a.nombre, credits: Number(a.creditos) || 0, estado: a.estado, color: a.color,
-    sinCreditos: a.sin_creditos === true, esErasmus: a.es_erasmus === true,
+    sinCreditos: a.sin_creditos === true, cuenta: a.cuenta !== false, esErasmus: a.es_erasmus === true,
     hpc: a.horas_por_credito, nota: a.nota, cursosNecesarios: a.cursos_necesarios, minutos: a.minutos,
   }));
   const logs = (resumen.historial ?? []).map((h) => ({
@@ -72,7 +73,7 @@ export function buildFriendModel(resumen) {
     hpcTotal: resumen.horas_por_credito == null ? null : Number(resumen.horas_por_credito),
     subjects,
     logs,
-    ...summarizeStudy(subjects, entries, logs),
+    ...summarizeSocial(subjects, entries, logs),
   };
 }
 

@@ -2,8 +2,9 @@
 -- Migración 033: las asignaturas NO canónicas no cuentan en las estadísticas sociales.
 --   Hasta que el admin apruebe la canónica (estado = 'aprobada'), una asignatura creada a mano
 --   (texto libre, canónica pendiente o rechazada) no suma a nadie más que a su dueño:
---     * resumen_amigo / mi_resumen: la asignatura no aparece en la ficha (ni sus minutos, ni el
---       historial, ni h/cr), así que tampoco suma puntos de rango ni racha en la clasificación de amigos.
+--     * resumen_amigo / mi_resumen: la asignatura SIGUE apareciendo en la ficha, pero con 'cuenta' = false:
+--       sus minutos no entran en minutos_totales ni en h/cr, y el cliente la excluye de puntos de
+--       rango y racha (el historial se devuelve entero y se filtra allí).
 --     * clasificacion_global: solo suman las horas de asignaturas con canónica aprobada.
 --     * _aprobados (comunidad_stats, listado_aprobados, detalle_aprobado): solo canónicas aprobadas.
 --   Las de Erasmus siguen contando (no tienen canónica por diseño). Las marcadas «sin créditos» siguen sin contar.
@@ -65,11 +66,11 @@ begin
            a.es_erasmus, a.frozen_nota, a.frozen_cursos_necesarios,
            coalesce(case when a.asignatura_canonica_id is not null and a.es_erasmus is not true and c.estado <> 'rechazada'
                          then c.nombre_oficial end, a.nombre) as nombre,
-           (c.no_credits is true) as sin_creditos
+           (c.no_credits is true) as sin_creditos,
+           (a.es_erasmus is true or c.estado = 'aprobada') as cuenta
     from public.asignaturas a
     left join public.asignaturas_canonicas c on c.id = a.asignatura_canonica_id
     where a.user_id = v_other
-      and (a.es_erasmus is true or c.estado = 'aprobada')
   ),
   own as (
     select asignatura_id, sum(minutos)::bigint as minutos from public.entradas_estudio
@@ -84,9 +85,9 @@ begin
     left join ga on ga.base_id = s.id
   ),
   tot as (
-    select coalesce(sum(minutos), 0) as minutos_totales, count(*) as n_asignaturas,
-           sum(minutos_computables) filter (where aprobada_grupo and not sin_creditos and creditos > 0) as min_apr,
-           sum(creditos) filter (where aprobada_grupo and not sin_creditos and creditos > 0) as cred_apr
+    select coalesce(sum(minutos) filter (where cuenta), 0) as minutos_totales, count(*) as n_asignaturas,
+           sum(minutos_computables) filter (where aprobada_grupo and cuenta and not sin_creditos and creditos > 0) as min_apr,
+           sum(creditos) filter (where aprobada_grupo and cuenta and not sin_creditos and creditos > 0) as cred_apr
     from det
   )
   select jsonb_build_object(
@@ -101,8 +102,8 @@ begin
     'asignaturas', coalesce((
       select jsonb_agg(jsonb_build_object(
         'ref', d.ref, 'nombre', d.nombre, 'creditos', d.creditos, 'estado', case when d.aprobada_grupo then 'aprobada' else d.estado end, 'color', d.color,
-        'es_erasmus', d.es_erasmus, 'sin_creditos', d.sin_creditos, 'minutos', d.minutos,
-        'horas_por_credito', case when d.aprobada_grupo and not d.sin_creditos and d.creditos > 0
+        'es_erasmus', d.es_erasmus, 'sin_creditos', d.sin_creditos, 'cuenta', d.cuenta, 'minutos', d.minutos,
+        'horas_por_credito', case when d.aprobada_grupo and d.cuenta and not d.sin_creditos and d.creditos > 0
                                   then round(d.minutos_computables / 60.0 / d.creditos, 3) end,
         'cursos_necesarios', d.cursos_grupo,
         'nota', case when v_notas then d.nota_grupo end
@@ -143,11 +144,11 @@ begin
            a.es_erasmus, a.frozen_nota, a.frozen_cursos_necesarios,
            coalesce(case when a.asignatura_canonica_id is not null and a.es_erasmus is not true and c.estado <> 'rechazada'
                          then c.nombre_oficial end, a.nombre) as nombre,
-           (c.no_credits is true) as sin_creditos
+           (c.no_credits is true) as sin_creditos,
+           (a.es_erasmus is true or c.estado = 'aprobada') as cuenta
     from public.asignaturas a
     left join public.asignaturas_canonicas c on c.id = a.asignatura_canonica_id
     where a.user_id = v_me
-      and (a.es_erasmus is true or c.estado = 'aprobada')
   ),
   own as (
     select asignatura_id, sum(minutos)::bigint as minutos from public.entradas_estudio
@@ -162,9 +163,9 @@ begin
     left join ga on ga.base_id = s.id
   ),
   tot as (
-    select coalesce(sum(minutos), 0) as minutos_totales, count(*) as n_asignaturas,
-           sum(minutos_computables) filter (where aprobada_grupo and not sin_creditos and creditos > 0) as min_apr,
-           sum(creditos) filter (where aprobada_grupo and not sin_creditos and creditos > 0) as cred_apr
+    select coalesce(sum(minutos) filter (where cuenta), 0) as minutos_totales, count(*) as n_asignaturas,
+           sum(minutos_computables) filter (where aprobada_grupo and cuenta and not sin_creditos and creditos > 0) as min_apr,
+           sum(creditos) filter (where aprobada_grupo and cuenta and not sin_creditos and creditos > 0) as cred_apr
     from det
   )
   select jsonb_build_object(
@@ -179,8 +180,8 @@ begin
     'asignaturas', coalesce((
       select jsonb_agg(jsonb_build_object(
         'ref', d.ref, 'nombre', d.nombre, 'creditos', d.creditos, 'estado', case when d.aprobada_grupo then 'aprobada' else d.estado end, 'color', d.color,
-        'es_erasmus', d.es_erasmus, 'sin_creditos', d.sin_creditos, 'minutos', d.minutos,
-        'horas_por_credito', case when d.aprobada_grupo and not d.sin_creditos and d.creditos > 0
+        'es_erasmus', d.es_erasmus, 'sin_creditos', d.sin_creditos, 'cuenta', d.cuenta, 'minutos', d.minutos,
+        'horas_por_credito', case when d.aprobada_grupo and d.cuenta and not d.sin_creditos and d.creditos > 0
                                   then round(d.minutos_computables / 60.0 / d.creditos, 3) end,
         'cursos_necesarios', d.cursos_grupo,
         'nota', case when v_notas then d.nota_grupo end
