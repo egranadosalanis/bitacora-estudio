@@ -2,9 +2,10 @@
 -- Migración 033: las asignaturas NO canónicas no cuentan en las estadísticas sociales.
 --   Hasta que el admin apruebe la canónica (estado = 'aprobada'), una asignatura creada a mano
 --   (texto libre, canónica pendiente o rechazada) no suma a nadie más que a su dueño:
---     * resumen_amigo / mi_resumen: la asignatura SIGUE apareciendo en la ficha, pero con 'cuenta' = false:
---       sus minutos no entran en minutos_totales ni en h/cr, y el cliente la excluye de puntos de
---       rango y racha (el historial se devuelve entero y se filtra allí).
+--     * resumen_amigo (lo que ven los demás): la asignatura NO aparece en la ficha (ni minutos, ni historial,
+--       ni h/cr), así que no suma puntos de rango ni racha. Solo la ve su dueño.
+--     * mi_resumen (lo que ve el dueño): la asignatura aparece con 'cuenta' = false ("no puntúa"); sus
+--       minutos no entran en minutos_totales ni h/cr, y el cliente la excluye de puntos de rango y racha.
 --     * clasificacion_global: solo suman las horas de asignaturas con canónica aprobada.
 --     * _aprobados (comunidad_stats, listado_aprobados, detalle_aprobado): solo canónicas aprobadas.
 --   Las de Erasmus siguen contando (no tienen canónica por diseño). Las marcadas «sin créditos» siguen sin contar.
@@ -71,6 +72,7 @@ begin
     from public.asignaturas a
     left join public.asignaturas_canonicas c on c.id = a.asignatura_canonica_id
     where a.user_id = v_other
+      and (a.es_erasmus is true or c.estado = 'aprobada')
   ),
   own as (
     select asignatura_id, sum(minutos)::bigint as minutos from public.entradas_estudio
