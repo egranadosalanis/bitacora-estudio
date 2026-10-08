@@ -255,6 +255,19 @@ function Modal({ title, onClose, children, wide }) {
   );
 }
 
+function PendingSubjectNotice({ onClose }) {
+  return (
+    <Modal title="Solicitud enviada" onClose={onClose}>
+      <p className="panel-subtitle">
+        Tu asignatura se ha enviado para su aprobación. Hasta que se apruebe no aparecerá en la pestaña Social.
+      </p>
+      <div className="btn-row">
+        <button className="btn-primary" onClick={onClose}>Entendido</button>
+      </div>
+    </Modal>
+  );
+}
+
 /** Se muestra en vez del contenido de una vista reservada a planes de
  * pago, cuando el usuario está en el plan free. Los datos de esa vista
  * siguen existiendo y guardándose con normalidad — esto solo oculta la
@@ -1532,6 +1545,7 @@ function ApprovalForm({ subject, subjects, suggestedCursos, onConfirm, onCancel 
 function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubject, onDeleteSubject, onUpdateSubject, onChangeEstado, onApprove, cursos, activeCursoId, onSelectCurso, onAddCurso, onRemoveCurso, onToggleCursoEstado, onUpdateCursoFechas }) {
   const carreraCanonicaId = profile?.carrera_canonica_id ?? null;
   const [newSubject, setNewSubject] = useState({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: 0 });
+  const [pendingNotice, setPendingNotice] = useState(false);
   const [newCurso, setNewCurso] = useState({ name: "", startDate: "", endDate: "" });
   const [approvingId, setApprovingId] = useState(null);
   const [cursoToDeleteId, setCursoToDeleteId] = useState(null);
@@ -1559,15 +1573,17 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
       name: row.nombre_oficial,
       credits: row.creditos != null ? String(row.creditos) : v.credits,
       asignaturaCanonicaId: row.id,
+      pendiente: row.estado === "pendiente",
     }));
   }
 
   function toggleErasmus(checked) {
-    setNewSubject((v) => ({ ...v, esErasmus: checked, name: "", asignaturaCanonicaId: null, resetKey: v.resetKey + 1 }));
+    setNewSubject((v) => ({ ...v, esErasmus: checked, name: "", asignaturaCanonicaId: null, pendiente: false, resetKey: v.resetKey + 1 }));
   }
 
   function addSubject() {
     if (!newSubject.name.trim() || !newSubject.credits) return;
+    if (newSubject.pendiente && !newSubject.esErasmus) setPendingNotice(true);
     onAddSubject({
       name: newSubject.name.trim(),
       credits: parseFloat(newSubject.credits),
@@ -1832,6 +1848,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
         </div>
       </div>
 
+      {pendingNotice && <PendingSubjectNotice onClose={() => setPendingNotice(false)} />}
       {approvingSubject && (
         <Modal title="Marcar asignatura como aprobada" onClose={() => setApprovingId(null)}>
           <ApprovalForm
@@ -2422,6 +2439,7 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
 function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject, onDeleteSubject, onContinue, onSignOut, email }) {
   const carreraCanonicaId = profile?.carrera_canonica_id ?? null;
   const [newSubject, setNewSubject] = useState({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: 0 });
+  const [pendingNotice, setPendingNotice] = useState(false);
   const [adding, setAdding] = useState(false);
 
   function selectCanonicalAsignatura(row) {
@@ -2430,11 +2448,12 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
       name: row.nombre_oficial,
       credits: row.creditos != null ? String(row.creditos) : v.credits,
       asignaturaCanonicaId: row.id,
+      pendiente: row.estado === "pendiente",
     }));
   }
 
   function toggleErasmus(checked) {
-    setNewSubject((v) => ({ ...v, esErasmus: checked, name: "", asignaturaCanonicaId: null, resetKey: v.resetKey + 1 }));
+    setNewSubject((v) => ({ ...v, esErasmus: checked, name: "", asignaturaCanonicaId: null, pendiente: false, resetKey: v.resetKey + 1 }));
   }
 
   async function addSubject() {
@@ -2447,6 +2466,7 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
         asignaturaCanonicaId: newSubject.esErasmus ? null : newSubject.asignaturaCanonicaId,
         esErasmus: newSubject.esErasmus,
       });
+      if (newSubject.pendiente && !newSubject.esErasmus) setPendingNotice(true);
       setNewSubject({ name: "", credits: "", asignaturaCanonicaId: null, esErasmus: false, resetKey: newSubject.resetKey + 1 });
     } finally {
       setAdding(false);
@@ -2518,6 +2538,7 @@ function SelectSubjectsGate({ curso, profile, subjects, cloudError, onAddSubject
         </div>
         <OnboardingSignOut email={email} onSignOut={onSignOut} />
       </div>
+      {pendingNotice && <PendingSubjectNotice onClose={() => setPendingNotice(false)} />}
     </div>
   );
 }
