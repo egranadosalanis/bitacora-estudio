@@ -8,7 +8,7 @@ import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, CONSENT_GLOBAL, STA
 import Avatar from "./Avatar.jsx";
 import SeasonEnd from "./SeasonEnd.jsx";
 import RangosTab from "./RangosTab.jsx";
-import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes } from "./friendMetrics.js";
+import { summarizeSocial, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
 /*  Pestaña Social — sección Amigos                                    */
@@ -682,7 +682,9 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
               <span className="sc-bdot" style={{ background: s.color || "var(--cyan)" }} />
               <span className="sc-bname">{s.name}</span>
               <span className="sc-bval mono">
-                {s.estado === "aprobada" && s.hpc != null
+                {s.cuenta === false
+                  ? `${hm(s.minutos || 0)} · no puntúa`
+                  : s.estado === "aprobada" && s.hpc != null
                   ? `${fmtNum(s.hpc)} h/cr`
                   : `${hm(s.minutos || 0)}${s.credits > 0 && !s.sinCreditos ? ` · ${fmtNum((s.minutos || 0) / 60 / s.credits)} h/cr` : ""}`}
                 {s.estado === "aprobada" && model.showGrades && s.nota != null ? ` · nota ${fmtNum(s.nota, 1)}` : ""}
@@ -883,7 +885,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
   const rankShareRef = useRef(null);
   const [inviteOpen, setInviteOpen] = useState(Boolean(pendingInvite) && pendingInvite.toLowerCase() !== perfil.username.toLowerCase());
 
-  const own = useMemo(() => summarizeStudy(subjects, entries, logs), [subjects, entries, logs]);
+  const own = useMemo(() => summarizeSocial(subjects, entries, logs), [subjects, entries, logs]);
 
   // Un ciclo de carga por vez: si se pide otra, la anterior se descarta.
   const loadSeq = useRef(0);
