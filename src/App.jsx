@@ -259,7 +259,7 @@ function PendingSubjectNotice({ onClose }) {
   return (
     <Modal title="Solicitud enviada" onClose={onClose}>
       <p className="panel-subtitle">
-        Tu asignatura se ha enviado para su aprobación. Hasta que se apruebe no aparecerá en la pestaña Social.
+        Tu asignatura se ha enviado para su aprobación. No aparecerá en la pestaña Social hasta que se apruebe, pero puedes usarla desde ahora.
       </p>
       <div className="btn-row">
         <button className="btn-primary" onClick={onClose}>Entendido</button>
