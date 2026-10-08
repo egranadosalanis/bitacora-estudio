@@ -31,6 +31,25 @@ export function summarizeStudy(subjects, entries, logs) {
   };
 }
 
+/** ¿Cuenta esta asignatura en lo social (clasificación, fichas de amigos, comunidad)? Solo si su
+ * canónica está aprobada por el admin o es de Erasmus. Igual que hace el servidor en
+ * resumen_amigo / clasificacion_global: las creadas a mano no suman a nadie más que a su dueño. */
+export function countsForSocial(subject) {
+  return subject.esErasmus === true || subject.canonicalEstado === "aprobada";
+}
+
+/** summarizeStudy de lo que ven los demás de mí: sin las asignaturas que no cuentan en lo social
+ * (ni sus minutos ni sus registros, para que tampoco alimenten rachas ni cifras de hoy/semana). */
+export function summarizeSocial(subjects, entries, logs) {
+  const ids = new Set(subjects.filter(countsForSocial).map((s) => s.id));
+  const socialEntries = {};
+  Object.entries(entries).forEach(([date, bySubject]) => {
+    const kept = Object.fromEntries(Object.entries(bySubject).filter(([id]) => ids.has(id)));
+    if (Object.keys(kept).length) socialEntries[date] = kept;
+  });
+  return summarizeStudy(subjects.filter((s) => ids.has(s.id)), socialEntries, (logs || []).filter((l) => ids.has(l.subjectId)));
+}
+
 /** Modelo de un amigo a partir de lo que devuelve resumen_amigo. */
 export function buildFriendModel(resumen) {
   const subjects = (resumen.asignaturas ?? []).map((a) => ({

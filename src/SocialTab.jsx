@@ -8,7 +8,7 @@ import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, CONSENT_GLOBAL, STA
 import Avatar from "./Avatar.jsx";
 import SeasonEnd from "./SeasonEnd.jsx";
 import RangosTab from "./RangosTab.jsx";
-import { summarizeStudy, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes } from "./friendMetrics.js";
+import { summarizeSocial, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
 /*  Pestaña Social — sección Amigos                                    */
@@ -883,7 +883,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
   const rankShareRef = useRef(null);
   const [inviteOpen, setInviteOpen] = useState(Boolean(pendingInvite) && pendingInvite.toLowerCase() !== perfil.username.toLowerCase());
 
-  const own = useMemo(() => summarizeStudy(subjects, entries, logs), [subjects, entries, logs]);
+  const own = useMemo(() => summarizeSocial(subjects, entries, logs), [subjects, entries, logs]);
 
   // Un ciclo de carga por vez: si se pide otra, la anterior se descarta.
   const loadSeq = useRef(0);
