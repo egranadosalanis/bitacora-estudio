@@ -671,7 +671,7 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
           label="ASIGNATURAS" value={model.numSubjects} hint={showSubjects ? "ocultar desglose" : "ver desglose"}
           onClick={() => setShowSubjects((v) => !v)} active={showSubjects}
         />
-        <StatCardSc label="ESTA SEMANA" value={hm(model.weekMinutes)} hint="últimos 7 días" />
+        <StatCardSc label="ESTA SEMANA" value={hm(model.weekMinutes)} hint="desde el lunes" />
       </div>
 
       {showSubjects && (

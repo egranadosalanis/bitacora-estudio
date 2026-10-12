@@ -12,7 +12,7 @@ export function summarizeStudy(subjects, entries, logs) {
   const rango = computeSeasonRango(subjects, entries, logs, season);
   const stats = computeStats(subjects, entries, logs);
   const today = isoToday();
-  const weekStart = addDays(today, -6);
+  const weekStart = weekStartOf(today);
   let weekMinutes = 0;
   const todayMinutes = Object.values(entries[today] ?? {}).reduce((a, m) => a + (m || 0), 0);
   Object.entries(entries).forEach(([date, bySubject]) => {
