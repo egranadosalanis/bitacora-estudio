@@ -58,10 +58,12 @@ export function summarizeSocial(subjects, entries, logs) {
 /** Una fila por asignatura para el desglose: los intentos de una misma asignatura en varios cursos
  * (misma asignatura repetida o dividida por curso) llegan del servidor como filas distintas con el
  * mismo nombre; aquí se juntan en una sola (suman minutos; vale el dato de la aprobada, si la hay). */
+const normName = (n) => String(n ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+
 export function groupSubjectsForDisplay(subjects) {
   const groups = new Map();
   subjects.forEach((s) => {
-    const key = `${s.esErasmus ? "e" : "u"}|${String(s.name ?? "").trim().toLowerCase()}`;
+    const key = `${s.esErasmus ? "e" : "u"}|${normName(s.name)}`;
     const g = groups.get(key);
     if (!g) { groups.set(key, { ...s, minutos: s.minutos || 0 }); return; }
     const best = s.estado === "aprobada" && g.estado !== "aprobada" ? s : g;
@@ -119,7 +121,8 @@ export function weekStartOf(iso) {
  * entradas `{ fecha: { asignaturaId: minutos } }`. Igual que los puntos de rango, no cuentan las
  * asignaturas «sin créditos». Todo se calcula al vuelo: no se guarda nada por semana. */
 export function weeklyMinutes(subjects, entries) {
-  const counted = new Set(subjects.filter((s) => !s.sinCreditos).map((s) => s.id));
+  // Mismo criterio que el resto de Social: con créditos y que puntúen (canónica aprobada o Erasmus).
+  const counted = new Set(subjects.filter((s) => !s.sinCreditos && countsForSocial(s)).map((s) => s.id));
   const out = new Map();
   Object.entries(entries).forEach(([date, bySubject]) => {
     let day = 0;
