@@ -671,13 +671,13 @@ function FriendSheet({ model, own, isSelf, isMobile, online, onBack, onRemove, o
           label="ASIGNATURAS" value={model.numSubjects} hint={showSubjects ? "ocultar desglose" : "ver desglose"}
           onClick={() => setShowSubjects((v) => !v)} active={showSubjects}
         />
-        <StatCardSc label="ESTA SEMANA" value={hm(model.weekMinutes)} hint="desde el lunes" />
+        <StatCardSc label="ESTA SEMANA" value={hm(model.weekMinutes)} hint={`desde el lunes ${formatShort(model.weekStart)}`} />
       </div>
 
       {showSubjects && (
         <div className="panel sc-breakdown">
-          {model.subjects.length === 0 && <div className="empty-hint">Aún no tiene asignaturas.</div>}
-          {model.subjects.map((s) => (
+          {model.displaySubjects.length === 0 && <div className="empty-hint">Aún no tiene asignaturas.</div>}
+          {model.displaySubjects.map((s) => (
             <div key={s.id} className="sc-brow">
               <span className="sc-bdot" style={{ background: s.color || "var(--cyan)" }} />
               <span className="sc-bname">{s.name}</span>
