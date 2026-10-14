@@ -134,7 +134,7 @@ export function inferCursoRange(name, today = isoToday()) {
 
 /** Reglas de un curso académico: un año de septiembre a julio, no un cuatrimestre ni una carrera.
  *   - empieza entre el 1 de agosto y el 31 de octubre;
- *   - termina entre el 1 de junio y el 30 de septiembre;
+ *   - termina entre el 1 de mayo y el 30 de septiembre;
  *   - termina en un año posterior al de inicio y dura como máximo 13 meses.
  * Devuelve el mensaje de error o null si las fechas son válidas. */
 export function validateCursoDates(startDate, endDate) {
@@ -145,8 +145,8 @@ export function validateCursoDates(startDate, endDate) {
   if (sm < 8 || sm > 10) {
     return "Un curso es un año académico completo y empieza entre agosto y octubre. Aunque empezaras a usar la app más tarde, pon el inicio en septiembre. Si es el segundo cuatrimestre, no crees otro curso: amplía el que ya tienes hasta julio.";
   }
-  if (em < 6 || em > 9) {
-    return "Un curso es un año académico completo y termina entre junio y septiembre (normalmente a finales de julio). No lo cortes en un cuatrimestre.";
+  if (em < 5 || em > 9) {
+    return "Un curso es un año académico completo y termina entre mayo y septiembre (normalmente a finales de julio). No lo cortes en un cuatrimestre.";
   }
   const [y, m, d] = startDate.split("-").map(Number);
   const limit = new Date(Date.UTC(y, m - 1 + 13, d)).toISOString().slice(0, 10);
