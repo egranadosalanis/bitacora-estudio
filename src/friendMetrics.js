@@ -14,9 +14,12 @@ export function summarizeStudy(subjects, entries, logs) {
   const today = isoToday();
   const weekStart = weekStartOf(today);
   let weekMinutes = 0;
-  const todayMinutes = Object.values(entries[today] ?? {}).reduce((a, m) => a + (m || 0), 0);
+  // Igual que la clasificación semanal y los puntos de rango: las asignaturas «sin créditos» no suman horas.
+  const counted = new Set(subjects.filter((s) => !s.sinCreditos).map((s) => s.id));
+  const sumDay = (bySubject) => Object.entries(bySubject ?? {}).reduce((a, [id, m]) => a + (counted.has(id) ? m || 0 : 0), 0);
+  const todayMinutes = sumDay(entries[today]);
   Object.entries(entries).forEach(([date, bySubject]) => {
-    if (date >= weekStart && date <= today) weekMinutes += Object.values(bySubject).reduce((a, m) => a + (m || 0), 0);
+    if (date >= weekStart && date <= today) weekMinutes += sumDay(bySubject);
   });
   return {
     season, live, rango,
@@ -25,6 +28,7 @@ export function summarizeStudy(subjects, entries, logs) {
     streak: stats.current,
     bestStreak: stats.longest,
     weekMinutes,
+    weekStart,
     todayMinutes,
     history: getSeasonHistory(subjects, entries, logs),
     dailyTotals: stats.dailyTotals,
@@ -51,6 +55,28 @@ export function summarizeSocial(subjects, entries, logs) {
   return summarizeStudy(subjects.filter((s) => ids.has(s.id)), socialEntries, (logs || []).filter((l) => ids.has(l.subjectId)));
 }
 
+/** Una fila por asignatura para el desglose: los intentos de una misma asignatura en varios cursos
+ * (misma asignatura repetida o dividida por curso) llegan del servidor como filas distintas con el
+ * mismo nombre; aquí se juntan en una sola (suman minutos; vale el dato de la aprobada, si la hay). */
+const normName = (n) => String(n ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+
+export function groupSubjectsForDisplay(subjects) {
+  const groups = new Map();
+  subjects.forEach((s) => {
+    const key = `${s.esErasmus ? "e" : "u"}|${normName(s.name)}`;
+    const g = groups.get(key);
+    if (!g) { groups.set(key, { ...s, minutos: s.minutos || 0 }); return; }
+    const best = s.estado === "aprobada" && g.estado !== "aprobada" ? s : g;
+    groups.set(key, {
+      ...best, id: g.id, minutos: g.minutos + (s.minutos || 0),
+      cuenta: g.cuenta !== false || s.cuenta !== false,
+      credits: Math.max(g.credits, s.credits),
+      hpc: best.hpc ?? g.hpc ?? s.hpc, nota: best.nota ?? g.nota ?? s.nota,
+    });
+  });
+  return [...groups.values()];
+}
+
 /** Modelo de un amigo a partir de lo que devuelve resumen_amigo. */
 export function buildFriendModel(resumen) {
   const subjects = (resumen.asignaturas ?? []).map((a) => ({
@@ -69,9 +95,10 @@ export function buildFriendModel(resumen) {
     avatarPath: resumen.avatar_path ?? null,
     showGrades: resumen.mostrar_notas === true,
     totalMinutes: Number(resumen.minutos_totales) || 0,
-    numSubjects: Number(resumen.n_asignaturas) || 0,
+    numSubjects: groupSubjectsForDisplay(subjects).length,
     hpcTotal: resumen.horas_por_credito == null ? null : Number(resumen.horas_por_credito),
     subjects,
+    displaySubjects: groupSubjectsForDisplay(subjects),
     logs,
     ...summarizeSocial(subjects, entries, logs),
   };
@@ -94,7 +121,8 @@ export function weekStartOf(iso) {
  * entradas `{ fecha: { asignaturaId: minutos } }`. Igual que los puntos de rango, no cuentan las
  * asignaturas «sin créditos». Todo se calcula al vuelo: no se guarda nada por semana. */
 export function weeklyMinutes(subjects, entries) {
-  const counted = new Set(subjects.filter((s) => !s.sinCreditos).map((s) => s.id));
+  // Mismo criterio que el resto de Social: con créditos y que puntúen (canónica aprobada o Erasmus).
+  const counted = new Set(subjects.filter((s) => !s.sinCreditos && countsForSocial(s)).map((s) => s.id));
   const out = new Map();
   Object.entries(entries).forEach(([date, bySubject]) => {
     let day = 0;
