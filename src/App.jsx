@@ -10,7 +10,7 @@ import {
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
   APP_SHARE_URL, TIER_COLORS, RANK_NAMES, RANK_QUIPS, getCurrentSeason, computeSeasonRango,
 } from "./domain.js";
-import {
+import { dismissCursoNotice,
   loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
   updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, updateCursoFechas, deleteCursoConDatos,
   searchUniversidades, searchCarreras, searchAsignaturasCanonicas,
@@ -252,6 +252,25 @@ function Modal({ title, onClose, children, wide }) {
         <div className="modal-body">{children}</div>
       </div>
     </div>
+  );
+}
+
+function CursoDatesNotice({ onClose }) {
+  return (
+    <Modal title="Hemos ajustado las fechas de tus cursos" onClose={onClose}>
+      <p className="panel-subtitle">
+        Para que la app funcione bien, hemos modificado las fechas de tu curso. Tus asignaturas y tus registros de estudio siguen intactos.
+      </p>
+      <p className="panel-subtitle">{CURSO_HELP}</p>
+      <ul className="panel-subtitle" style={{ paddingLeft: 18 }}>
+        <li>Un curso empieza entre agosto y octubre y termina entre mayo y septiembre (normalmente a finales de julio).</li>
+        <li>No crees un curso por cuatrimestre ni uno para toda la carrera: los registros ya se reparten por fecha dentro del curso.</li>
+        <li>Cuando empiece el siguiente año académico, crea un curso nuevo con sus asignaturas (también las que repites).</li>
+      </ul>
+      <div className="btn-row" style={{ marginTop: 16, justifyContent: "flex-end" }}>
+        <button className="btn-primary" onClick={onClose}>Entendido</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -2775,6 +2794,8 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [reportOpen, setReportOpen] = useState(false);
   // null = cerrado; "auto" = abierto solo al entrar; "manual" = desde el menú
   const [newsOpen, setNewsOpen] = useState(null);
+  // Aviso de una sola vez para quien tenía cursos fuera de las reglas y se los hemos corregido.
+  const [cursoNoticeOpen, setCursoNoticeOpen] = useState(profile?.aviso_cursos_pendiente === true);
   const isMobile = useIsMobile();
   const [moreOpen, setMoreOpen] = useState(false);
   // Invitación recibida por enlace (?invitar=usuario): lleva directo a Social.
@@ -3388,6 +3409,15 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
 
       {socialSettingsOpen && (
         <SocialSettingsModal userId={userId} googleAvatarUrl={googleAvatar} onClose={() => { setSocialSettingsOpen(false); setSocialKey((k) => k + 1); refreshSocialPhoto(); }} />
+      )}
+
+      {cursoNoticeOpen && (
+        <CursoDatesNotice
+          onClose={() => {
+            setCursoNoticeOpen(false);
+            dismissCursoNotice(userId).catch(() => { /* si falla, se volverá a mostrar la próxima vez */ });
+          }}
+        />
       )}
 
       {newsOpen && (

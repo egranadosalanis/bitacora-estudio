@@ -309,6 +309,12 @@ export async function linkProfileToCanonical(userId, { universidadId, carreraId 
   if (error) throw error;
 }
 
+/** Marca como visto el aviso de «hemos corregido las fechas de tus cursos». */
+export async function dismissCursoNotice(userId) {
+  const { error } = await supabase.from("profiles").update({ aviso_cursos_pendiente: false }).eq("id", userId);
+  if (error) throw error;
+}
+
 export async function linkAsignaturaToCanonical(userId, subjectId, asignaturaCanonicaId) {
   const { error } = await supabase
     .from("asignaturas")
