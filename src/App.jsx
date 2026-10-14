@@ -6,7 +6,7 @@ import {
 import {
   PALETTE, SUBJECT_COLORS, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
-  computeDesgaste, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase, groupEstado,
+  computeDesgaste, validateCursoDates, CURSO_HELP, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase, groupEstado,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
   APP_SHARE_URL, TIER_COLORS, RANK_NAMES, RANK_QUIPS, getCurrentSeason, computeSeasonRango,
 } from "./domain.js";
@@ -1598,16 +1598,18 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
   }
 
   function addCurso() {
-    if (!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate) return;
+    if (!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate || newCursoError) return;
     onAddCurso(newCurso.name.trim(), newCurso.startDate, newCurso.endDate);
     setNewCurso({ name: "", startDate: "", endDate: "" });
   }
 
+  const newCursoError = validateCursoDates(newCurso.startDate, newCurso.endDate);
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
   const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
   const curso = cursos.find((c) => c.id === activeCursoId);
   const cursoToEdit = cursoToEditId ? cursos.find((c) => c.id === cursoToEditId) : null;
-  const editDatesInvalid = !editDates.startDate || !editDates.endDate || editDates.endDate < editDates.startDate;
+  const editDatesError = validateCursoDates(editDates.startDate, editDates.endDate);
+  const editDatesInvalid = !editDates.startDate || !editDates.endDate || editDatesError !== null;
   // Días con registros del curso que quedarían fuera del rango nuevo (y de cualquier otro curso).
   const editDatesLeftOut = cursoToEdit && !editDatesInvalid
     ? Object.entries(entries).filter(([date, bySubject]) =>
@@ -1624,8 +1626,9 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
       <div className="panel">
         <div className="panel-title">Cursos académicos</div>
         <div className="panel-subtitle">
-          Cada curso es solo un rango de fechas — el registro de una asignatura se muestra bajo el curso al que
+          Cada curso es un año académico (septiembre a julio) — el registro de una asignatura se muestra bajo el curso al que
           corresponda su fecha, automáticamente, sin que tengas que vincular nada a mano.
+          {" "}Si repites una asignatura, créala otra vez en el curso nuevo y se combinará sola con la anterior.
         </div>
         <div className="curso-list">
           {cursos.map((c) => (
@@ -1658,12 +1661,13 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
           <button
             className="btn-primary"
             onClick={addCurso}
-            disabled={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate}
-            style={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+            disabled={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate || !!newCursoError}
+            style={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate || newCursoError ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
           >
             Añadir curso
           </button>
         </div>
+        {newCursoError && <div className="auth-error" style={{ marginTop: 8 }}>{newCursoError}</div>}
       </div>
 
       <div className="panel">
@@ -1865,7 +1869,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
             <label className="field-label">Fin</label>
             <input type="date" className="input-field" value={editDates.endDate} onChange={(e) => setEditDates((v) => ({ ...v, endDate: e.target.value }))} />
           </div>
-          {editDatesInvalid && <div className="auth-error">La fecha de fin no puede ser anterior a la de inicio.</div>}
+          {editDatesError && <div className="auth-error">{editDatesError}</div>}
           {editDatesLeftOut > 0 && (
             <div className="auth-error">
               Con estas fechas, {editDatesLeftOut} día(s) con registros de este curso quedarían fuera y dejarían de verse en él.
@@ -2389,7 +2393,8 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
     }));
   }
 
-  const canCreate = newCurso.name.trim() && newCurso.startDate && newCurso.endDate;
+  const dateError = validateCursoDates(newCurso.startDate, newCurso.endDate);
+  const canCreate = newCurso.name.trim() && newCurso.startDate && newCurso.endDate && !dateError;
 
   return (
     <div className="app-shell app-loading">
@@ -2397,7 +2402,7 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
       <div className="panel auth-card">
         <OnboardingStep step={2} total={3} />
         <div className="panel-title">¡Bienvenido!</div>
-        <div className="panel-subtitle">Antes de empezar, crea tu primer curso académico (solo un rango de fechas).</div>
+        <div className="panel-subtitle">Antes de empezar, crea tu curso académico actual. {CURSO_HELP}</div>
         <div className="field-row">
           <label className="field-label">Nombre</label>
           <input className="input-field" placeholder="Ej. 2026-2027" value={newCurso.name} onChange={(e) => updateName(e.target.value)} />
@@ -2410,6 +2415,7 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
           <label className="field-label">Fin</label>
           <input type="date" className="input-field" value={newCurso.endDate} onChange={(e) => setNewCurso((v) => ({ ...v, endDate: e.target.value }))} />
         </div>
+        {dateError && <div className="auth-error">{dateError}</div>}
         <div className="btn-row">
           <button
             className="btn-primary"
