@@ -6,7 +6,7 @@ import {
 import {
   PALETTE, SUBJECT_COLORS, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
-  computeDesgaste, validateCursoDates, CURSO_HELP, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase, groupEstado,
+  computeDesgaste, validateCursoDates, findCursoOverlap, startAfterOverlap, CURSO_HELP, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase, groupEstado,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
   APP_SHARE_URL, TIER_COLORS, RANK_NAMES, RANK_QUIPS, getCurrentSeason, computeSeasonRango,
 } from "./domain.js";
@@ -1611,7 +1611,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
     setNewCurso((v) => ({
       ...v,
       name,
-      startDate: inferred ? inferred.startDate : v.startDate,
+      startDate: inferred ? startAfterOverlap(cursos, inferred.startDate, inferred.endDate) : v.startDate,
       endDate: inferred ? inferred.endDate : v.endDate,
     }));
   }
@@ -1622,12 +1622,15 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
     setNewCurso({ name: "", startDate: "", endDate: "" });
   }
 
-  const newCursoError = validateCursoDates(newCurso.startDate, newCurso.endDate);
+  const overlapMsg = (o) => (o ? `Esas fechas se solapan con el curso «${o.name}» (${o.startDate} → ${o.endDate}). Un curso no puede empezar antes de que acabe el anterior.` : null);
+  const newCursoError = validateCursoDates(newCurso.startDate, newCurso.endDate)
+    ?? overlapMsg(findCursoOverlap(cursos, newCurso.startDate, newCurso.endDate));
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
   const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
   const curso = cursos.find((c) => c.id === activeCursoId);
   const cursoToEdit = cursoToEditId ? cursos.find((c) => c.id === cursoToEditId) : null;
-  const editDatesError = validateCursoDates(editDates.startDate, editDates.endDate);
+  const editDatesError = validateCursoDates(editDates.startDate, editDates.endDate)
+    ?? overlapMsg(findCursoOverlap(cursos, editDates.startDate, editDates.endDate, cursoToEditId));
   const editDatesInvalid = !editDates.startDate || !editDates.endDate || editDatesError !== null;
   // Días con registros del curso que quedarían fuera del rango nuevo (y de cualquier otro curso).
   const editDatesLeftOut = cursoToEdit && !editDatesInvalid

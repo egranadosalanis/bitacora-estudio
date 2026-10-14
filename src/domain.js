@@ -155,6 +155,19 @@ export function validateCursoDates(startDate, endDate) {
   return null;
 }
 
+/** Curso (de `cursos`) cuyas fechas se solapan con [startDate, endDate]; `excludeId` ignora el que se está editando. */
+export function findCursoOverlap(cursos, startDate, endDate, excludeId = null) {
+  if (!startDate || !endDate) return null;
+  return cursos.find((c) => c.id !== excludeId && c.startDate <= endDate && c.endDate >= startDate) ?? null;
+}
+
+/** Si el inicio propuesto cae dentro de otro curso (p. ej. se crea en agosto y el anterior acaba el 31 de agosto),
+ * lo mueve al día siguiente al fin de ese curso. */
+export function startAfterOverlap(cursos, startDate, endDate) {
+  const o = findCursoOverlap(cursos, startDate, endDate);
+  return o && o.startDate < startDate && o.endDate < endDate ? addDays(o.endDate, 1) : startDate;
+}
+
 export const CURSO_HELP = "Un curso es un año académico (de septiembre a julio), no un cuatrimestre ni toda la carrera. Si repites una asignatura, créala otra vez en el curso nuevo y se combinará sola con la anterior.";
 
 export function buildDefaultData() {
