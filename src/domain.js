@@ -124,11 +124,51 @@ export const SCHEMA_VERSION = 3;
 /** Si el nombre de un curso sigue el patrón "AAAA-AAAA" (p. ej.
  * "2025-2026"), infiere su rango como año académico español estándar:
  * 1 de septiembre del primer año al 31 de agosto del segundo. */
-export function inferCursoRange(name) {
+export function inferCursoRange(name, today = isoToday()) {
   const m = /^(\d{4})-(\d{4})$/.exec((name || "").trim());
   if (!m) return null;
-  return { startDate: `${m[1]}-09-01`, endDate: `${m[2]}-08-31` };
+  // Si se crea durante agosto del año de inicio, el curso arranca el 1 de agosto para que los registros de hoy caigan dentro.
+  const startsInAugust = today.startsWith(`${m[1]}-08`);
+  return { startDate: `${m[1]}-${startsInAugust ? "08" : "09"}-01`, endDate: `${m[2]}-08-31` };
 }
+
+/** Reglas de un curso académico: un año de septiembre a julio, no un cuatrimestre ni una carrera.
+ *   - empieza entre el 1 de agosto y el 31 de octubre;
+ *   - termina entre el 1 de mayo y el 30 de septiembre;
+ *   - termina en un año posterior al de inicio y dura como máximo 13 meses.
+ * Devuelve el mensaje de error o null si las fechas son válidas. */
+export function validateCursoDates(startDate, endDate) {
+  if (!startDate || !endDate) return null;
+  if (endDate < startDate) return "La fecha de fin no puede ser anterior a la de inicio.";
+  const sm = Number(startDate.slice(5, 7));
+  const em = Number(endDate.slice(5, 7));
+  if (sm < 8 || sm > 10) {
+    return "Un curso es un año académico completo y empieza entre agosto y octubre. Aunque empezaras a usar la app más tarde, pon el inicio en septiembre. Si es el segundo cuatrimestre, no crees otro curso: amplía el que ya tienes hasta julio.";
+  }
+  if (em < 5 || em > 9) {
+    return "Un curso es un año académico completo y termina entre mayo y septiembre (normalmente a finales de julio). No lo cortes en un cuatrimestre.";
+  }
+  const [y, m, d] = startDate.split("-").map(Number);
+  const limit = new Date(Date.UTC(y, m - 1 + 13, d)).toISOString().slice(0, 10);
+  if (endDate > limit) return "Un curso no puede durar más de 12 meses. Crea un curso nuevo por cada año académico.";
+  if (endDate.slice(0, 4) <= startDate.slice(0, 4)) return "Un curso académico termina en el año siguiente al de inicio (por ejemplo, de septiembre de 2026 a julio de 2027).";
+  return null;
+}
+
+/** Curso (de `cursos`) cuyas fechas se solapan con [startDate, endDate]; `excludeId` ignora el que se está editando. */
+export function findCursoOverlap(cursos, startDate, endDate, excludeId = null) {
+  if (!startDate || !endDate) return null;
+  return cursos.find((c) => c.id !== excludeId && c.startDate <= endDate && c.endDate >= startDate) ?? null;
+}
+
+/** Si el inicio propuesto cae dentro de otro curso (p. ej. se crea en agosto y el anterior acaba el 31 de agosto),
+ * lo mueve al día siguiente al fin de ese curso. */
+export function startAfterOverlap(cursos, startDate, endDate) {
+  const o = findCursoOverlap(cursos, startDate, endDate);
+  return o && o.startDate < startDate && o.endDate < endDate ? addDays(o.endDate, 1) : startDate;
+}
+
+export const CURSO_HELP = "Un curso es un año académico (de septiembre a julio), no un cuatrimestre ni toda la carrera. Si repites una asignatura, créala otra vez en el curso nuevo y se combinará sola con la anterior.";
 
 export function buildDefaultData() {
   const subjects = DEFAULT_SUBJECT_DEFS.map((s, i) => ({

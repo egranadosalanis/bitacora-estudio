@@ -6,11 +6,11 @@ import {
 import {
   PALETTE, SUBJECT_COLORS, uid, isoToday, addDays, formatShort, formatLong, formatMedium, hm,
   computeStats, buildEntriesFromLogs, getSubjectEntries, getAllEntriesFlat,
-  computeDesgaste, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase, groupEstado,
+  computeDesgaste, validateCursoDates, findCursoOverlap, startAfterOverlap, CURSO_HELP, freezeApproval, computeClassification, getMergeGroup, countCursosOf, pickGroupBase, groupEstado,
   inferCursoRange, entriesInRange, subjectsWithActivityInRange, subjectsForRegisterInCurso,
   APP_SHARE_URL, TIER_COLORS, RANK_NAMES, RANK_QUIPS, getCurrentSeason, computeSeasonRango,
 } from "./domain.js";
-import {
+import { dismissCursoNotice,
   loadUserData, insertEntries, updateEntryMinutes, deleteEntry, EntryNotFoundError, insertSubject, deleteSubject, updateSubject,
   updateSubjectEstado, approveSubject, insertCurso, updateCursoEstado, updateCursoFechas, deleteCursoConDatos,
   searchUniversidades, searchCarreras, searchAsignaturasCanonicas,
@@ -252,6 +252,25 @@ function Modal({ title, onClose, children, wide }) {
         <div className="modal-body">{children}</div>
       </div>
     </div>
+  );
+}
+
+function CursoDatesNotice({ onClose }) {
+  return (
+    <Modal title="Hemos ajustado las fechas de tus cursos" onClose={onClose}>
+      <p className="panel-subtitle">
+        Para que la app funcione bien, hemos modificado las fechas de tu curso. Tus asignaturas y tus registros de estudio siguen intactos.
+      </p>
+      <p className="panel-subtitle">{CURSO_HELP}</p>
+      <ul className="panel-subtitle" style={{ paddingLeft: 18 }}>
+        <li>Un curso empieza entre agosto y octubre y termina entre mayo y septiembre (normalmente a finales de julio).</li>
+        <li>No crees un curso por cuatrimestre ni uno para toda la carrera: los registros ya se reparten por fecha dentro del curso.</li>
+        <li>Cuando empiece el siguiente año académico, crea un curso nuevo con sus asignaturas (también las que repites).</li>
+      </ul>
+      <div className="btn-row" style={{ marginTop: 16, justifyContent: "flex-end" }}>
+        <button className="btn-primary" onClick={onClose}>Entendido</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -1592,22 +1611,27 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
     setNewCurso((v) => ({
       ...v,
       name,
-      startDate: inferred ? inferred.startDate : v.startDate,
+      startDate: inferred ? startAfterOverlap(cursos, inferred.startDate, inferred.endDate) : v.startDate,
       endDate: inferred ? inferred.endDate : v.endDate,
     }));
   }
 
   function addCurso() {
-    if (!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate) return;
+    if (!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate || newCursoError) return;
     onAddCurso(newCurso.name.trim(), newCurso.startDate, newCurso.endDate);
     setNewCurso({ name: "", startDate: "", endDate: "" });
   }
 
+  const overlapMsg = (o) => (o ? `Esas fechas se solapan con el curso «${o.name}» (${o.startDate} → ${o.endDate}). Un curso no puede empezar antes de que acabe el anterior.` : null);
+  const newCursoError = validateCursoDates(newCurso.startDate, newCurso.endDate)
+    ?? overlapMsg(findCursoOverlap(cursos, newCurso.startDate, newCurso.endDate));
   const approvingSubject = approvingId ? subjects.find((s) => s.id === approvingId) : null;
   const hasEntries = (subjectId) => Object.values(entries).some((day) => day[subjectId] > 0);
   const curso = cursos.find((c) => c.id === activeCursoId);
   const cursoToEdit = cursoToEditId ? cursos.find((c) => c.id === cursoToEditId) : null;
-  const editDatesInvalid = !editDates.startDate || !editDates.endDate || editDates.endDate < editDates.startDate;
+  const editDatesError = validateCursoDates(editDates.startDate, editDates.endDate)
+    ?? overlapMsg(findCursoOverlap(cursos, editDates.startDate, editDates.endDate, cursoToEditId));
+  const editDatesInvalid = !editDates.startDate || !editDates.endDate || editDatesError !== null;
   // Días con registros del curso que quedarían fuera del rango nuevo (y de cualquier otro curso).
   const editDatesLeftOut = cursoToEdit && !editDatesInvalid
     ? Object.entries(entries).filter(([date, bySubject]) =>
@@ -1624,8 +1648,9 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
       <div className="panel">
         <div className="panel-title">Cursos académicos</div>
         <div className="panel-subtitle">
-          Cada curso es solo un rango de fechas — el registro de una asignatura se muestra bajo el curso al que
+          Cada curso es un año académico (septiembre a julio) — el registro de una asignatura se muestra bajo el curso al que
           corresponda su fecha, automáticamente, sin que tengas que vincular nada a mano.
+          {" "}Si repites una asignatura, créala otra vez en el curso nuevo y se combinará sola con la anterior.
         </div>
         <div className="curso-list">
           {cursos.map((c) => (
@@ -1658,12 +1683,13 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
           <button
             className="btn-primary"
             onClick={addCurso}
-            disabled={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate}
-            style={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+            disabled={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate || !!newCursoError}
+            style={!newCurso.name.trim() || !newCurso.startDate || !newCurso.endDate || newCursoError ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
           >
             Añadir curso
           </button>
         </div>
+        {newCursoError && <div className="auth-error" style={{ marginTop: 8 }}>{newCursoError}</div>}
       </div>
 
       <div className="panel">
@@ -1865,7 +1891,7 @@ function AsignaturasTab({ subjects, cursoSubjects, entries, profile, onAddSubjec
             <label className="field-label">Fin</label>
             <input type="date" className="input-field" value={editDates.endDate} onChange={(e) => setEditDates((v) => ({ ...v, endDate: e.target.value }))} />
           </div>
-          {editDatesInvalid && <div className="auth-error">La fecha de fin no puede ser anterior a la de inicio.</div>}
+          {editDatesError && <div className="auth-error">{editDatesError}</div>}
           {editDatesLeftOut > 0 && (
             <div className="auth-error">
               Con estas fechas, {editDatesLeftOut} día(s) con registros de este curso quedarían fuera y dejarían de verse en él.
@@ -2389,7 +2415,8 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
     }));
   }
 
-  const canCreate = newCurso.name.trim() && newCurso.startDate && newCurso.endDate;
+  const dateError = validateCursoDates(newCurso.startDate, newCurso.endDate);
+  const canCreate = newCurso.name.trim() && newCurso.startDate && newCurso.endDate && !dateError;
 
   return (
     <div className="app-shell app-loading">
@@ -2397,7 +2424,7 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
       <div className="panel auth-card">
         <OnboardingStep step={2} total={3} />
         <div className="panel-title">¡Bienvenido!</div>
-        <div className="panel-subtitle">Antes de empezar, crea tu primer curso académico (solo un rango de fechas).</div>
+        <div className="panel-subtitle">Antes de empezar, crea tu curso académico actual. {CURSO_HELP}</div>
         <div className="field-row">
           <label className="field-label">Nombre</label>
           <input className="input-field" placeholder="Ej. 2026-2027" value={newCurso.name} onChange={(e) => updateName(e.target.value)} />
@@ -2410,6 +2437,7 @@ function WelcomeCreateCurso({ onCreate, onSignOut, email }) {
           <label className="field-label">Fin</label>
           <input type="date" className="input-field" value={newCurso.endDate} onChange={(e) => setNewCurso((v) => ({ ...v, endDate: e.target.value }))} />
         </div>
+        {dateError && <div className="auth-error">{dateError}</div>}
         <div className="btn-row">
           <button
             className="btn-primary"
@@ -2769,6 +2797,8 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
   const [reportOpen, setReportOpen] = useState(false);
   // null = cerrado; "auto" = abierto solo al entrar; "manual" = desde el menú
   const [newsOpen, setNewsOpen] = useState(null);
+  // Aviso de una sola vez para quien tenía cursos fuera de las reglas y se los hemos corregido.
+  const [cursoNoticeOpen, setCursoNoticeOpen] = useState(profile?.aviso_cursos_pendiente === true);
   const isMobile = useIsMobile();
   const [moreOpen, setMoreOpen] = useState(false);
   // Invitación recibida por enlace (?invitar=usuario): lleva directo a Social.
@@ -3382,6 +3412,15 @@ export default function App({ session, profile, onSignOut, onDeleteAccount } = {
 
       {socialSettingsOpen && (
         <SocialSettingsModal userId={userId} googleAvatarUrl={googleAvatar} onClose={() => { setSocialSettingsOpen(false); setSocialKey((k) => k + 1); refreshSocialPhoto(); }} />
+      )}
+
+      {cursoNoticeOpen && (
+        <CursoDatesNotice
+          onClose={() => {
+            setCursoNoticeOpen(false);
+            dismissCursoNotice(userId).catch(() => { /* si falla, se volverá a mostrar la próxima vez */ });
+          }}
+        />
       )}
 
       {newsOpen && (
