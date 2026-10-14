@@ -142,16 +142,20 @@ export function validateCursoDates(startDate, endDate) {
   if (endDate < startDate) return "La fecha de fin no puede ser anterior a la de inicio.";
   const sm = Number(startDate.slice(5, 7));
   const em = Number(endDate.slice(5, 7));
+  const [y, m, d] = startDate.split("-").map(Number);
+  const limit = new Date(Date.UTC(y, m - 1 + 13, d)).toISOString().slice(0, 10);
+  const endsInLaterYear = endDate.slice(0, 4) > startDate.slice(0, 4);
+  // Más de un año (o acabando en otoño del año siguiente): es un curso demasiado largo, no un cuatrimestre.
+  if (endDate > limit || (em > 9 && endsInLaterYear)) {
+    return "Un curso no puede durar más de un año: empieza entre agosto y octubre y termina, como muy tarde, en septiembre del año siguiente (normalmente a finales de julio). Crea un curso nuevo por cada año académico.";
+  }
   if (sm < 8 || sm > 10) {
     return "Un curso es un año académico completo y empieza entre agosto y octubre. Aunque empezaras a usar la app más tarde, pon el inicio en septiembre. Si es el segundo cuatrimestre, no crees otro curso: amplía el que ya tienes hasta julio.";
   }
   if (em < 5 || em > 9) {
     return "Un curso es un año académico completo y termina entre mayo y septiembre (normalmente a finales de julio). No lo cortes en un cuatrimestre.";
   }
-  const [y, m, d] = startDate.split("-").map(Number);
-  const limit = new Date(Date.UTC(y, m - 1 + 13, d)).toISOString().slice(0, 10);
-  if (endDate > limit) return "Un curso no puede durar más de 12 meses. Crea un curso nuevo por cada año académico.";
-  if (endDate.slice(0, 4) <= startDate.slice(0, 4)) return "Un curso académico termina en el año siguiente al de inicio (por ejemplo, de septiembre de 2026 a julio de 2027).";
+  if (!endsInLaterYear) return "Un curso académico termina en el año siguiente al de inicio (por ejemplo, de septiembre de 2026 a julio de 2027).";
   return null;
 }
 
