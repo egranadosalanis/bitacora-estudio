@@ -124,16 +124,18 @@ export const SCHEMA_VERSION = 3;
 /** Si el nombre de un curso sigue el patrón "AAAA-AAAA" (p. ej.
  * "2025-2026"), infiere su rango como año académico español estándar:
  * 1 de septiembre del primer año al 31 de agosto del segundo. */
-export function inferCursoRange(name) {
+export function inferCursoRange(name, today = isoToday()) {
   const m = /^(\d{4})-(\d{4})$/.exec((name || "").trim());
   if (!m) return null;
-  return { startDate: `${m[1]}-09-01`, endDate: `${m[2]}-08-31` };
+  // Si se crea durante agosto del año de inicio, el curso arranca el 1 de agosto para que los registros de hoy caigan dentro.
+  const startsInAugust = today.startsWith(`${m[1]}-08`);
+  return { startDate: `${m[1]}-${startsInAugust ? "08" : "09"}-01`, endDate: `${m[2]}-08-31` };
 }
 
 /** Reglas de un curso académico: un año de septiembre a julio, no un cuatrimestre ni una carrera.
  *   - empieza entre el 1 de agosto y el 31 de octubre;
  *   - termina entre el 1 de junio y el 30 de septiembre;
- *   - dura entre 3 y 13 meses (margen sobre septiembre-julio).
+ *   - termina en un año posterior al de inicio y dura como máximo 13 meses.
  * Devuelve el mensaje de error o null si las fechas son válidas. */
 export function validateCursoDates(startDate, endDate) {
   if (!startDate || !endDate) return null;
@@ -141,7 +143,7 @@ export function validateCursoDates(startDate, endDate) {
   const sm = Number(startDate.slice(5, 7));
   const em = Number(endDate.slice(5, 7));
   if (sm < 8 || sm > 10) {
-    return "Un curso es un año académico completo y empieza entre agosto y octubre. Si es el segundo cuatrimestre, no crees otro curso: amplía el que ya tienes hasta julio.";
+    return "Un curso es un año académico completo y empieza entre agosto y octubre. Aunque empezaras a usar la app más tarde, pon el inicio en septiembre. Si es el segundo cuatrimestre, no crees otro curso: amplía el que ya tienes hasta julio.";
   }
   if (em < 6 || em > 9) {
     return "Un curso es un año académico completo y termina entre junio y septiembre (normalmente a finales de julio). No lo cortes en un cuatrimestre.";
@@ -149,7 +151,7 @@ export function validateCursoDates(startDate, endDate) {
   const [y, m, d] = startDate.split("-").map(Number);
   const limit = new Date(Date.UTC(y, m - 1 + 13, d)).toISOString().slice(0, 10);
   if (endDate > limit) return "Un curso no puede durar más de 12 meses. Crea un curso nuevo por cada año académico.";
-  if (daysBetween(startDate, endDate) < 90) return "Un curso académico dura como mínimo 3 meses.";
+  if (endDate.slice(0, 4) <= startDate.slice(0, 4)) return "Un curso académico termina en el año siguiente al de inicio (por ejemplo, de septiembre de 2026 a julio de 2027).";
   return null;
 }
 
