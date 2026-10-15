@@ -7,8 +7,8 @@ import { USERNAME_RE, GOOGLE_AVATAR_RE } from "./socialData.js";
 import { CONSENT_VERSION, CONSENT_METRICAS, CONSENT_RANKING, CONSENT_GLOBAL, STATS_PRIVACY_NOTE } from "./socialTexts.js";
 import Avatar from "./Avatar.jsx";
 import SeasonEnd from "./SeasonEnd.jsx";
-import RangosTab from "./RangosTab.jsx";
-import { summarizeSocial, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes } from "./friendMetrics.js";
+import RangosTab, { RachaTab } from "./RangosTab.jsx";
+import { summarizeSocial, buildFriendModel, compareByRank, heatmapCells, weekStartOf, weeklyMinutes, dayMinutes } from "./friendMetrics.js";
 
 /* ------------------------------------------------------------------ */
 /*  Pestaña Social — sección Amigos                                    */
@@ -810,7 +810,7 @@ function InviteModal({ from, online, onClose }) {
 
 /* ---------- sección Amigos ---------- */
 
-function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, live, onClick }) {
+function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, live, onClick, daily }) {
   const Tag = onClick ? "button" : "div";
   return (
     <Tag type={onClick ? "button" : undefined} className={`sc-row ${isMe ? "sc-me" : ""}`} onClick={onClick}>
@@ -820,7 +820,9 @@ function WeekRow({ pos, name, verified, avatarUrl, minutes, days, isMe, live, on
         <Username name={name} verified={verified} />
         {isMe && <span className="sc-you mono">TÚ</span>}
         {live && <LiveBadge />}
-        <span className="sc-note mono">{days > 0 ? `${days} ${days === 1 ? "día" : "días"} de estudio` : "sin estudio"}</span>
+        {daily
+          ? (minutes <= 0 && <span className="sc-note mono">sin estudio</span>)
+          : <span className="sc-note mono">{days > 0 ? `${days} ${days === 1 ? "día" : "días"} de estudio` : "sin estudio"}</span>}
       </span>
       <span className="sc-weekval mono">{minutes > 0 ? hm(minutes) : "—"}</span>
     </Tag>
@@ -872,7 +874,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
   const [fichaUser, setFichaUser] = useState(null);
   const [selfModel, setSelfModel] = useState(null);
   const [selfBusy, setSelfBusy] = useState(false);
-  const [rankMode, setRankMode] = useState("season"); // season | week
+  const [rankMode, setRankMode] = useState("season"); // season | week | day
   const [weekKey, setWeekKey] = useState(null); // lunes de la semana elegida; null = la actual
   const [busyId, setBusyId] = useState(null);
   const [reqError, setReqError] = useState(null);
@@ -967,10 +969,20 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
     return { weeks, selected, rows };
   }, [ranking.ok, subjects, entries, weekKey, currentWeek]);
 
+  // Clasificación diaria: solo el día de hoy, con las mismas entradas que la semanal.
+  const today = isoToday();
+  const daily = useMemo(() => ranking.ok
+    .map((r) => ({
+      ...r,
+      minutes: r.me ? dayMinutes(subjects, entries, today) : dayMinutes(r.summary.subjects, buildEntriesFromLogs(r.summary.logs), today),
+    }))
+    .sort((a, b) => b.minutes - a.minutes || a.username.localeCompare(b.username)),
+  [ranking.ok, subjects, entries, today]);
+
   // Clasificación general (todos los usuarios): solo si la persona ha aceptado aparecer en ella.
   const globalOn = scope === "global" && perfil.share_global_ok === true;
-  const globalFrom = rankMode === "week" ? weekly.selected : own.season.startDate;
-  const globalTo = rankMode === "week" ? addDays(weekly.selected, 6) : own.season.endDate;
+  const globalFrom = rankMode === "day" ? today : rankMode === "week" ? weekly.selected : own.season.startDate;
+  const globalTo = rankMode === "day" ? today : rankMode === "week" ? addDays(weekly.selected, 6) : own.season.endDate;
   useEffect(() => {
     if (!globalOn) return undefined;
     let cancelled = false;
@@ -1064,18 +1076,29 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
   const shareCard = useMemo(() => {
     if (globalOn) {
       const filas = (globalData?.filas ?? []).slice(0, SHARE_MAX_ROWS);
-      const sub = rankMode === "week"
+      const sub = rankMode === "day"
+        ? `Hoy · ${formatShort(today)}`
+        : rankMode === "week"
         ? `${formatShort(weekly.selected)} – ${formatShort(addDays(weekly.selected, 6))}`
         : `${own.season.label} · ${seasonWeekLabel(own.season, own.live)}`;
       return {
-        title: rankMode === "week" ? "Clasificación general semanal" : "Clasificación general de la season",
+        title: rankMode === "day" ? "Clasificación general diaria" : rankMode === "week" ? "Clasificación general semanal" : "Clasificación general de la season",
         subtitle: `${sub} · Top ${filas.length}`,
         rows: filas.map((r) => ({
           username: r.username, tier: rankTierForPoints(r.minutos / 60),
-          value: rankMode === "week" ? hm(r.minutos) : `${fmtNum(r.minutos / 60, 1)} pts`,
+          value: rankMode === "season" ? `${fmtNum(r.minutos / 60, 1)} pts` : hm(r.minutos),
         })),
-        fileName: rankMode === "week" ? "clever-general-semanal.png" : "clever-general-season.png",
+        fileName: rankMode === "day" ? "clever-general-diaria.png" : rankMode === "week" ? "clever-general-semanal.png" : "clever-general-season.png",
         text: "Así va la clasificación general de Clever 🏆",
+      };
+    }
+    if (rankMode === "day") {
+      return {
+        title: "Clasificación diaria",
+        subtitle: `Hoy · ${formatShort(today)} · Top ${Math.min(daily.length, SHARE_MAX_ROWS)}`,
+        rows: daily.slice(0, SHARE_MAX_ROWS).map((r) => ({ username: r.username, value: r.minutes > 0 ? hm(r.minutes) : "—" })),
+        fileName: "clever-clasificacion-diaria.png",
+        text: "Así va la clasificación diaria entre amigos en Clever 🏆",
       };
     }
     if (rankMode === "week") {
@@ -1094,7 +1117,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
       fileName: "clever-clasificacion-season.png",
       text: "Así va la clasificación de la season entre amigos en Clever 🏆",
     };
-  }, [rankMode, weekly, ranking.ok, own.season, own.live, globalOn, globalData]);
+  }, [rankMode, weekly, daily, today, ranking.ok, own.season, own.live, globalOn, globalData]);
 
   async function shareRanking() {
     if (sharingRank || !rankShareRef.current || (globalOn && !globalData)) return;
@@ -1125,10 +1148,10 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
     if (!globalData) return <div className="sc-hint">Cargando clasificación…</div>;
     const filas = globalData.filas ?? [];
     if (filas.length === 0) return <div className="sc-hint">Todavía nadie ha registrado estudio en este periodo.</div>;
-    const rowEl = (r) => rankMode === "week" ? (
+    const rowEl = (r) => rankMode !== "season" ? (
       <WeekRow
         key={r.username} pos={r.pos} name={r.username} verified={r.verificado} avatarUrl={api.avatarSrc(r)}
-        minutes={r.minutos} days={r.dias} isMe={r.yo}
+        minutes={r.minutos} days={r.dias} isMe={r.yo} daily={rankMode === "day"}
       />
     ) : (
       <RankRow
@@ -1205,7 +1228,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
               {recibidas.length > 0 && <span className="sc-count mono">{recibidas.length}</span>}
             </button>
             <button className="sc-iconbtn" onClick={shareInvite} aria-label="Invitar a un amigo a Clever"><Icon name="invite" /></button>
-            <button className="sc-iconbtn" onClick={shareRanking} disabled={sharingRank} aria-label={rankMode === "week" ? "Compartir la clasificación semanal" : "Compartir la clasificación de la season"}><Icon name="share" /></button>
+            <button className="sc-iconbtn" onClick={shareRanking} disabled={sharingRank} aria-label={rankMode === "day" ? "Compartir la clasificación diaria" : rankMode === "week" ? "Compartir la clasificación semanal" : "Compartir la clasificación de la season"}><Icon name="share" /></button>
           </div>
           {shareMsg && <div className="sc-hint">{shareMsg}</div>}
 
@@ -1213,6 +1236,7 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
             <div className="sc-seg">
               <button className={`tab-btn ${rankMode === "season" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("season")}>Season</button>
               <button className={`tab-btn ${rankMode === "week" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("week")}>Semanal</button>
+              <button className={`tab-btn ${rankMode === "day" ? "tab-btn-active" : ""}`} onClick={() => setRankMode("day")}>Diario</button>
             </div>
             <SeasonEnd season={own.season} live={own.live} size="sm" />
           </div>
@@ -1246,6 +1270,27 @@ function AmigosSection({ onOpenSettings, ownPhoto, perfil, subjects, entries, lo
               </>
             );
           })()}
+
+          {rankMode === "day" && (
+            <>
+              <div className="sc-hint" style={{ margin: 0 }}>Hoy · {fmtDay(today)}</div>
+              {globalOn ? renderGlobal() : (
+                <div className="sc-list">
+                  {daily.map((r, k) => (
+                    <WeekRow
+                      key={r.username} pos={k + 1} name={r.username} verified={r.verified} avatarUrl={r.avatar}
+                      minutes={r.minutes} isMe={r.me} live={r.live} daily
+                      onClick={r.me ? openSelf : () => { setFichaUser(r.username); setView("ficha"); }}
+                    />
+                  ))}
+                </div>
+              )}
+              {!globalOn && daily.every((r) => r.minutes === 0) && (
+                <div className="sc-hint">Nadie ha registrado estudio hoy todavía.</div>
+              )}
+              <div className="sc-hint">Solo cuenta el día de hoy. Cuentan las horas de las asignaturas con créditos, como en los puntos de rango.</div>
+            </>
+          )}
 
           {globalOn && rankMode === "season" && renderGlobal()}
 
@@ -1964,6 +2009,8 @@ export default function SocialTab({ userId, avatarUrl, onOwnPhoto, subjects, ent
   let body;
   if (section === "rangos") {
     body = <RangosTab subjects={subjects} entries={entries} logs={logs} />;
+  } else if (section === "racha") {
+    body = <RachaTab subjects={subjects} entries={entries} logs={logs} />;
   } else if (loadError) {
     body = <ErrorPanel message={loadError} onRetry={loadPerfil} />;
   } else if (perfil === undefined) {
@@ -1995,6 +2042,7 @@ export default function SocialTab({ userId, avatarUrl, onOwnPhoto, subjects, ent
       <div className="sc-seg">
         <button className={`tab-btn ${section === "amigos" ? "tab-btn-active" : ""}`} onClick={() => setSection("amigos")}>Amigos</button>
         <button className={`tab-btn ${section === "rangos" ? "tab-btn-active" : ""}`} onClick={() => setSection("rangos")}>Rangos</button>
+        <button className={`tab-btn ${section === "racha" ? "tab-btn-active" : ""}`} onClick={() => setSection("racha")}>Racha</button>
       </div>
       {body}
     </div>

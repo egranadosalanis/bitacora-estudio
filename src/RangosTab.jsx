@@ -409,18 +409,24 @@ function HistorialView({ subjects, entries, logs }) {
 
 /* -------------------------- TAB -------------------------- */
 
+export function RachaTab({ subjects, entries, logs }) {
+  return (
+    <div className="rt-wrap">
+      <RachaView subjects={subjects} entries={entries} logs={logs} />
+    </div>
+  );
+}
+
 export default function RangosTab({ subjects, entries, logs }) {
   const [sub, setSub] = useState(0);
   return (
     <div className="rt-wrap">
       <div className="rt-seg">
         <button type="button" className={sub === 0 ? "rt-on" : ""} onClick={() => setSub(0)}>Rango</button>
-        <button type="button" className={sub === 1 ? "rt-on" : ""} onClick={() => setSub(1)}>Racha</button>
-        <button type="button" className={sub === 2 ? "rt-on" : ""} onClick={() => setSub(2)}>Historial</button>
+        <button type="button" className={sub === 1 ? "rt-on" : ""} onClick={() => setSub(1)}>Historial</button>
       </div>
       {sub === 0 && <RangoView subjects={subjects} entries={entries} logs={logs} />}
-      {sub === 1 && <RachaView subjects={subjects} entries={entries} logs={logs} />}
-      {sub === 2 && <HistorialView subjects={subjects} entries={entries} logs={logs} />}
+      {sub === 1 && <HistorialView subjects={subjects} entries={entries} logs={logs} />}
     </div>
   );
 }

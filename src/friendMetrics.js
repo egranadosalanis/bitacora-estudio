@@ -137,6 +137,12 @@ export function weeklyMinutes(subjects, entries) {
   return out;
 }
 
+/** Minutos estudiados un día concreto, con el mismo criterio que `weeklyMinutes`. */
+export function dayMinutes(subjects, entries, date) {
+  const counted = new Set(subjects.filter((s) => !s.sinCreditos && countsForSocial(s)).map((s) => s.id));
+  return Object.entries(entries[date] ?? {}).reduce((a, [id, m]) => a + (m > 0 && counted.has(id) ? m : 0), 0);
+}
+
 /** Celdas del mapa de calor: `weeks` semanas completas terminando esta semana
  * (lunes a domingo), con los minutos de cada día. Las fechas futuras salen a null. */
 export function heatmapCells(dailyTotals, weeks = 12) {
